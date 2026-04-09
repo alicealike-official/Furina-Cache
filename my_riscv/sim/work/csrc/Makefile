@@ -2,7 +2,7 @@
 # This file may be modified; VCS will not overwrite it unless -Mupdate is used
 
 # define default verilog source directory 
-VSRC=/mnt/hgfs/Project/eva-riscv/my_riscv/sim
+VSRC=/home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim
 
 # Override TARGET_ARCH
 TARGET_ARCH=

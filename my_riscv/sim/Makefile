@@ -11,16 +11,25 @@ WAVE_DIR = $(WORK_DIR)/wave
 LOG_DIR = $(WORK_DIR)/log
 RUN_DIR = $(WORK_DIR)/run
 CSRC_DIR = $(WORK_DIR)/csrc
+SCRIPT_DIR = $(WORK_DIR)/script
 
 SIMV = $(RUN_DIR)/simv
 WAVEFORM = $(WAVE_DIR)/wave.fsdb
 VCS_COMP_LOG = $(LOG_DIR)/vcs_com.log
 VCS_SIM_LOG = $(LOG_DIR)/vcs_sim.log
+DUMP_TCL = $(SCRIPT_DIR)/dump_wave.tcl   # 新增：波形 dump 脚本
 
-DIRS = $(WORK_DIR) $(WAVE_DIR) $(RUN_DIR) $(LOG_DIR) $(CSRC_DIR)
+DIRS = $(WORK_DIR) $(WAVE_DIR) $(RUN_DIR) $(LOG_DIR) $(CSRC_DIR) $(SCRIPT_DIR)
 $(DIRS):
 	@mkdir -p $@
 
+
+$(DUMP_TCL): 
+	@echo "Generating TCL script for waveform dump..."
+	@echo "fsdbDumpfile \"$(WAVEFORM)\"" > $@
+	@echo "fsdbDumpvars 0 \"tp_top\"" >> $@
+	@echo "run" >> $@
+	@echo "TCL script generated: $(DUMP_TCL)"
 
 vcs_all: clean vcs_compile vcs_simulate
 
@@ -41,13 +50,15 @@ vcs_compile: $(DIRS)
 vcs_simulate: $(SIMV)
 	$(SIMV) \
     +fsdb+autoflush \
-	+wave=$(WAVEFORM)
+	+wave=$(WAVEFORM) \
+	-ucli -do $(DUMP_TCL) \
 	-l $(VCS_SIM_LOG)
 
 vcs_simulate_verdi: $(SIMV)
 	$(SIMV) \
     +fsdb+autoflush \
 	+wave=$(WAVEFORM) \
+	-ucli -do $(DUMP_TCL) \
     -l $(VCS_SIM_LOG) \
 	+UVM_VERDI_TRACE="UVM_AWARE+HIER" -gui=verdi
 

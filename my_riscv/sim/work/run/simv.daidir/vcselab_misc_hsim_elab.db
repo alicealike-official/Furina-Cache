@@ -1,6 +1,6 @@
 psSimBaseName                      	work/run/simv
 psLogFileName                      	work/log/vcs_com.log
-pDaiDir                            	/mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir
+pDaiDir                            	/home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir
 destPath                           	work/csrc/
 fSharedMaster                      	0
 fHsimPCSharedLibSpecified          	0

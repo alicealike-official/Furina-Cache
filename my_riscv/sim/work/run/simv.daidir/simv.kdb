@@ -1,7 +1,7 @@
 rc file Version 1.0
 
 [Design]
-COMPILE_PATH=/mnt/hgfs/Project/eva-riscv/my_riscv/sim
+COMPILE_PATH=/home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim
 SystemC=FALSE
 UUM=FALSE
 KDB=TRUE
@@ -13,7 +13,7 @@ ELAB_OPTION=-ssv -ssy
 ELAB=TRUE
 SIMV_WRAPPER=FALSE
 [vcs]
-RUN_ELABCOM=unset TURBO_LOG_DIR ;\rm -rf /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/elabcomLog ;/home/alicealike1022/Downloads/synopsis/vcs2018/vcs/O-2018.09-SP2/linux64/bin/elabcom -logdir /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/elabcomLog  -simvdaidir /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir  -lib /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/work  -saveLevel  -elab /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/kdb -simflow -simdir /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/kdb_libs -top 'tb_top' -ssv -ssy  -Lf work +disable_message+C00380+C00381 +disable_message+C00388+C00389  >& /dev/null  && echo Success >& /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/.elabcomReport || echo Fail >& /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/.elabcomReport; \rm -rf /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/work.lib++ /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/kdb_libs/ 
+RUN_ELABCOM=unset TURBO_LOG_DIR ;\rm -rf /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/elabcomLog ;/home/alicealike1022/Downloads/synopsis/vcs2018/vcs/O-2018.09-SP2/linux64/bin/elabcom -logdir /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/elabcomLog  -simvdaidir /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir  -lib /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/work  -saveLevel  -elab /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/kdb -simflow -simdir /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/kdb_libs -top 'tb_top' -ssv -ssy  -Lf work +disable_message+C00380+C00381 +disable_message+C00388+C00389  >& /dev/null  && echo Success >& /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/.elabcomReport || echo Fail >& /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/.elabcomReport; \rm -rf /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/work.lib++ /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/kdb_libs/ 
 
 [Value]
 WREALX=ffff534e50535f58

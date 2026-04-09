@@ -1,6 +1,6 @@
 @elabcom rc file Version 1.0
 [oh]
-invokeDir = /mnt/hgfs/Project/eva-riscv/my_riscv/sim
-hostCommand = -lib /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/work -saveLevel -elab /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/kdb -simflow -simdir /mnt/hgfs/Project/eva-riscv/my_riscv/sim/work/run/simv.daidir/kdb_libs -top tb_top -\
-Lf work +disable_message+C00380+C00381 +disable_message+C00388+C00389 -SNPS_ELABCOM -saveElab
+invokeDir = /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim
+hostCommand = -lib /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/work -saveLevel -elab /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/kdb -simflow -simdir /home/alicealike1022/Project/Write\
+_Project/eva_riscv/my_riscv/sim/work/run/simv.daidir/kdb_libs -top tb_top -Lf work +disable_message+C00380+C00381 +disable_message+C00388+C00389 -SNPS_ELABCOM -saveElab
 simType = VCS
