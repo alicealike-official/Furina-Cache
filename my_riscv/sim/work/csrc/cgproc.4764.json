@@ -1,0 +1,222 @@
+{
+    "ObjArchives": [
+        {
+            "archive": "archive.0/_4764_archive_1.a",
+            "objects": [
+                [
+                    "JmpFG_d.o",
+                    94082
+                ],
+                [
+                    "jdPWL_d.o",
+                    30934
+                ],
+                [
+                    "uM9F1_d.o",
+                    9360
+                ],
+                [
+                    "amcQwB.o",
+                    116136
+                ]
+            ],
+            "size": 250512
+        }
+    ],
+    "Modules": {
+        "_vcs_DPI_package": {
+            "nMops": 43,
+            "Compiled Times": 1,
+            "start_perf": [
+                2.9651329517364502,
+                2.0931890000000002,
+                0.48427500000000001,
+                363048,
+                382564,
+                1775716269.226002,
+                1159885924120
+            ],
+            "nRouts": 6,
+            "end_perf": [
+                2.9701850414276123,
+                2.0931890000000002,
+                0.48699799999999999,
+                363048,
+                382564,
+                1159899565498,
+                0,
+                0
+            ],
+            "child_modules": {},
+            "Compiled": "Yes",
+            "nQuads": 28
+        },
+        "...MASTER...": {
+            "nMops": 0,
+            "start_perf": [
+                2.866163969039917,
+                2.090328,
+                0.43964799999999998,
+                361104,
+                382564,
+                1775716269.127033,
+                1159619947638
+            ],
+            "nRouts": 5,
+            "end_perf": [
+                2.8773679733276367,
+                2.0924719999999999,
+                0.44009900000000002,
+                362084,
+                382564,
+                1159650061604,
+                0,
+                0
+            ],
+            "child_modules": {
+                "_vcs_DPI_package": 1,
+                "clk_rst_pkg": 1,
+                "uvm_pkg": 1,
+                "tb_top": 1,
+                "_vcs_unit__4215556882": 1,
+                "vcs_paramclassrepository": 1,
+                "std": 1,
+                "ID_pkg": 1
+            },
+            "nQuads": 0
+        },
+        "tb_top": {
+            "nMops": 671,
+            "Compiled Times": 1,
+            "start_perf": [
+                2.9514670372009277,
+                2.0924719999999999,
+                0.47434900000000002,
+                363048,
+                382564,
+                1775716269.2123361,
+                1159849190449
+            ],
+            "nRouts": 58,
+            "end_perf": [
+                2.9650919437408447,
+                2.0931549999999999,
+                0.484267,
+                363048,
+                382564,
+                1159885877914,
+                47244640257,
+                0
+            ],
+            "child_modules": {
+                "ID_top": 1,
+                "clk_rst_interface": 1,
+                "ID_interface": 1
+            },
+            "Compiled": "Yes",
+            "nQuads": 282
+        },
+        "_vcs_unit__4215556882": {
+            "start_perf": [
+                2.8845150470733643,
+                2.0924719999999999,
+                0.44309100000000001,
+                362084,
+                382564,
+                1775716269.1453841,
+                1159669309192
+            ],
+            "Compiled Times": 1,
+            "nMops": 1230,
+            "child_modules": {},
+            "end_perf": [
+                2.9514200687408447,
+                2.0924719999999999,
+                0.47430099999999997,
+                363048,
+                382564,
+                1159849126255,
+                4294967297,
+                0
+            ],
+            "Compiled": "Yes",
+            "svclass": [
+                "ID_env",
+                6345,
+                499,
+                8,
+                8,
+                4294974807,
+                "base_test",
+                8936,
+                702,
+                14,
+                9,
+                4294974924
+            ],
+            "nQuads": 372,
+            "nRouts": 40
+        }
+    },
+    "CompUnits": {
+        "amcQw_d": {
+            "mod": "...MASTER...",
+            "checksum": 0,
+            "text": 594,
+            "out": "objs/amcQw_d.o",
+            "bytes": 8944,
+            "mode": 4
+        },
+        "uM9F1_d": {
+            "mod": "_vcs_DPI_package",
+            "checksum": 0,
+            "text": 1068,
+            "out": "uM9F1_d.o",
+            "archive": "archive.0/_4764_archive_1.a",
+            "bytes": 9360,
+            "mode": 4
+        },
+        "JmpFG_d": {
+            "mod": "_vcs_unit__4215556882",
+            "checksum": 0,
+            "text": 15916,
+            "out": "JmpFG_d.o",
+            "archive": "archive.0/_4764_archive_1.a",
+            "bytes": 94082,
+            "cls": 15281,
+            "mode": 4
+        },
+        "jdPWL_d": {
+            "mod": "tb_top",
+            "checksum": 0,
+            "text": 6726,
+            "out": "jdPWL_d.o",
+            "archive": "archive.0/_4764_archive_1.a",
+            "bytes": 30934,
+            "mode": 4
+        }
+    },
+    "stat": {
+        "peak_mem_kb": 382564,
+        "ru_self_end": {
+            "ru_stime_sec": 0.53311200000000003,
+            "ru_utime_sec": 2.0931890000000002,
+            "ru_minflt": 64699,
+            "ru_maxrss_kb": 197816,
+            "ru_majflt": 0,
+            "ru_nvcsw": 8455,
+            "ru_nivcsw": 10
+        },
+        "ru_childs_end": {
+            "ru_stime_sec": 1.752626,
+            "ru_utime_sec": 1.4642629999999999,
+            "ru_minflt": 53157,
+            "ru_maxrss_kb": 196848,
+            "ru_majflt": 0,
+            "ru_nvcsw": 17960,
+            "ru_nivcsw": 6
+        },
+        "cpu_cycles_end": 1167119662354
+    },
+    "reusePaths": {}
+}

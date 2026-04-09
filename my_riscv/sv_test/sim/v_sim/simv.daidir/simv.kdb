@@ -1,0 +1,20 @@
+rc file Version 1.0
+
+[Design]
+COMPILE_PATH=/home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim
+SystemC=FALSE
+UUM=FALSE
+KDB=TRUE
+USE_NOVAS_HOME=FALSE
+COSIM=FALSE
+TOP=tb_mem 
+OPTION=-ssv -ssy 
+ELAB_OPTION=-ssv -ssy 
+ELAB=TRUE
+SIMV_WRAPPER=FALSE
+[vcs]
+RUN_ELABCOM=unset TURBO_LOG_DIR ;\rm -rf /home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim/v_sim/simv.daidir/elabcomLog ;/home/alicealike1022/Downloads/synopsis/vcs2018/vcs/O-2018.09-SP2/linux64/bin/elabcom -logdir /home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim/v_sim/simv.daidir/elabcomLog  -simvdaidir /home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim/v_sim/simv.daidir  -lib /home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim/v_sim/simv.daidir/work  -saveLevel  -elab /home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim/v_sim/simv.daidir/kdb -simflow -simdir /home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim/v_sim/simv.daidir/kdb_libs -top 'tb_mem' -ssv -ssy  -Lf work +disable_message+C00380+C00381 +disable_message+C00388+C00389  >& /dev/null  && echo Success >& /home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim/v_sim/simv.daidir/.elabcomReport || echo Fail >& /home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim/v_sim/simv.daidir/.elabcomReport; \rm -rf /home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim/v_sim/simv.daidir/work.lib++ /home/alicealike1022/Project/Write_Project/my_riscv/sv_test/sim/v_sim/simv.daidir/kdb_libs/ 
+
+[Value]
+WREALX=ffff534e50535f58
+WREALZ=ffff534e50535f5a

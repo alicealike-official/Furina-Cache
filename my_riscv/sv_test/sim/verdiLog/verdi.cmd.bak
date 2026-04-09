@@ -1,0 +1,109 @@
+simSetSimulator "-vcssv" -exec "./v_sim/simv" -args \
+           "+fsdb+autoflush -l v_sim/vcs_sim.log +UVM_VERDI_TRACE=UVM_AWARE+HIER" \
+           -uvmDebug on -simDelim
+debImport "-i" "-simflow" "-dbdir" "./v_sim/simv.daidir"
+srcTBInvokeSim
+srcTBRunSim
+verdiDockWidgetSetCurTab -dock widgetDock_<Inst._Tree>
+srcHBSelect "tb_mem.dut" -win $_nTrace1
+wvCreateWindow
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "clk_enable" -line 117 -pos 1 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcTBObjectBrowser -treeExpand "uvm_pkg"
+verdiDockWidgetSetCurTab -dock widgetDock_<Inst._Tree>
+verdiDockWidgetSetCurTab -dock widgetDock_<Decl._Tree>
+verdiDockWidgetSetCurTab -dock widgetDock_<Object._Tree>
+verdiDockWidgetSetCurTab -dock widgetDock_<Stack>
+verdiDockWidgetSetCurTab -dock widgetDock_<Inst._Tree>
+srcHBSelect "tb_mem.test_read" -win $_nTrace1
+srcSetScope -win $_nTrace1 "tb_mem.test_read" -delim "."
+srcHBSelect "tb_mem.test_read" -win $_nTrace1
+srcHBSelect "tb_mem" -win $_nTrace1
+srcSetScope -win $_nTrace1 "tb_mem" -delim "."
+srcHBSelect "tb_mem" -win $_nTrace1
+wvSelectSignal -win $_nWave3 {( "G1" 1 )} 
+wvCut -win $_nWave3
+wvSetPosition -win $_nWave3 {("G2" 0)}
+wvSetPosition -win $_nWave3 {("G1" 0)}
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "clk" -line 2 -pos 1 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "address" -line 19 -pos 2 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "rom_read_data" -line 20 -pos 2 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "memory_read" -line 21 -pos 2 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "memory_write" -line 22 -pos 2 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "funct3" -line 23 -pos 2 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "register_file_read_data" -line 24 -pos 2 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "register_file_write_data" -line 25 -pos 2 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "rom_address" -line 26 -pos 2 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "written_data" -line 27 -pos 2 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+srcDeselectAll -win $_nTrace1
+srcSelect -signal "written_address" -line 28 -pos 2 -win $_nTrace1
+srcAddSelectedToWave -clipboard -win $_nTrace1
+wvDrop -win $_nWave3
+wvZoomOut -win $_nWave3
+wvZoomOut -win $_nWave3
+wvZoomOut -win $_nWave3
+wvZoomOut -win $_nWave3
+wvZoomOut -win $_nWave3
+wvZoomOut -win $_nWave3
+wvZoomIn -win $_nWave3
+wvZoom -win $_nWave3 0.000000 53986.636971
+wvSetCursor -win $_nWave3 19959.424804 -snap {("G1" 2)}
+wvSetCursor -win $_nWave3 30119.493455 -snap {("G1" 2)}
+wvSetCursor -win $_nWave3 19899.306055 -snap {("G1" 2)}
+wvSetCursor -win $_nWave3 4569.024955 -snap {("G1" 2)}
+wvSetCursor -win $_nWave3 19959.424804 -snap {("G1" 2)}
+wvSetCursor -win $_nWave3 34748.637160 -snap {("G1" 1)}
+wvSetCursor -win $_nWave3 44668.230812 -snap {("G1" 1)}
+wvSetCursor -win $_nWave3 75082.306139 -snap {("G1" 1)}
+srcDeselectAll -win $_nTrace1
+srcDeselectAll -win $_nTrace1
+srcDeselectAll -win $_nTrace1
+srcDeselectAll -win $_nTrace1
+srcDeselectAll -win $_nTrace1
+srcDeselectAll -win $_nTrace1
+srcDeselectAll -win $_nTrace1
+wvSelectSignal -win $_nWave3 {( "G1" 10 )} 
+wvSelectSignal -win $_nWave3 {( "G1" 3 )} 
+wvSelectSignal -win $_nWave3 {( "G1" 7 )} 
+wvSelectSignal -win $_nWave3 {( "G1" 7 )} 
+debReload
+wvZoomOut -win $_nWave3
+wvZoomOut -win $_nWave3
+wvZoomOut -win $_nWave3
+wvZoomOut -win $_nWave3
+wvZoomOut -win $_nWave3
+wvZoomOut -win $_nWave3
+srcTBInvokeSim
+debExit

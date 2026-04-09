@@ -1,0 +1,13 @@
+stateDiagram
+direction LR
+
+[*] -> IDLE
+
+IDLE --> DIRTY_CHECK
+IDLE --> WB
+IDLE --> MISS_WAIT
+DIRTY_CHECK --> WB
+DIRTY_CHECK --> MISS_WAIT
+WB --> MISS_WAIT
+MISS_WAIT --> IDLE
+IDLE --> IDLE
