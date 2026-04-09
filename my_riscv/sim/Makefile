@@ -47,14 +47,14 @@ vcs_compile: $(DIRS)
 		-CFLAGS -DVCS \
 		-o $(SIMV)
         
-vcs_simulate: $(SIMV)
+vcs_simulate: $(SIMV) $(DUMP_TCL)
 	$(SIMV) \
     +fsdb+autoflush \
 	+wave=$(WAVEFORM) \
 	-ucli -do $(DUMP_TCL) \
 	-l $(VCS_SIM_LOG)
 
-vcs_simulate_verdi: $(SIMV)
+vcs_simulate_verdi: $(SIMV) $(DUMP_TCL)
 	$(SIMV) \
     +fsdb+autoflush \
 	+wave=$(WAVEFORM) \

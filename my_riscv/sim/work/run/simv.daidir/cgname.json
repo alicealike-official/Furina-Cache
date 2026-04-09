@@ -1,9 +1,39 @@
 {
-    "tb_top": [
-        "tb_top",
-        "jdPWL",
+    "std": [
+        "std",
+        "reYIK",
         "module",
-        11
+        4
+    ],
+    "ID_pkg": [
+        "ID_pkg",
+        "i1YVA",
+        "module",
+        9
+    ],
+    "_vcs_DPI_package": [
+        "_vcs_DPI_package",
+        "uM9F1",
+        "module",
+        1
+    ],
+    "clk_rst_pkg": [
+        "clk_rst_pkg",
+        "JgxjY",
+        "module",
+        10
+    ],
+    "vcs_paramclassrepository": [
+        "vcs_paramclassrepository",
+        "hEeZs",
+        "module",
+        2
+    ],
+    "clk_rst_interface": [
+        "clk_rst_interface",
+        "DFRKq",
+        "module",
+        8
     ],
     "_vcs_unit__4215556882": [
         "_vcs_unit__4215556882",
@@ -17,36 +47,6 @@
         "module",
         6
     ],
-    "_vcs_DPI_package": [
-        "_vcs_DPI_package",
-        "uM9F1",
-        "module",
-        1
-    ],
-    "vcs_paramclassrepository": [
-        "vcs_paramclassrepository",
-        "hEeZs",
-        "module",
-        2
-    ],
-    "clk_rst_pkg": [
-        "clk_rst_pkg",
-        "JgxjY",
-        "module",
-        10
-    ],
-    "std": [
-        "std",
-        "reYIK",
-        "module",
-        4
-    ],
-    "clk_rst_interface": [
-        "clk_rst_interface",
-        "DFRKq",
-        "module",
-        8
-    ],
     "uvm_pkg": [
         "uvm_pkg",
         "zr7M1",
@@ -59,11 +59,11 @@
         "module",
         7
     ],
-    "ID_pkg": [
-        "ID_pkg",
-        "i1YVA",
+    "tb_top": [
+        "tb_top",
+        "jdPWL",
         "module",
-        9
+        11
     ],
     "...MASTER...": [
         "SIM",

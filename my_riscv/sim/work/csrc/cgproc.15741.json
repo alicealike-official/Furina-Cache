@@ -1,0 +1,231 @@
+{
+    "reusePaths": {},
+    "Modules": {
+        "...MASTER...": {
+            "start_perf": [
+                2.262080192565918,
+                2.0190239999999999,
+                0.306033,
+                361104,
+                382572,
+                1775721156.5378151,
+                14296894900316
+            ],
+            "child_modules": {
+                "tb_top": 1,
+                "uvm_pkg": 1,
+                "clk_rst_pkg": 1,
+                "vcs_paramclassrepository": 1,
+                "_vcs_unit__4215556882": 1,
+                "_vcs_DPI_package": 1,
+                "ID_pkg": 1,
+                "std": 1
+            },
+            "end_perf": [
+                2.2634060382843018,
+                2.0201750000000001,
+                0.30620700000000001,
+                362084,
+                382572,
+                14296898476862,
+                0,
+                0
+            ],
+            "nQuads": 0,
+            "nMops": 0,
+            "nRouts": 5
+        },
+        "_vcs_unit__4215556882": {
+            "start_perf": [
+                2.2667560577392578,
+                2.0201750000000001,
+                0.30955700000000003,
+                362084,
+                382572,
+                1775721156.542491,
+                14296907532322
+            ],
+            "child_modules": {},
+            "nQuads": 372,
+            "Compiled": "Yes",
+            "Compiled Times": 1,
+            "nRouts": 40,
+            "significant_routs": [
+                [
+                    19,
+                    "F_VCSgd_JmpFG_3_0",
+                    76005435,
+                    519,
+                    21
+                ]
+            ],
+            "svclass": [
+                "ID_env",
+                6345,
+                499,
+                8,
+                8,
+                4294974807,
+                "base_test",
+                8936,
+                702,
+                14,
+                9,
+                4294974924
+            ],
+            "end_perf": [
+                2.3159620761871338,
+                2.05396,
+                0.32494200000000001,
+                363048,
+                382572,
+                14297039781468,
+                4294967297,
+                0
+            ],
+            "nMops": 1230
+        },
+        "tb_top": {
+            "start_perf": [
+                2.3160099983215332,
+                2.0540029999999998,
+                0.32494899999999999,
+                363048,
+                382572,
+                1775721156.5917449,
+                14297039853160
+            ],
+            "child_modules": {
+                "ID_top": 1,
+                "clk_rst_interface": 1,
+                "ID_interface": 1
+            },
+            "nQuads": 281,
+            "Compiled": "Yes",
+            "nMops": 671,
+            "Compiled Times": 1,
+            "end_perf": [
+                2.3218421936035156,
+                2.0598339999999999,
+                0.32494899999999999,
+                363048,
+                382572,
+                14297055603585,
+                47244640257,
+                0
+            ],
+            "nRouts": 58
+        },
+        "_vcs_DPI_package": {
+            "start_perf": [
+                2.3218870162963867,
+                2.0598809999999999,
+                0.32494899999999999,
+                363048,
+                382572,
+                1775721156.5976219,
+                14297055651979
+            ],
+            "child_modules": {},
+            "nQuads": 28,
+            "Compiled": "Yes",
+            "nMops": 43,
+            "Compiled Times": 1,
+            "end_perf": [
+                2.3236191272735596,
+                2.0616110000000001,
+                0.32494899999999999,
+                363048,
+                382572,
+                14297060361790,
+                0,
+                0
+            ],
+            "nRouts": 6
+        }
+    },
+    "CompUnits": {
+        "amcQw_d": {
+            "bytes": 8968,
+            "mod": "...MASTER...",
+            "out": "objs/amcQw_d.o",
+            "text": 594,
+            "mode": 4,
+            "checksum": 0
+        },
+        "jdPWL_d": {
+            "archive": "archive.0/_15741_archive_1.a",
+            "bytes": 30694,
+            "mod": "tb_top",
+            "out": "jdPWL_d.o",
+            "text": 6726,
+            "mode": 4,
+            "checksum": 0
+        },
+        "JmpFG_d": {
+            "archive": "archive.0/_15741_archive_1.a",
+            "bytes": 94106,
+            "mod": "_vcs_unit__4215556882",
+            "out": "JmpFG_d.o",
+            "cls": 15281,
+            "text": 15916,
+            "mode": 4,
+            "checksum": 0
+        },
+        "uM9F1_d": {
+            "archive": "archive.0/_15741_archive_1.a",
+            "bytes": 9384,
+            "mod": "_vcs_DPI_package",
+            "out": "uM9F1_d.o",
+            "text": 1068,
+            "mode": 4,
+            "checksum": 0
+        }
+    },
+    "ObjArchives": [
+        {
+            "archive": "archive.0/_15741_archive_1.a",
+            "objects": [
+                [
+                    "JmpFG_d.o",
+                    94106
+                ],
+                [
+                    "jdPWL_d.o",
+                    30694
+                ],
+                [
+                    "uM9F1_d.o",
+                    9384
+                ],
+                [
+                    "amcQwB.o",
+                    116208
+                ]
+            ],
+            "size": 250392
+        }
+    ],
+    "stat": {
+        "ru_self_end": {
+            "ru_utime_sec": 2.0924770000000001,
+            "ru_maxrss_kb": 197772,
+            "ru_stime_sec": 0.32503199999999999,
+            "ru_minflt": 64655,
+            "ru_majflt": 0,
+            "ru_nvcsw": 302,
+            "ru_nivcsw": 7
+        },
+        "ru_childs_end": {
+            "ru_utime_sec": 2.4078210000000002,
+            "ru_maxrss_kb": 196856,
+            "ru_stime_sec": 0.153665,
+            "ru_minflt": 53155,
+            "ru_majflt": 0,
+            "ru_nvcsw": 111,
+            "ru_nivcsw": 12
+        },
+        "cpu_cycles_end": 14300462537400,
+        "peak_mem_kb": 382572
+    }
+}

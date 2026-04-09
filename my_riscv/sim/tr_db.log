@@ -1,0 +1,2 @@
+  CREATE_STREAM @0 {NAME:seq T:Transactions SCOPE:uvm_test_top.env.ID_agt.sqr STREAM:671}
+  CREATE_STREAM @0 {NAME:seq T:Transactions SCOPE:uvm_test_top.env.ID_agt.sqr STREAM:671}

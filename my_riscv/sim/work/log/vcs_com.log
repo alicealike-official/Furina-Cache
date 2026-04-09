@@ -9,7 +9,7 @@ Command: vcs -notice -debug_acc+all -j8 -timescale=1ns/1ps -sverilog -LDFLAGS -r
 -f ./tb.f +vcs+lic+wait -kdb -l work/log/vcs_com.log -CFLAGS -DVCS -o work/run/simv \
 
                          Chronologic VCS (TM)
-       Version O-2018.09-SP2_Full64 -- Thu Apr  9 00:34:40 2026
+       Version O-2018.09-SP2_Full64 -- Thu Apr  9 00:52:34 2026
                Copyright (c) 1991-2018 by Synopsys Inc.
                          ALL RIGHTS RESERVED
 
@@ -578,8 +578,8 @@ g++  -o /home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/r
 -Wl,-rpath='$ORIGIN'/simv.daidir//scsim.db.dir  -L/usr/lib/x86_64-linux-gnu -L/lib/x86_64-linux-gnu \
 -Wl,--no-as-needed -rdynamic -rdynamic  -Wl,-rpath=/home/alicealike1022/Downloads/synopsis/vcs2018/vcs/O-2018.09-SP2/linux64/lib \
 -L/home/alicealike1022/Downloads/synopsis/vcs2018/vcs/O-2018.09-SP2/linux64/lib  \
-uvm_dpi.o   objs/amcQw_d.o   _13837_archive_1.so _13863_archive_1.so _13864_archive_1.so \
-_13865_archive_1.so _13866_archive_1.so  SIM_l.o      rmapats_mop.o rmapats.o rmar.o \
+uvm_dpi.o   objs/amcQw_d.o   _15741_archive_1.so _15767_archive_1.so _15768_archive_1.so \
+_15769_archive_1.so _15770_archive_1.so  SIM_l.o      rmapats_mop.o rmapats.o rmar.o \
 rmar_nd.o  rmar_llvm_0_1.o rmar_llvm_0_0.o          -lzerosoft_rt_stubs -lvirsim \
 -lerrorinf -lsnpsmalloc -lvfs    -lvcsnew -lsimprofile -luclinative /home/alicealike1022/Downloads/synopsis/vcs2018/vcs/O-2018.09-SP2/linux64/lib/vcs_tls.o \
 -Wl,-whole-archive -lvcsucli -Wl,-no-whole-archive       ./../run/simv.daidir/vc_hdrs.o \
@@ -590,4 +590,4 @@ _vcs_pli_stub_.o   /home/alicealike1022/Downloads/synopsis/vcs2018/vcs/O-2018.09
 to date
 make[1]: Leaving directory '/home/alicealike1022/Project/Write_Project/eva_riscv/my_riscv/sim/work/csrc' \
 
-CPU time: 5.077 seconds to compile + .148 seconds to elab + .314 seconds to link
+CPU time: 5.014 seconds to compile + .170 seconds to elab + .302 seconds to link
