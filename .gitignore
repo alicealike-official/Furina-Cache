@@ -1,5 +1,4 @@
-./my_riscv/sim/work
+./my_riscv/sim/work                                                                      
 ./my_riscv/sim/novas_dump.log
 ./my_riscv/sim/tr_db.log
 ./my_riscv/sim/ucli.key
-
