@@ -1,2 +1,0 @@
-搭建了指令Cache的基本框架，但是还没有完成指令Cache，目前的考虑是Cpu-core和I-Cache还有I-Ram直接相连，且状态机只实现三个状态，IDLE, HIT和MISS。
-对于成熟的Soc来讲，指令Cache和Cpu-core还有Ram之间应该用高速总线进行通信，相应的Cache状态机应该有很多状态，还应该满足cache冲刷和cache屏蔽，但是这部分因为时间的关系暂时不打算实现。
