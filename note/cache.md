@@ -1,9 +1,8 @@
 # Description
 
-Write-back, write-allocate, set-associative Data Cache for RISC-V CPU.
-Supports configurable set count, associativity, and block size.
-Implements FIFO replacement policy.
+本D-Cache是一个参数可配置的写回、写分配、组相联数据缓存，面向RISC-V处理器设计。
 
+---
 
 # Parameters # 
 
@@ -18,6 +17,8 @@ Implements FIFO replacement policy.
 | `parameter` | [DataAddrBus](#DataAddrBus) | Address bus width in bits |
 | `parameter` | [DataWidth](#DataWidth) | Data bus width between CPU and Cache in bits |
 
+---
+
 # Local Parameters #
 
 ## Member List
@@ -30,7 +31,7 @@ Implements FIFO replacement policy.
 | `localparam` | [Tag_Width](#Tag_Width) | Number of bits for address tag|
 
 
-
+---
 
 # Ports #
 
@@ -56,4 +57,17 @@ Implements FIFO replacement policy.
 | `input` | [mem_resp](#mem_resp) | Memory response. Indicates `read/write` completion.|
 | `input` | [mem_rdata](#mem_rdata) | Memory read data. Full cache block width.|
 
+---
+
 # Feature #
+
+>- **可配置架构**：组数（Num_Cache_Set）、路数（Num_Cache_Way）、缓存行大小（Cache_Block_Size）、数据总线宽度（DataWidth）、地址总线宽度（DataAddrBus）均可通过参数定制
+>- **组相联结构**：支持2的幂次组数，任意正整数路数，总容量 = 组数 × 路数 × 缓存行大小
+>- **写回策略**：写操作只更新缓存并标记脏位，不立即写内存
+>- **写分配策略**：写未命中时先从内存读取整行到缓存，再合并写入
+>- **FIFO替换策略**：采用先进先出算法选择被替换的缓存行
+>- **有限状态机控制**：包含空闲（IDLE）、脏行检查（DIRTY_CHECK）、写回（WB）、等待填充（MISS_WAIT）四个状态
+>- **读命中**：直接返回缓存数据
+>- **读未命中**：被替换行脏时先写回再填充，否则直接填充
+>- **写命中**：直接更新缓存行并标记脏位
+>- **写未命中**：读内存填充整行后合并写数据，并标记脏位
