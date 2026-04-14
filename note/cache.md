@@ -7,8 +7,6 @@
 # Parameters # 
 
 
-## Member List
-
 | prefix | identifier | description |
 | - | - | - |
 | `parameter` | [Num_Cache_Set](#Num_Cache_Set) | Number of cache sets. Must be power of 2 |
@@ -20,8 +18,6 @@
 ---
 
 # Local Parameters #
-
-## Member List
 
 | prefix | identifier | description |
 | - | - | - |
@@ -35,8 +31,6 @@
 
 # Ports #
 
-
-## Member List
 
 | direction | identifier | description |
 | - | - | - |
