@@ -36,9 +36,13 @@ class d_cache_model extends uvm_component;
     cache_line_t cache[Num_Cache_Set][Num_Cache_Way];
     cache_hit_status status;
     
-    // LRU 跟踪（简化版，用于替换策略）
-    int lru_counter[Num_Cache_Set][Num_Cache_Way];
-    int lru_global;
+    // // LRU 跟踪（简化版，用于替换策略）
+    // int lru_counter[Num_Cache_Set][Num_Cache_Way];
+    // int lru_global;
+
+    //FIFO替换
+    logic [Way_Width-1:0] fifo_ptr[Num_Cache_Set];
+
     
     // 统计信息
     int hit_count;
@@ -51,18 +55,6 @@ class d_cache_model extends uvm_component;
     uvm_blocking_get_port #(mem_transaction) mem_resp_port;
     uvm_analysis_port #(mem_transaction) mem_req_port;
     
-    // // 内部事务队列
-    // typedef struct {
-    //     cpu_transaction req;
-    //     int set_index;
-    //     int way_index;
-    //     int word_offset;
-    //     bit hit;
-    //     cache_line_t original_line;
-    // } pending_req_t;
-    
-    // pending_req_t pending_req;
-    // bit has_pending_req;
     
     // 函数声明
     extern function new(string name, uvm_component parent);
@@ -77,8 +69,9 @@ class d_cache_model extends uvm_component;
     extern function int check_hit(logic [Tag_Width-1:0] tag, 
                                   logic [Index_Width-1:0] index,
                                   output int way_hit);
-    extern function int select_victim(logic [Index_Width-1:0] index);
-    extern function void update_lru(logic [Index_Width-1:0] index, int way_accessed);
+    extern function logic [Way_Width-1:0] select_alloc_way(logic [Index_Width-1:0] index);
+   // extern function void update_lru(logic [Index_Width-1:0] index, int way_accessed);
+    extern function void update_fifo_ptr(logic [Index_Width-1:0] index);
     extern task write_back_line(logic [Index_Width-1:0] index, int way);
     extern task fetch_line(logic [Index_Width-1:0] index, int way, 
                            logic [Tag_Width-1:0] tag);
@@ -107,7 +100,7 @@ function d_cache_model::new(string name = "d_cache_model",
     miss_count = 0;
     writeback_count = 0;
     //has_pending_req = 0;
-    lru_global = 0;
+    //lru_global = 0;
 endfunction
 
 // Build Phase
@@ -139,7 +132,8 @@ function void d_cache_model::reset_cache();
             for (int k = 0; k < Words_Per_Block; k++) begin
                 cache[i][j].data[k] = '0;
             end
-            lru_counter[i][j] = 0;
+            //lru_counter[i][j] = 0;
+            fifo_ptr[i] = 0;
         end
     end
     //has_pending_req = 0;
@@ -161,7 +155,7 @@ endfunction
 function void d_cache_model::check_hit(logic [Tag_Width-1:0] tag,
                                       logic [Index_Width-1:0] index,
                                       ref logic [Way_Width-1:0] way_hit,
-                                      ref logic hit_sign);
+                                      ref bit hit_sign);
     way_hit = 0;
     hit_sign = 0;
     for (int i = 0; i < Num_Cache_Way; i++) begin
@@ -179,41 +173,44 @@ function void d_cache_model::check_hit(logic [Tag_Width-1:0] tag,
     end
 endfunction
 
-// 选择牺牲块（LRU策略）
-function int d_cache_model::select_victim(logic [Index_Width-1:0] index);
-    int victim_way = 0;
-    int max_age = -1;
+// 选择替换行（FIFO策略）
+function logic [Way_Width-1:0] d_cache_model::select_alloc_way(
+    logic [Index_Width-1:0] index
+);
+    int alloc_way;
     
-    // 优先选择无效块
-    for (int i = 0; i < Num_Cache_Way; i++) begin
+    // 优先选择无效行
+    for (int i = 0; i < NUM_WAYS; i++) begin
         if (!cache[index][i].valid) begin
-            return i;
+            return i;  // 返回无效行，不更新 FIFO 指针
         end
     end
     
-    // 全满时选择最久未使用的
-    for (int i = 0; i < Num_Cache_Way; i++) begin
-        if (lru_counter[index][i] > max_age) begin
-            max_age = lru_counter[index][i];
-            victim_way = i;
-        end
-    end
-    
-    return victim_way;
+    // 所有行都有效，使用 FIFO 指针选择 Victim
+    alloc_way = fifo_ptr[index];
+    return alloc_way;
 endfunction
 
-// 更新LRU计数
-function void d_cache_model::update_lru(logic [Index_Width-1:0] index, int way_accessed);
-    lru_global++;
-    for (int i = 0; i < Num_Cache_Way; i++) begin
-        if (i == way_accessed) begin
-            lru_counter[index][i] = lru_global;
-        end
+// // 更新LRU计数
+// function void d_cache_model::update_lru(logic [Index_Width-1:0] index, int way_accessed);
+//     lru_global++;
+//     for (int i = 0; i < Num_Cache_Way; i++) begin
+//         if (i == way_accessed) begin
+//             lru_counter[index][i] = lru_global;
+//         end
+//     end
+// endfunction
+
+function void d_cache_model::update_fifo_ptr(logic [INDEX_BITS-1:0] index);
+    // 模拟 RTL 中 fifo_counter 的行为：计数器加 1，循环计数
+    fifo_ptr[index] = fifo_ptr[index] + 1;
+    if (fifo_ptr[index] >= NUM_WAYS) begin
+        fifo_ptr[index] = 0;
     end
 endfunction
 
 // 写回脏行到内存
-task d_cache_model::write_back_line(logic [Index_Width-1:0] index, int way);
+task d_cache_model::write_back_line(logic [Index_Width-1:0] index, logic [Way_Width-1:0] way);
     mem_transaction mem_req;
     
     if (cache[index][way].dirty) begin
@@ -243,7 +240,7 @@ task d_cache_model::write_back_line(logic [Index_Width-1:0] index, int way);
 endtask
 
 // 从内存读取缓存行
-task d_cache_model::fetch_line(logic [Index_Width-1:0] index, int way,
+task d_cache_model::fetch_line(logic [Index_Width-1:0] index, logic [Way_Width-1:0] way,
                                logic [Tag_Width-1:0] tag);
     mem_transaction mem_req;
     
@@ -267,38 +264,27 @@ task d_cache_model::fetch_line(logic [Index_Width-1:0] index, int way,
         cache[index][way].data[i] = mem_resp.rdata[i];
     end
     
-    `info_debug(get_type_name(), $sformatf("Fetch completed: %0d words loaded", Words_Per_Block))
+    `info_debug($sformatf("Fetch completed: %0d words loaded", Words_Per_Block))
 endtask
 
 // 从缓存读字
 function logic [DataWidth-1:0] d_cache_model::read_word_from_cache(
-    logic [Index_Width-1:0] index, int way, int word_offset);
+    logic [Index_Width-1:0] index, logic [Way_Width-1:0] way, 
+    logic [Offset_Width-1:0] word_offset);
     return cache[index][way].data[word_offset];
 endfunction
 
 // 写字到缓存（支持字节掩码）
 function void d_cache_model::write_word_to_cache(
-    logic [Index_Width-1:0] index, int way, int word_offset,
-    logic [DataWidth-1:0] data, logic [Bytes_Per_Word-1:0] byte_enable);
-    
-    logic [DataWidth-1:0] original_data;
-    logic [DataWidth-1:0] new_data;
-    
-    original_data = cache[index][way].data[word_offset];
-    new_data = original_data;
-    
-    // 按字节使能更新数据
-    for (int i = 0; i < Bytes_Per_Word; i++) begin
-        if (byte_enable[i]) begin
-            new_data[i*8 +: 8] = data[i*8 +: 8];
-        end
-    end
-    
-    cache[index][way].data[word_offset] = new_data;
+    logic [Index_Width-1:0] index, logic [Way_Width-1:0] way, 
+    logic [Offset_Width-1:0] word_offset,
+    logic [DataWidth-1:0] data, 
+); 
+    cache[index][way].data[word_offset] = data;
     cache[index][way].dirty = 1'b1;  // 标记为脏
     
     `info_debug($sformatf("Write to cache: index=%0d, way=%0d, offset=%0d, data=0x%0h",
-                index, way, word_offset, new_data))
+                index, way, word_offset, data))
 endfunction
 
 // 处理CPU请求
@@ -307,8 +293,8 @@ task d_cache_model::process_cpu_request(cpu_transaction req);
     logic [Index_Width-1:0] index;
     logic [Offset_Width-1:0] offset;
     int word_offset;
-    int way_hit;
-    bit is_hit;
+    logic [Way_Width-1:0] way_hit;
+    bit hit_sign;
     cpu_transaction resp;
     
     // 解析地址
@@ -316,9 +302,9 @@ task d_cache_model::process_cpu_request(cpu_transaction req);
     word_offset = offset / Bytes_Per_Word;  // 转换为字偏移
     
     // 检查命中
-    is_hit = check_hit(tag, index, way_hit);
+    check_hit(tag, index, way_hit, hit_sign);
     
-    if (is_hit) begin
+    if (hit_sign) begin
         // 缓存命中
         hit_count++;
         `info_debug($sformatf("HIT: addr=0x%0h, tag=0x%0h, index=%0d, way=%0d",
@@ -326,7 +312,7 @@ task d_cache_model::process_cpu_request(cpu_transaction req);
         
         if (req.wr_en) begin
             // 写操作：更新缓存
-            write_word_to_cache(index, way_hit, word_offset, req.wdata, req.byte_enable);
+            write_word_to_cache(index, way_hit, word_offset, req.wdata);
         end
         
         // 准备响应数据
@@ -337,9 +323,6 @@ task d_cache_model::process_cpu_request(cpu_transaction req);
         if (!req.wr_en) begin
             resp.rdata = read_word_from_cache(index, way_hit, word_offset);
         end
-        
-        // 更新LRU
-        update_lru(index, way_hit);
     end
     else begin
         // 缓存未命中
@@ -348,7 +331,7 @@ task d_cache_model::process_cpu_request(cpu_transaction req);
                     req.addr, tag, index))
         
         // 选择牺牲块
-        int victim_way = select_victim(index);
+        int victim_way = select_alloc_way(index);
         
         // 如果牺牲块有效且脏，写回
         if (cache[index][victim_way].valid && cache[index][victim_way].dirty) begin
@@ -373,7 +356,7 @@ task d_cache_model::process_cpu_request(cpu_transaction req);
         end
         
         // 更新LRU
-        update_lru(index, victim_way);
+        update_fifo_ptr(index);
     end
     
     // 发送响应
