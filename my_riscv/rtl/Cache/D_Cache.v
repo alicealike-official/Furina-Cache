@@ -80,7 +80,7 @@ module D_cache#(
     reg [1:0] next_state;
 
     //==================================控制信号================================//
-    wire                            alloc_enable;
+    wire [Num_Cache_Set-1:0]        alloc_enable;
     wire                            miss_done;
     wire                            wb_done;
     wire                            replace_dirty;
@@ -90,30 +90,33 @@ module D_cache#(
     wire [DataWidth-1 : 0]          hit_rdata;
     wire [DataWidth-1 : 0]          alloc_data;
     wire [Way_Width-1 : 0]          alloc_way;
+    wire alloc_enable_condition;
 
 
-    assign hit_rdata            = (~cpu_wr_en) ? cache_data[hit_way][index_in][8*offset_in +: DataWidth] : {DataWidth{1'b0}};
-    assign alloc_data           = mem_rdata[8*offset_in +: DataWidth];
-    assign alloc_addr           = {tag[alloc_way][index_in], index_in, Offset_Width{1'b0}};
 
-    assign alloc_enable         = cpu_req && (curr_state == IDLE && ~hit_sign);
-    assign mem_req              = cpu_req && ((cpu_wr_en && (curr_state == IDLE && ~hit_sign)) ||
+    assign hit_rdata                = (~cpu_wr_en) ? cache_data[hit_way][index_in][8*offset_in +: DataWidth] : {DataWidth{1'b0}};
+    assign alloc_data               = mem_rdata[8*offset_in +: DataWidth];
+    assign alloc_addr               = {tag[alloc_way][index_in], index_in, Offset_Width{1'b0}};
+    assign alloc_enable_condition   = cpu_req && (curr_state == IDLE && ~hit_sign);
+    assign alloc_enable             = alloc_enable_condition ? (1 << index_in) : {Num_Cache_Set{1'b0}};
+
+    assign mem_req                  = cpu_req && ((cpu_wr_en && (curr_state == IDLE && ~hit_sign)) ||
                                      (~cpu_wr_en && ((curr_state == DIRTY_CHECK) || wb_done))
                                     );
-    assign mem_wr_en            = cpu_req && (~cpu_wr_en && replace_dirty);
-    assign is_write_back_req    = (~cpu_wr_en && replace_dirty);
-    assign is_cpu_req_valid     = ((~cpu_wr_en && (wb_done || curr_state == MISS_WAIT)) || (cpu_wr_en && curr_state == IDLE && ~hit_sign));
-    assign mem_addr             = cpu_req ? (
+    assign mem_wr_en                = cpu_req && (~cpu_wr_en && replace_dirty);
+    assign is_write_back_req        = (~cpu_wr_en && replace_dirty);
+    assign is_cpu_req_valid         = ((~cpu_wr_en && (wb_done || curr_state == MISS_WAIT)) || (cpu_wr_en && curr_state == IDLE && ~hit_sign));
+    assign mem_addr                 = cpu_req ? (
                                     is_write_back_req   ? alloc_addr    :
                                     is_cpu_req_valid    ? cpu_req_addr  :
                                     0) : 0;
-    assign mem_wdata            = (is_write_back_req) ? cache_data[alloc_way][index_in] : 0;
-    assign ready                = (cpu_req && ((curr_state == IDLE && hit_sign) || miss_done)) || ~cpu_req;
-    assign wb_done              = (curr_state == WB && mem_resp);
-    assign miss_done            = (curr_state == MISS_WAIT && mem_resp);
-    assign replace_dirty        = (curr_state == DIRTY_CHECK && dirty[alloc_way][index_in]);
+    assign mem_wdata                = (is_write_back_req) ? cache_data[alloc_way][index_in] : 0;
+    assign ready                    = (cpu_req && ((curr_state == IDLE && hit_sign) || miss_done)) || ~cpu_req;
+    assign wb_done                  = (curr_state == WB && mem_resp);
+    assign miss_done                = (curr_state == MISS_WAIT && mem_resp);
+    assign replace_dirty            = (curr_state == DIRTY_CHECK && dirty[alloc_way][index_in]);
 
-    assign cache_rdata          = (hit_sign) ? hit_rdata : alloc_data;
+    assign cache_rdata              = (hit_sign) ? hit_rdata : alloc_data;
 
     //====================状态机跳转===========================//
     always @(*) begin
@@ -196,14 +199,26 @@ module D_cache#(
 
     //===============FIFO替换策略================//
        
-     fifo_counter u_fifo_counter #(
-        .Num_Cache_Way(Num_Cache_Way)
-    ) (
-        .clk(clk),
-        .reset(reset),
-        .alloc_enable(alloc_enable),
-        .replace_way_out(alloc_way)
-    );
+    // fifo_counter u_fifo_counter #(
+    //     .Num_Cache_Way(Num_Cache_Way)
+    // ) (
+    //     .clk(clk),
+    //     .reset(reset),
+    //     .alloc_enable(alloc_enable),
+    //     .replace_way_out(alloc_way)
+    // );
 
+    generate
+        for (genvar set = 0; set < Num_Cache_Set; set++) begin : fifo_inst_gen
+            fifo_counter #(
+                .Num_Cache_Way(Num_Cache_Way)
+            ) u_fifo_counter (
+                .clk(clk),
+                .reset(reset),
+                .alloc_enable(alloc_enable[set]),
+                .replace_way_out(alloc_way)
+            );
+        end
+    endgenerate
 
 endmodule 

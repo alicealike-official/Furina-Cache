@@ -56,7 +56,8 @@ module I_cache #(
 
 
     wire alloc_get;//判断是否获得了alloc_way
-    wire alloc_enable;
+    wire alloc_enable_condition;
+    wire [Num_Cache_Set-1 :0] alloc_enable;
     wire [DataWidth-1 : 0] hit_data;
     wire [DataWidth-1 : 0] alloc_data;
 
@@ -72,7 +73,8 @@ module I_cache #(
     assign mem_req = (state == IDLE) && cpu_req && (~hit_sign);
 
     //alloc请求
-    assign alloc_enable = (state == IDLE) && cpu_req && (~hit_sign);
+    assign alloc_enable_condition = (state == IDLE) && cpu_req && (~hit_sign);
+    assign alloc_enable = alloc_enable_condition ? (1 << index_in) ? {Num_Cache_Set{1'b0}};
     assign alloc_get = (state == MISS_WAIT);
 
     //ready信号
@@ -129,12 +131,25 @@ module I_cache #(
         end
     end
 
-    fifo_counter u_fifo_counter #(
-        .Num_Cache_Way(Num_Cache_Way)
-    ) (
-        .clk(clk),
-        .reset(reset),
-        .alloc_enable(alloc_enable),
-        .replace_way_out(alloc_way)
-    );
+    // fifo_counter u_fifo_counter #(
+    //     .Num_Cache_Way(Num_Cache_Way)
+    // ) (
+    //     .clk(clk),
+    //     .reset(reset),
+    //     .alloc_enable(alloc_enable),
+    //     .replace_way_out(alloc_way)
+    // );
+
+    generate
+        for (genvar set = 0; set < Num_Cache_Set; set++) begin : fifo_inst_gen
+            fifo_counter #(
+                .Num_Cache_Way(Num_Cache_Way)
+            ) u_fifo_counter (
+                .clk(clk),
+                .reset(reset),
+                .alloc_enable(alloc_enable[set]),
+                .replace_way_out(alloc_way)
+            );
+        end
+    endgenerate
 endmodule
