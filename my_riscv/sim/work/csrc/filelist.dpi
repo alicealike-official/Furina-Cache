@@ -1,4 +1,0 @@
-DPI_STUB_OBJS += ./../run/simv.daidir/vc_hdrs.o
-./../run/simv.daidir/vc_hdrs.o: ./../run/simv.daidir/vc_hdrs.c
-	@$(CC) -I/home/alicealike1022/Downloads/synopsis/vcs2018/vcs/O-2018.09-SP2/include  -pipe -fPIC -DVCS    -I/home/alicealike1022/Downloads/synopsis/vcs2018/vcs/O-2018.09-SP2/include  -fPIC -c -o ./../run/simv.daidir/vc_hdrs.o ./../run/simv.daidir/vc_hdrs.c
-	@strip -g ./../run/simv.daidir/vc_hdrs.o
