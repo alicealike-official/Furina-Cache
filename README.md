@@ -7,6 +7,7 @@ my_verif_env/                # 验证环境根目录
 |   `-- top/                 # 顶层环境文档
 |-- src/                     # 源代码目录
 |   |-- common/              # 公共组件(跨子系统共享)
+|   |   |-- component        # 公共组件(如时钟模块的driver和agent)
 |   |   |-- interface/       # 公共接口(如时钟/复位)
 |   |   |-- config/          # 公共配置类
 |   |   |-- pkg/             # 公共包(如类型定义、宏)
