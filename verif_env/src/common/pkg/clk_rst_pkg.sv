@@ -1,5 +1,6 @@
 package clk_rst_pkg;
         import uvm_pkg::*;
+        `include "vutils_macros.svh"
         `include "uvm_macros.svh"
 
         `include "clk_rst_config.sv"

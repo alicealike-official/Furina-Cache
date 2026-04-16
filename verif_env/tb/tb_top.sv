@@ -95,8 +95,8 @@ module tb_top;
     initial begin
                 // 根据命令行参数决定是否dump波形
                     $display("Dumping waveform...");
-                    $fsdbDumpfile("wave.fsdb");
-                    $fsdbDumpvars(0, tb_top);
+                    $fsdbDumpfile();
+                    $fsdbDumpvars();
     end
     
     // ====================================================

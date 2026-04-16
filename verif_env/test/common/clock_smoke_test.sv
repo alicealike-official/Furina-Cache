@@ -1,10 +1,16 @@
+`include "uvm_macros.svh"
 import clk_rst_pkg::*;
+import uvm_pkg::*;
 
 class clk_rst_smoke_test extends uvm_test;
     clk_rst_agent agent;
     clk_rst_config cfg;
     
     `uvm_component_utils(clk_rst_smoke_test)
+    function new(string name = "clk_rst_smoke_test",
+                        uvm_component parent = null);
+        super.new(name,parent);
+    endfunction
 
     extern virtual function void build_phase(uvm_phase phase);
     extern virtual task run_phase(uvm_phase phase);
@@ -19,8 +25,8 @@ function void clk_rst_smoke_test::build_phase(uvm_phase phase);
     
     // 配置时钟参数
     cfg = clk_rst_config::type_id::create("clk_rst_config");
-    cfg.clk_period = 10ns;
-    cfg.clk_duty_cycle = 50;
+    cfg.clock_period = 10;
+    cfg.initial_reset_cycles = 1;
     
     // 通过 config_db 传递给 driver
     uvm_config_db#(clk_rst_config)::set(this, "*", "clk_rst_config", cfg);
@@ -35,4 +41,4 @@ task clk_rst_smoke_test::run_phase(uvm_phase phase);
     end
     
     phase.drop_objection(this);
-endfunction
+endtask
