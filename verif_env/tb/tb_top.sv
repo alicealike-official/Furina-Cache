@@ -18,12 +18,7 @@ module tb_top;
     // ====================================================
     
     clk_rst_interface clk_rst_vif(clk, rst_n);
-
-    // // ID接口
-    // ID_interface ID_vif (
-    //     .clock(clk_rst_vif.clk)
-    // );
-    
+    cache_interface cache_vif(clk, rst_n);
 
     // ====================================================
     // DUT实例化
@@ -31,45 +26,28 @@ module tb_top;
     
     // DUT内部连接信号
 
-
-//         wire [6:0] opcode;
-//         wire [2:0] funct3;
-//         wire [6:0] funct7;
-//         wire [4:0] rs1;
-//         wire [4:0] rs2;
-//         wire [4:0] rd;
-//         wire [31:0] imm;
-
-//         wire jump;
-//         wire branch;
-//         wire [1:0] alu_src_A_select;
-//         wire [2:0] alu_src_B_select;
-//         wire csr_write_enable;
-//         wire register_file_write;
-//         wire [2:0] register_file_write_data_select;        
-//         wire memory_read;
-//         wire memory_write;
-
-    
-//     ID_top u_dut(
-//         .instruction(ID_vif.instruction),
-//         .opcode(ID_vif.opcode),
-//         .funct3(ID_vif.funct3),
-//         .funct7(ID_vif.funct7),
-//         .rs1(ID_vif.rs1),
-//         .rs2(ID_vif.rs2),
-//         .rd(ID_vif.rd),
-//         .imm(ID_vif.imm),
-//         .jump(ID_vif.jump),
-//         .branch(ID_vif.branch),
-//         .alu_src_A_select(ID_vif.alu_src_A_select),
-//         .alu_src_B_select(ID_vif.alu_src_B_select),
-//         .csr_write_enable(ID_vif.csr_write_enable),
-//         .register_file_write(ID_vif.register_file_write),
-//         .register_file_write_data_select(ID_vif.register_file_write_data_select),
-//         .memory_read(ID_vif.memory_read),
-//         .memory_write(ID_vif.memory_write)
-// );
+    D_cache #(
+            .Num_Cache_Set(),
+            .Cache_Block_Size(),
+            .Num_Cache_Way(),
+            .DataAddrBus(),
+            .DataWidth()
+    ) u_D_cache(
+                .clk(cache_vif.clk),
+                .reset(cache_vif.rst_n),
+                .cpu_req(cache_vif.cpu_req),
+                .cpu_wr_en(cache_vif.cpu_wr_en),
+                .cpu_req_addr(cache_vif.cpu_req_addr),
+                .cpu_wdata(cache_vif.cpu_wdata),
+                .cache_rdata(cache_vif.cache_rdata), 
+                .ready(cache_vif.ready),
+                .mem_req(cache_vif.mem_req),
+                .mem_wr_en(cache_vif.mem_wr_en),
+                .mem_addr(cache_vif.mem_addr),
+                .mem_wdata(cache_vif.mem_wdata),
+                .mem_resp(cache_vif.mem_resp),
+                .mem_rdata(cache_vif.mem_rdata)
+    );
     
     
     // ====================================================
@@ -85,8 +63,9 @@ module tb_top;
         // // 通过uvm_config_db传递接口句柄
         // uvm_config_db#(virtual ID_interface)::set(null, "*", "ID_vif", ID_vif);
         uvm_config_db#(virtual clk_rst_interface)::set(null,"*","clk_rst_vif",clk_rst_vif);
+        uvm_config_db#(virtual cache_interface)::set(null,"*","cache_vif",cache_vif);
         // // 启动UVM测试
-        run_test("clk_rst_smoke_test");
+        run_test("cache_basic_test");
     end
     
     // ====================================================

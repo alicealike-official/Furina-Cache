@@ -1,6 +1,6 @@
 interface  cache_interface(
     input clk,
-    input rstn
+    input rst_n
 );
     logic                               cpu_req,        // CPU访问请求
     logic                               cpu_wr_en,      // CPU写使能（1=写，0=读）
