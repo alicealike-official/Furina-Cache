@@ -39,7 +39,7 @@ task cpu_cache_driver::drive_transaction(cpu_cache_transaction tr);
     cache_vif.cpu_wdata <= tr.cpu_wdata;
 
     wait(cache_vif.ready);  
-    tr.rdata = cache_vif.cache_rdata;
+    tr.cache_rdata = cache_vif.cache_rdata;
     tr.ready = cache_vif.ready; 
     @(posedge cache_vif.clk);
 endtask

@@ -1,10 +1,10 @@
-class mem_cache_transaction extends uvm_sequence_item;
-    rand bit                        mem_req;     
-    rand bit                        mem_wr_en;  
-    rand bit [DataAddrBus-1 : 0]    mem_addr;     
-    rand bit [DataWidth-1 : 0]      mem_wdata[Words_Per_Block];
-    rand bit                        mem_resp;
-    rand bit [DataWidth-1 : 0]      mem_rdata[Words_Per_Block];
+class mem_cache_transaction extends cache_base_transaction;
+    rand bit                            mem_req;     
+    rand bit                            mem_wr_en;  
+    rand bit [`DATA_ADDR_BUS-1 : 0]     mem_addr;     
+    rand bit [`DATA_WIDTH-1 : 0]        mem_wdata[`WORDS_PER_BLOCK];
+    rand bit                            mem_resp;
+    rand bit [`DATA_WIDTH-1 : 0]        mem_rdata[`WORDS_PER_BLOCK];
 
     `uvm_object_utils(mem_cache_transaction)
 

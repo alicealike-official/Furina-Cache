@@ -10,6 +10,7 @@ my_verif_env/                # 验证环境根目录
 |   |   |-- component        # 公共组件(如时钟模块的driver和agent)
 |   |   |-- interface/       # 公共接口(如时钟/复位)
 |   |   |-- config/          # 公共配置类
+|   |   |-- define/          # common definition
 |   |   |-- pkg/             # 公共包(如类型定义、宏)
 |   |   |-- model/           # 公共参考模型(目前只包含mem)
 |   |   `-- utils/           # 公共工具类

@@ -6,9 +6,7 @@ class cache_basic_test extends uvm_test;
     
     function new(string name = "cache_basic_test", 
                     uvm_component parent = null);
-        super.new(name, parent);
-        if (parent == null) begin
-            `fatal("This component's parent can not be null!!")       
+        super.new(name, parent);    
     endfunction
 
     extern virtual function void build_phase(uvm_phase phase);

@@ -8,6 +8,7 @@ class mem_cache_driver extends uvm_driver #(mem_cache_transaction);
         super.new(name, parent);
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
+        end
     endfunction
 
     extern virtual function void build_phase(uvm_phase phase);
@@ -34,11 +35,19 @@ task mem_cache_driver::drive_transaction(mem_cache_transaction tr);
     tr.mem_req      <= cache_vif.mem_req;
     tr.mem_wr_en    <= cache_vif.mem_wr_en;
     tr.mem_addr     <= cache_vif.mem_addr;
-    tr.mem_wdata    <= cache_vif.mem_wdata;
+    for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
+        // 计算向量中的起始位位置
+        int start_bit = i * `DATA_WIDTH;
+        tr.mem_wdata[i] <= cache_vif.mem_wdata[start_bit +: `DATA_WIDTH];
+    end
     
-    wait(tr.resp);
+    wait(tr.mem_resp);
         
-    cache_vif.mem_resp = tr.resp;
-    cache_vif.mem_rdata = tr.mem_rdata;
+    cache_vif.mem_resp = tr.mem_resp;
+    for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
+        // 计算向量中的起始位位置
+        int start_bit = i * `DATA_WIDTH;
+        cache_vif.mem_rdata[start_bit +: `DATA_WIDTH] <= tr.mem_rdata[i];
+    end
     @(posedge cache_vif.clk); 
 endtask

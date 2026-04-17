@@ -1,12 +1,12 @@
 class cpu_cache_transaction extends cache_base_transaction;
     //请求
-    rand  bit                       cpu_req;    
-    rand  bit                       cpu_wr_en;    
-    rand  bit [DataAddrBus-1 : 0]   cpu_req_addr;
-    rand  bit [DataWidth-1 : 0]     cpu_wdata;
+    rand  bit                           cpu_req;    
+    rand  bit                           cpu_wr_en;    
+    rand  bit [`DATA_ADDR_BUS-1 : 0]    cpu_req_addr;
+    rand  bit [`DATA_WIDTH-1 : 0]       cpu_wdata;
 
     //响应
-    rand  bit [DataWidth-1 : 0]     cache_rdata;    
+    rand  bit [`DATA_WIDTH-1 : 0]     cache_rdata;    
     rand  bit                       ready;          
     `uvm_object_utils(cpu_cache_transaction)
 

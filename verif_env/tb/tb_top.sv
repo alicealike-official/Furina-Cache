@@ -1,5 +1,6 @@
 // tb_top.sv - UVM测试平台的顶层模块
 `timescale 1ns/1ps
+`include "define.svh"
 // import uvm_pkg::*;
 // import ID_pkg::*;
 // import clk_rst_pkg::*;
@@ -27,11 +28,11 @@ module tb_top;
     // DUT内部连接信号
 
     D_cache #(
-            .Num_Cache_Set(),
-            .Cache_Block_Size(),
-            .Num_Cache_Way(),
-            .DataAddrBus(),
-            .DataWidth()
+            .Num_Cache_Set(`NUM_CACHE_SET),
+            .Cache_Block_Size(`CACHE_BLOCK_SIZE),
+            .Num_Cache_Way(`NUM_CACHE_WAY),
+            .DataAddrBus(`DATA_ADDR_BUS),
+            .DataWidth(`DATA_WIDTH)
     ) u_D_cache(
                 .clk(cache_vif.clk),
                 .reset(cache_vif.rst_n),

@@ -10,6 +10,7 @@ class cpu_cache_agent extends uvm_agent;
         super.new(name, parent);
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
+        end
     endfunction
 
     extern virtual function void build_phase(uvm_phase phase);

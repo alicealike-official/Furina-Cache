@@ -12,10 +12,10 @@ endclass
 
 function string cache_transaction::convert2string();
     if(hit_sign) begin
-        return $sformatf("HIT: %s", cpu_tr.convert2string());
+        return $sformatf("HIT: %s", cpu_cache_tr.convert2string());
     end
 
     else begin
-        return $sformatf("MISS: %s -> %s", cpu_tr.convert2string(), mem_tr.convert2string());
+        return $sformatf("MISS: %s -> %s", cpu_cache_tr.convert2string(), mem_cache_tr.convert2string());
     end
 endfunction

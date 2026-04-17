@@ -48,7 +48,9 @@ module D_cache#(
     //命中判断
     wire [Num_Cache_Way-1 : 0]  way_hit;
     wire                        hit_sign;
-    wire [Way_Width-1 : 0]      hit_way;
+
+    //for priority enconder
+    reg [Way_Width-1 : 0]      hit_way;
 
     genvar i;
     generate
@@ -96,7 +98,7 @@ module D_cache#(
 
     assign hit_rdata                = (~cpu_wr_en) ? cache_data[hit_way][index_in][8*offset_in +: DataWidth] : {DataWidth{1'b0}};
     assign alloc_data               = mem_rdata[8*offset_in +: DataWidth];
-    assign alloc_addr               = {tag[alloc_way][index_in], index_in, Offset_Width{1'b0}};
+    assign alloc_addr               = {tag[alloc_way][index_in], index_in, {Offset_Width{1'b0}}};
     assign alloc_enable_condition   = cpu_req && (curr_state == IDLE && ~hit_sign);
     assign alloc_enable             = alloc_enable_condition ? (1 << index_in) : {Num_Cache_Set{1'b0}};
 
@@ -181,10 +183,13 @@ module D_cache#(
                 // cache_data[alloc_way][index_in] <= mem_rdata;
                 //dirty[alloc_way][index_in] <= 1'b0;
                 if (cpu_wr_en) begin
+                    // cache_data[alloc_way][index_in] <= 
+                    //     {mem_rdata[8*Cache_Block_Size-1 : 8*offset_in+DataWidth],
+                    //         cpu_wdata,
+                    //     mem_rdata[8*offset_in-1 : 0]};
                     cache_data[alloc_way][index_in] <= 
-                        {mem_rdata[8*Cache_Block_Size-1 : 8*offset_in+DataWidth],
-                            cpu_wdata,
-                        mem_rdata[8*offset_in-1 : 0]};
+                        (mem_rdata & ~(({DataWidth{1'b1}} << (offset_in * 8)))) |
+                        ({cpu_wdata} << (offset_in * 8));
                     dirty[alloc_way][index_in] <= 1'b1;  // 写操作标记脏
                 end
 

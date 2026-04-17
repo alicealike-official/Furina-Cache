@@ -6,6 +6,7 @@
 +incdir+../src/common
 +incdir+../src/common/component
 +incdir+../src/common/config
++incdir+../src/common/define
 +incdir+../src/common/interface
 +incdir+../src/common/model
 +incdir+../src/common/pkg
