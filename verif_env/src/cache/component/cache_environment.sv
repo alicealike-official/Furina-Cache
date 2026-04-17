@@ -44,9 +44,9 @@ endfunction
 function void cache_environment::connect_phase(uvm_phase phase);
     // 将sequencer通过config_db传递给virtual sequence
     uvm_config_db #(uvm_sequencer #(cpu_cache_transaction))::set(
-        this, "", "cpu_cache_sqr", cpu_cache_agt.sequencer);
+        null, "*", "cpu_cache_sqr", cpu_cache_agt.sequencer);
     uvm_config_db #(uvm_sequencer #(mem_cache_transaction))::set(
-        this, "", "mem_cache_sqr", mem_cache_agt.sequencer);
+        null, "*", "mem_cache_sqr", mem_cache_agt.sequencer);
 endfunction
 
 task cache_environment::run_phase(uvm_phase phase);

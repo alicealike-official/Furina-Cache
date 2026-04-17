@@ -27,7 +27,7 @@ $(DIRS):
 $(DUMP_TCL): 
 	@echo "Generating TCL script for waveform dump..."
 	@echo "fsdbDumpfile \"$(WAVEFORM)\"" > $@
-	@echo "fsdbDumpvars 0 \"tp_top\"" >> $@
+	@echo "fsdbDumpvars 0 \"tb_top\"" >> $@
 	@echo "run" >> $@
 	@echo "TCL script generated: $(DUMP_TCL)"
 
