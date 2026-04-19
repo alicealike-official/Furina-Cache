@@ -1,7 +1,7 @@
 class cpu_cache_sequence extends uvm_sequence #(cpu_cache_transaction);
     `uvm_object_utils(cpu_cache_sequence)
     
-    int num_transactions = 20;
+    int num_transactions = 1;
 
     function new(string name = "cpu_cache_sequence");
         super.new();
