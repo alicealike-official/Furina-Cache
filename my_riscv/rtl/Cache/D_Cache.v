@@ -102,7 +102,8 @@ module D_cache#(
     assign alloc_enable_condition   = cpu_req && (curr_state == IDLE && ~hit_sign);
     assign alloc_enable             = alloc_enable_condition ? (1 << index_in) : {Num_Cache_Set{1'b0}};
 
-    assign mem_req                  = cpu_req && ((cpu_wr_en && (curr_state == IDLE && ~hit_sign)) ||
+    assign mem_req                  = cpu_req && (cpu_wr_en && ((curr_state == IDLE && ~hit_sign) || 
+                                                                    curr_state == MISS_WAIT) ||
                                      (~cpu_wr_en && ((curr_state == DIRTY_CHECK) || wb_done))
                                     );
     assign mem_wr_en                = cpu_req && (~cpu_wr_en && replace_dirty);
@@ -168,6 +169,7 @@ module D_cache#(
             end
 
             curr_state <= IDLE;
+            next_state <= IDLE;
         end
 
         else begin

@@ -25,7 +25,7 @@ task cache_basic_test::run_phase(uvm_phase phase);
     phase.raise_objection(this);
     
     vseq = cache_base_virtual_sequence::type_id::create("vseq");
-    vseq.start(null);  // virtual sequence不需要sequencer
+    vseq.start(null);
     
     phase.drop_objection(this);
 endtask

@@ -67,7 +67,7 @@ run_verdi:
 
 
 clean:
-	rm -rf $(WORK_DIR) novas.* novas_dump.log ucli.key
+	rm -rf $(WORK_DIR) novas.* novas_dump.log ucli.key verdiLog/ inter.fsdb tr_db.log
 
 help:
 	@echo "Available targets:"

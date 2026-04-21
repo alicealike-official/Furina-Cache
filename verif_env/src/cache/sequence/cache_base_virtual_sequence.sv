@@ -25,15 +25,18 @@ task cache_base_virtual_sequence::body();
         null, "", "cpu_cache_sqr", cpu_cache_sqr))
     `fatal("CPU-Cache sequencer not found in config_db")
 
-    if(!uvm_config_db #(uvm_sequencer #(mem_cache_transaction))::get(
-        null, "", "mem_cache_sqr", mem_cache_sqr))
-    `fatal("MEM-Cache sequencer not found in config_db")
+    //if(!uvm_config_db #(uvm_sequencer #(mem_cache_transaction))::get(
+    //    null, "", "mem_cache_sqr", mem_cache_sqr))
+    //`fatal("MEM-Cache sequencer not found in config_db")
 
     cpu_cache_seq = cpu_cache_sequence::type_id::create("cpu_cache_seq");
     mem_cache_seq = mem_cache_sequence::type_id::create("mem_cache_seq");
 
     fork
+        $display("begin to start cpu_cache_seq");
         cpu_cache_seq.start(cpu_cache_sqr);
-        mem_cache_seq.start(mem_cache_sqr);
+        if (mem_cache_sqr != null) begin
+            mem_cache_seq.start(mem_cache_sqr);
+        end
     join
 endtask

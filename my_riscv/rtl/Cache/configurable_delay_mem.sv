@@ -1,6 +1,6 @@
 // filename: configurable_delay_mem.sv
 module configurable_delay_mem #(
-    parameter MEM_SIZE       = 1024 * 1024,
+    parameter MEM_SIZE       = 4294967296,
     parameter Cache_Block_Size = 64
 ) (
     input  wire                             clk,
@@ -116,8 +116,11 @@ module configurable_delay_mem #(
         end
     end
 
-    assign mem_resp = mem_req && ((curr_state == IDLE && current_latency == 0) || 
-                                    (curr_state == WAIT && current_latency == 1));
+    assign mem_resp =  (mem_req && curr_state == IDLE && current_latency == 0) || 
+                                    (curr_state == WAIT && current_latency == 1);
 
-    assign mem_rdata = (mem_resp && !mem_wr_en) ? read_cache_line(mem_addr) : {8*Cache_Block_Size{1'b0}};
+    //assign mem_rdata = (mem_resp && !mem_wr_en) ? read_cache_line(mem_addr) : {8*Cache_Block_Size{1'b0}};
+
+    //for debug
+    assign mem_rdata = (mem_resp && !mem_wr_en) ? {8*Cache_Block_Size{1'b1}} : {8*Cache_Block_Size{1'b0}};
 endmodule

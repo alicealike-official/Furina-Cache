@@ -52,7 +52,7 @@ task clk_rst_driver::run_phase(uvm_phase phase);
         fork
                 back_ground_clk();
                 set_reset();
-        join
+        join_none
 
         phase.drop_objection(this);
 endtask
@@ -70,7 +70,7 @@ endtask
 task clk_rst_driver::set_reset();
         clk_rst_vif.rst_n_drv <= 0;
         #(this.reset_time);
-        clk_rst_vif.rst_n_drv <=1;
+        clk_rst_vif.rst_n_drv <= 1;
 endtask
 
 function void clk_rst_driver::update_timing();

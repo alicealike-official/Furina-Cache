@@ -5,11 +5,12 @@ import clk_rst_pkg::*;
 `include "uvm_macros.svh"
 class cache_environment extends uvm_env;
     cpu_cache_agent cpu_cache_agt;
-    mem_cache_agent mem_cache_agt;
+//    mem_cache_agent mem_cache_agt;
 
     clk_rst_agent clk_rst_agt;
     clk_rst_config clk_rst_cfg;
-    
+    //cache_virtual_sequencer cache_vsqr;
+
     `uvm_component_utils(cache_environment)
     
     function new(string name = "cache_environment", 
@@ -22,7 +23,6 @@ class cache_environment extends uvm_env;
 
     extern virtual function void build_phase(uvm_phase phase);
     extern virtual function void connect_phase(uvm_phase phase);
-    extern virtual task run_phase(uvm_phase phase);
 
 endclass
 
@@ -30,7 +30,7 @@ endclass
 function void cache_environment::build_phase(uvm_phase phase);
     super.build_phase(phase);
     cpu_cache_agt = cpu_cache_agent::type_id::create("cpu_agt", this);
-    mem_cache_agt = mem_cache_agent::type_id::create("mem_cache_agt", this);
+//    mem_cache_agt = mem_cache_agent::type_id::create("mem_cache_agt", this);
     clk_rst_agt = clk_rst_agent::type_id::create("clk_rst_agt", this);
 
     clk_rst_cfg = clk_rst_config::type_id::create("clk_rst_config");
@@ -45,18 +45,6 @@ function void cache_environment::connect_phase(uvm_phase phase);
     // 将sequencer通过config_db传递给virtual sequence
     uvm_config_db #(uvm_sequencer #(cpu_cache_transaction))::set(
         null, "*", "cpu_cache_sqr", cpu_cache_agt.sequencer);
-    uvm_config_db #(uvm_sequencer #(mem_cache_transaction))::set(
-        null, "*", "mem_cache_sqr", mem_cache_agt.sequencer);
+    //uvm_config_db #(uvm_sequencer #(mem_cache_transaction))::set(
+    //    null, "*", "mem_cache_sqr", mem_cache_agt.sequencer);
 endfunction
-
-task cache_environment::run_phase(uvm_phase phase);
-    cache_base_virtual_sequence vseq;
-    
-    phase.raise_objection(this);
-    
-    // ✅ 在 test 中创建并启动 sequence
-    vseq = cache_base_virtual_sequence::type_id::create("vseq");
-    vseq.start(null);  // 启动时 sequencer 参数为 null
-    
-    phase.drop_objection(this);
-endtask

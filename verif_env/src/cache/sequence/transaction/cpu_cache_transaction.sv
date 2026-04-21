@@ -22,7 +22,7 @@ class cpu_cache_transaction extends cache_base_transaction;
 endclass
 
 function string cpu_cache_transaction::convert2string();
-    return $sformatf("CPU[%0d]: %s addr=%0h, data=%0h", 
+    return $sformatf("CPU[%0d]: %s addr=%0h, data=%0h, trans_id=%0d", 
                     trans_id, cpu_wr_en?"WR":"RD", cpu_req_addr, 
-                    cpu_wr_en?cpu_wdata:cache_rdata);
+                    cpu_wr_en?cpu_wdata:cache_rdata, trans_id);
 endfunction

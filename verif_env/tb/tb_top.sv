@@ -50,6 +50,17 @@ module tb_top;
                 .mem_rdata(cache_vif.mem_rdata)
     );
     
+    configurable_delay_mem u_mem(
+        .clk(cache_vif.clk),
+        .rst_n(cache_vif.rst_n),
+        .latency_in(0),
+        .mem_req(cache_vif.mem_req),
+        .mem_wr_en(cache_vif.mem_wr_en),
+        .mem_addr(cache_vif.mem_addr),
+        .mem_wdata(cache_vif.mem_wdata),
+        .mem_resp(cache_vif.mem_resp),
+        .mem_rdata(cache_vif.mem_rdata)
+    );
     
     // ====================================================
     // UVM配置和启动
@@ -77,6 +88,7 @@ module tb_top;
                     $display("Dumping waveform...");
                     $fsdbDumpfile();
                     $fsdbDumpvars();
+                    $fsdbDumpMDA();
     end
     
     // ====================================================

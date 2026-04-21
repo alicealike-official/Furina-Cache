@@ -33,6 +33,8 @@ task cpu_cache_driver::run_phase(uvm_phase phase);
 endtask
     
 task cpu_cache_driver::drive_transaction(cpu_cache_transaction tr);
+    wait(cache_vif.rst_n);
+    $display(tr.convert2string());
     cache_vif.cpu_req <= tr.cpu_req;
     cache_vif.cpu_wr_en <= tr.cpu_wr_en;
     cache_vif.cpu_req_addr <= tr.cpu_req_addr;
