@@ -176,8 +176,8 @@ module configurable_delay_mem #(
     assign mem_resp_valid = mem_resp_valid_r;
     assign mem_resp_handshake = mem_resp_valid && mem_resp_ready;
 
-    //assign mem_rdata = (mem_resp && !mem_wr_en) ? read_cache_line(mem_addr) : {8*Cache_Block_Size{1'b0}};
+    assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? read_cache_line(mem_addr) : {8*Cache_Block_Size{1'b0}};
 
     //for debug
-    assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? {8*Cache_Block_Size{1'b1}} : {8*Cache_Block_Size{1'b0}};
+    //assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? {8*Cache_Block_Size{1'b1}} : {8*Cache_Block_Size{1'b0}};
 endmodule
