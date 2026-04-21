@@ -14,6 +14,10 @@ class cpu_cache_transaction extends cache_base_transaction;
         cpu_req_addr[1:0] == 2'b00;
     }
 
+    constraint wdate_mask {
+        (cpu_wr_en == 0) -> (cpu_wdata == 0);
+    }
+
     function new(string name = "cpu_cache_transaction");
         super.new();
     endfunction

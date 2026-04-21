@@ -11,10 +11,12 @@ interface  cache_interface(
     logic   [`DATA_WIDTH-1 : 0]             cache_rdata;    // Cache读数据
     logic                                   ready;          // 访问完成信号
 
-    logic                                   mem_req;        // 内存请求
+    logic                                   mem_req_valid;  // 内存请求
+    logic                                   mem_req_ready;  //
     logic                                   mem_wr_en;      // 内存写使能（写回用）
     logic [`DATA_ADDR_BUS-1 : 0]            mem_addr;       // 内存地址
     logic [8*`CACHE_BLOCK_SIZE-1 : 0]       mem_wdata;      // 写回内存的数据
-    logic                                   mem_resp;       // 内存响应
+    logic                                   mem_resp_valid;
+    logic                                   mem_resp_ready;
     logic [8*`CACHE_BLOCK_SIZE-1 : 0]       mem_rdata;       // 内存读数据
 endinterface

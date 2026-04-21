@@ -42,11 +42,13 @@ module tb_top;
                 .cpu_wdata(cache_vif.cpu_wdata),
                 .cache_rdata(cache_vif.cache_rdata), 
                 .ready(cache_vif.ready),
-                .mem_req(cache_vif.mem_req),
+                .mem_req_valid(cache_vif.mem_req_valid),
+                .mem_req_ready(cache_vif.mem_req_ready),
                 .mem_wr_en(cache_vif.mem_wr_en),
                 .mem_addr(cache_vif.mem_addr),
                 .mem_wdata(cache_vif.mem_wdata),
-                .mem_resp(cache_vif.mem_resp),
+                .mem_resp_valid(cache_vif.mem_resp_valid),
+                .mem_resp_ready(cache_vif.mem_resp_ready),
                 .mem_rdata(cache_vif.mem_rdata)
     );
     
@@ -54,11 +56,13 @@ module tb_top;
         .clk(cache_vif.clk),
         .rst_n(cache_vif.rst_n),
         .latency_in(0),
-        .mem_req(cache_vif.mem_req),
+        .mem_req_valid(cache_vif.mem_req_valid),
+        .mem_req_ready(cache_vif.mem_req_ready),
         .mem_wr_en(cache_vif.mem_wr_en),
         .mem_addr(cache_vif.mem_addr),
         .mem_wdata(cache_vif.mem_wdata),
-        .mem_resp(cache_vif.mem_resp),
+        .mem_resp_valid(cache_vif.mem_resp_valid),
+        .mem_resp_ready(cache_vif.mem_resp_ready),
         .mem_rdata(cache_vif.mem_rdata)
     );
     

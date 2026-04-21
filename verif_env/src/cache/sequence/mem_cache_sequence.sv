@@ -11,7 +11,6 @@ class mem_cache_sequence extends uvm_sequence #(mem_cache_transaction);
         mem_cache_transaction tr;
         for (int i = 0; i < num_transactions; i++) begin
             `uvm_do_with(tr,{
-                mem_resp == 1;
             })
         end
     endtask

@@ -17,35 +17,41 @@ module D_cache#(
     input  wire [DataWidth-1 : 0]           cpu_wdata,      // CPU写数据
     output wire [DataWidth-1 : 0]           cache_rdata,    // Cache读数据
     output wire                             ready,          // 访问完成信号
-    
-    // Cache <-> 内存 接口
-    output wire                             mem_req,        // 内存请求
-    output wire                             mem_wr_en,      // 内存写使能（写回用）
-    output wire [DataAddrBus-1 : 0]         mem_addr,       // 内存地址
-    output wire [8*Cache_Block_Size-1 : 0]  mem_wdata,      // 写回内存的数据
-    input  wire                             mem_resp,       // 内存响应
-    input  wire [8*Cache_Block_Size-1 : 0]  mem_rdata       // 内存读数据
+
+    // Cache -> Memory 请求通道
+    output wire                             mem_req_valid,    // cache to mem request
+    input  wire                             mem_req_ready,    // mem to cache ready
+    output wire                             mem_wr_en,        //write/read enable, 1=write, 0=read  
+    output wire [DataAddrBus-1 : 0]         mem_addr,         //cache to mem addr
+    output wire [8*Cache_Block_Size-1 : 0]  mem_wdata,
+
+    // Memory -> Cache 响应通道  
+    input  wire                             mem_resp_valid,   // mem to cache response
+    output wire                             mem_resp_ready,   // cache to mem ready
+    input  wire [8*Cache_Block_Size-1 : 0]  mem_rdata
 );
     localparam Index_Width  = $clog2(Num_Cache_Set);
     localparam Offset_Width = $clog2(Cache_Block_Size);
     localparam Way_Width    = $clog2(Num_Cache_Way);
     localparam Tag_Width    = DataAddrBus - Offset_Width - Index_Width;
 
-    //cache存储内容
+    //===============================cache存储内容=======================//
     reg                             valid[Num_Cache_Way][Num_Cache_Set];
     reg                             dirty[Num_Cache_Way][Num_Cache_Set];
     reg [Tag_Width-1 : 0]           tag[Num_Cache_Way][Num_Cache_Set];
     reg [8*Cache_Block_Size-1 : 0]  cache_data[Num_Cache_Way][Num_Cache_Set];
+    //===============================cache存储内容=======================//
 
-    //地址分解
+    //==============================地址分解===============================//
     wire [Index_Width-1 : 0]    index_in;
     wire [Tag_Width-1 : 0]      tag_in;
     wire [Offset_Width-1 : 0]   offset_in;
 
     assign {tag_in, index_in, offset_in} = cpu_req_addr;
+    //==============================地址分解===============================//
 
 
-    //命中判断
+    //==============================命中判断===============================//
     wire [Num_Cache_Way-1 : 0]  way_hit;
     wire                        hit_sign;
 
@@ -59,6 +65,7 @@ module D_cache#(
         end
     endgenerate
     assign hit_sign = |way_hit;
+    //==============================命中判断===============================//
 
     //=============优先编码器==========//
     always @(*) begin
@@ -70,7 +77,7 @@ module D_cache#(
             end
         end
     end
-
+    //=============优先编码器==========//
 
     //====================状态机定义=============================//
     localparam IDLE         = 2'b00;
@@ -80,48 +87,112 @@ module D_cache#(
 
     reg [1:0] curr_state;
     reg [1:0] next_state;
-
-    //==================================控制信号================================//
-    wire [Num_Cache_Set-1:0]        alloc_enable;
-    wire                            miss_done;
-    wire                            wb_done;
-    wire                            replace_dirty;
-    wire                            is_write_back_req;
-    wire                            is_cpu_req_valid;
-    wire [DataAddrBus-1 : 0]        alloc_addr;
-    wire [DataWidth-1 : 0]          hit_rdata;
-    wire [DataWidth-1 : 0]          alloc_data;
-    wire [Way_Width-1 : 0]          alloc_way;
-    wire alloc_enable_condition;
+    //====================状态机定义=============================//
 
 
 
-    assign hit_rdata                = (~cpu_wr_en) ? cache_data[hit_way][index_in][8*offset_in +: DataWidth] : {DataWidth{1'b0}};
-    assign alloc_data               = mem_rdata[8*offset_in +: DataWidth];
-    assign alloc_addr               = {tag[alloc_way][index_in], index_in, {Offset_Width{1'b0}}};
-    assign alloc_enable_condition   = cpu_req && (curr_state == IDLE && ~hit_sign);
-    assign alloc_enable             = alloc_enable_condition ? (1 << index_in) : {Num_Cache_Set{1'b0}};
 
-    assign mem_req                  = cpu_req && (cpu_wr_en && ((curr_state == IDLE && ~hit_sign) || 
-                                                                    curr_state == MISS_WAIT) ||
-                                     (~cpu_wr_en && ((curr_state == DIRTY_CHECK) || wb_done))
-                                    );
-    assign mem_wr_en                = cpu_req && (~cpu_wr_en && replace_dirty);
-    assign is_write_back_req        = (~cpu_wr_en && replace_dirty);
-    assign is_cpu_req_valid         = ((~cpu_wr_en && (wb_done || curr_state == MISS_WAIT)) || (cpu_wr_en && curr_state == IDLE && ~hit_sign));
-    assign mem_addr                 = cpu_req ? (
-                                    is_write_back_req   ? alloc_addr    :
-                                    is_cpu_req_valid    ? cpu_req_addr  :
-                                    0) : 0;
-    assign mem_wdata                = (is_write_back_req) ? cache_data[alloc_way][index_in] : 0;
-    assign ready                    = (cpu_req && ((curr_state == IDLE && hit_sign) || miss_done)) || ~cpu_req;
-    assign wb_done                  = (curr_state == WB && mem_resp);
-    assign miss_done                = (curr_state == MISS_WAIT && mem_resp);
-    assign replace_dirty            = (curr_state == DIRTY_CHECK && dirty[alloc_way][index_in]);
+    //==================================alloc信号================================//
 
+    wire alloc_enable_condition;//alloc使能
+    assign alloc_enable_condition = cpu_req && (curr_state == IDLE && ~hit_sign);
+
+    wire [Num_Cache_Set-1:0] alloc_enable;//确认alloc使能的哪一路
+    assign alloc_enable = alloc_enable_condition ? (1 << index_in) : {Num_Cache_Set{1'b0}};
+
+    wire [Way_Width-1 : 0] alloc_way;//由FIFO counter确认
+    wire [DataAddrBus-1 : 0] alloc_addr;
+    assign alloc_addr = {tag[alloc_way][index_in], index_in, {Offset_Width{1'b0}}};
+
+    wire [DataWidth-1 : 0] hit_rdata;
+    assign hit_rdata = (~cpu_wr_en) ? cache_data[hit_way][index_in][8*offset_in +: DataWidth] : {DataWidth{1'b0}};
+
+    wire [DataWidth-1 : 0] alloc_data;
+    assign alloc_data = mem_rdata[8*offset_in +: DataWidth];
+    //==================================alloc信号================================//
+
+
+
+    //================================辅助判断信号===============================//
+    wire is_read_miss;//read miss
+    wire is_write_miss;//write miss
+    assign is_read_miss = (curr_state == IDLE && ~hit_sign && cpu_req && ~cpu_wr_en);   
+    assign is_write_miss = (curr_state == IDLE && ~hit_sign && cpu_req && cpu_wr_en); 
+
+    wire is_dirty;//判断替换行是否dirty
+    assign is_dirty = (curr_state == DIRTY_CHECK && dirty[alloc_way][index_in]); 
+    wire is_not_dirty;
+    assign is_not_dirty = (curr_state == DIRTY_CHECK && !dirty[alloc_way][index_in]);
+
+    wire mem_resp_handshake; //mem发生handshake
+    assign mem_resp_handshake = mem_resp_valid && mem_resp_ready;
+
+    wire mem_req_handshake; //cache发生handshake
+    assign mem_req_handshake = mem_req_valid && mem_req_ready;
+
+    wire is_write_back;        // 当前是写回操作
+    assign is_write_back = is_dirty || (curr_state == WB && !mem_resp_handshake);
+
+    
+    wire wb_done; // 写回完成
+    assign wb_done = (curr_state == WB && mem_resp_handshake);
+
+    wire miss_done; // 缺失填充完成
+    assign miss_done = (curr_state == MISS_WAIT && mem_resp_handshake);
+    //================================辅助判断信号===============================//
+
+
+
+    //================================生成握手信号=================================//
+    // 请求Valid信号：Cache有请求要发
+    wire mem_req_valid_condition;
+
+    assign mem_req_valid_condition = is_write_miss || (curr_state == DIRTY_CHECK) || (curr_state == WB && mem_resp_handshake);
+    // valid 寄存器
+    reg mem_req_valid_r;
+    always @(posedge clk or negedge reset) begin
+        if (!reset) begin
+            mem_req_valid_r <= 1'b0;
+        end
+        else if (mem_req_valid_r && mem_req_ready) begin
+            mem_req_valid_r <= 1'b0;  // 握手成功，清除
+        end
+        else if (mem_req_valid_condition && !mem_req_valid_r) begin
+            mem_req_valid_r <= 1'b1;  // 需要发请求，拉高
+        end
+    end
+    assign mem_req_valid = mem_req_valid_r;
+
+    assign mem_resp_ready = (curr_state == WB) || (curr_state == MISS_WAIT);
+    //================================生成握手信号=================================//
+
+
+
+    //================================生成mem传输信号=================================//
+    //读写使能信号，判断cache是否要读写mem
+    assign mem_wr_en = is_dirty || (curr_state == WB && !mem_resp_handshake);
+
+    //内存地址信号
+    assign mem_addr = (is_write_miss || is_not_dirty || wb_done) ? cpu_req_addr :
+                  (is_write_back) ? alloc_addr :
+                  32'b0;
+
+    //内存写数据
+    assign mem_wdata = cache_data[alloc_way][index_in];  // 写回数据
+    //================================生成mem传输信号=================================//
+
+
+
+
+
+
+    //============================cache to cpu signal===========================//
+    assign ready                    = (cpu_req && ((curr_state == IDLE && hit_sign) || miss_done)) || !cpu_req;
     assign cache_rdata              = (hit_sign) ? hit_rdata : alloc_data;
+    //============================cache to cpu signal===========================//
 
-    //====================状态机跳转===========================//
+
+    //================================状态机跳转================================//
     always @(*) begin
         case(curr_state)
             IDLE: begin
@@ -138,15 +209,15 @@ module D_cache#(
             end
 
             DIRTY_CHECK: begin
-                next_state = replace_dirty ? WB : MISS_WAIT;
+                next_state = is_dirty ? WB : MISS_WAIT;
             end
 
             WB: begin
-                next_state = mem_resp ? MISS_WAIT : WB;
+                next_state = wb_done ? MISS_WAIT : WB;
             end
 
             MISS_WAIT: begin
-                next_state = mem_resp ? IDLE : MISS_WAIT;
+                next_state = miss_done ? IDLE : MISS_WAIT;
             end
 
             default: begin
@@ -154,8 +225,12 @@ module D_cache#(
             end
         endcase
     end
+    //================================状态机跳转================================//
 
-    //===================状态机时序=================//
+
+
+
+    //==================================状态机时序===========================//
     always @(posedge clk or negedge reset) begin
         if(!reset) begin
             integer n,p;
@@ -167,13 +242,12 @@ module D_cache#(
                     cache_data[n][p]  <= {8*Cache_Block_Size{1'b0}};
                 end
             end
-
             curr_state <= IDLE;
-            next_state <= IDLE;
         end
 
         else begin
             curr_state <= next_state;
+
             if(cpu_req && cpu_wr_en && hit_sign && curr_state == IDLE)begin
                 cache_data[hit_way][index_in][8*offset_in +: DataWidth]     <= cpu_wdata;
                 dirty[hit_way][index_in]                                    <= 1'b1;
@@ -182,13 +256,7 @@ module D_cache#(
             if(miss_done) begin
                 valid[alloc_way][index_in] <=1'b1;
                 tag[alloc_way][index_in] <= tag_in;
-                // cache_data[alloc_way][index_in] <= mem_rdata;
-                //dirty[alloc_way][index_in] <= 1'b0;
                 if (cpu_wr_en) begin
-                    // cache_data[alloc_way][index_in] <= 
-                    //     {mem_rdata[8*Cache_Block_Size-1 : 8*offset_in+DataWidth],
-                    //         cpu_wdata,
-                    //     mem_rdata[8*offset_in-1 : 0]};
                     cache_data[alloc_way][index_in] <= 
                         (mem_rdata & ~(({DataWidth{1'b1}} << (offset_in * 8)))) |
                         ({cpu_wdata} << (offset_in * 8));
@@ -202,19 +270,9 @@ module D_cache#(
             end
         end 
     end
+    //==================================状态机时序===========================//
 
-
-    //===============FIFO替换策略================//
-       
-    // fifo_counter u_fifo_counter #(
-    //     .Num_Cache_Way(Num_Cache_Way)
-    // ) (
-    //     .clk(clk),
-    //     .reset(reset),
-    //     .alloc_enable(alloc_enable),
-    //     .replace_way_out(alloc_way)
-    // );
-
+    //============================FIFO替换策略========================//
     generate
         for (genvar set = 0; set < Num_Cache_Set; set++) begin : fifo_inst_gen
             fifo_counter #(
@@ -227,5 +285,5 @@ module D_cache#(
             );
         end
     endgenerate
-
+    //============================FIFO替换策略========================//
 endmodule 

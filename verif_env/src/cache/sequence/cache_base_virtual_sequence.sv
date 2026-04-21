@@ -13,14 +13,6 @@ task cache_base_virtual_sequence::body();
     cpu_cache_sequence cpu_cache_seq;
     mem_cache_sequence mem_cache_seq;
 
-
-
-
-    // 调试1：打印当前路径
-    `uvm_info("DEBUG", $sformatf("Getting at path: %s", get_full_name()), UVM_LOW)
-    
-
-
     if(!uvm_config_db #(uvm_sequencer #(cpu_cache_transaction))::get(
         null, "", "cpu_cache_sqr", cpu_cache_sqr))
     `fatal("CPU-Cache sequencer not found in config_db")
@@ -33,7 +25,6 @@ task cache_base_virtual_sequence::body();
     mem_cache_seq = mem_cache_sequence::type_id::create("mem_cache_seq");
 
     fork
-        $display("begin to start cpu_cache_seq");
         cpu_cache_seq.start(cpu_cache_sqr);
         if (mem_cache_sqr != null) begin
             mem_cache_seq.start(mem_cache_sqr);
