@@ -4,7 +4,7 @@ import cache_pkg::*;
 import clk_rst_pkg::*;
 `include "uvm_macros.svh"
 class cache_environment extends uvm_env;
-    cpu_cache_agent cpu_cache_agt;
+    cpu_agent cpu_agt;
 //    mem_cache_agent mem_cache_agt;
 
     clk_rst_agent clk_rst_agt;
@@ -29,7 +29,7 @@ endclass
 
 function void cache_environment::build_phase(uvm_phase phase);
     super.build_phase(phase);
-    cpu_cache_agt = cpu_cache_agent::type_id::create("cpu_agt", this);
+    cpu_agt = cpu_agent::type_id::create("cpu_agt", this);
 //    mem_cache_agt = mem_cache_agent::type_id::create("mem_cache_agt", this);
     clk_rst_agt = clk_rst_agent::type_id::create("clk_rst_agt", this);
 
@@ -43,8 +43,8 @@ endfunction
 
 function void cache_environment::connect_phase(uvm_phase phase);
     // 将sequencer通过config_db传递给virtual sequence
-    uvm_config_db #(uvm_sequencer #(cpu_cache_transaction))::set(
-        null, "*", "cpu_cache_sqr", cpu_cache_agt.sequencer);
+    uvm_config_db #(uvm_sequencer #(cpu_req_transaction))::set(
+        null, "*", "cpu_req_sqr", cpu_agt.cpu_req_sqr);
     //uvm_config_db #(uvm_sequencer #(mem_cache_transaction))::set(
     //    null, "*", "mem_cache_sqr", mem_cache_agt.sequencer);
 endfunction

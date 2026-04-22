@@ -29,33 +29,33 @@
 //    testbench files
 //---------------------------//
 
-// //-----------interface-------//
-// ../src/common/interface/clk_rst_interface.sv
-// ../src/cache/interface/cache_interface.sv
-// //-----------interface-------//
+//-----------interface-------//
+../src/common/interface/clk_rst_interface.sv
+../src/cache/interface/cache_interface.sv
+//-----------interface-------//
 
 
-// //-----------package---------//
-// ../src/common/pkg/clk_rst_pkg.sv
-// ../src/cache/pkg/cache_pkg.sv
-// //-----------package---------//
+//-----------package---------//
+../src/common/pkg/clk_rst_pkg.sv
+../src/cache/pkg/cache_pkg.sv
+//-----------package---------//
 
 
-// //---------environment-------//
-// ../src/cache/component/cache_environment.sv
-// //---------environment-------//
+//---------environment-------//
+../src/cache/component/cache_environment.sv
+//---------environment-------//
 
 
-// //-------------test----------//
-// ../test/common/clock_smoke_test.sv
-// ../test/cache/cache_basic_test.sv
-// //-------------test----------//
+//-------------test----------//
+../test/common/clock_smoke_test.sv
+../test/cache/cache_basic_test.sv
+//-------------test----------//
 
 
-// //-------------top-----------//
-// ../tb/tb_top.sv
-// //-------------top-----------//
+//-------------top-----------//
+../tb/tb_top.sv
+//-------------top-----------//
 
-//-------------------------------mem test------------------------------//
-../tb/mem_tb.sv
+// //-------------------------------mem test------------------------------//
+// ../tb/mem_tb.sv
 
