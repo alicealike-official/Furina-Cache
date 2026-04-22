@@ -10,7 +10,7 @@ my_verif_env/                # 验证环境根目录
 |   |   |-- component        # 公共组件(如时钟模块的driver和agent)
 |   |   |-- interface/       # 公共接口(如时钟/复位)
 |   |   |-- config/          # 公共配置类
-|   |   |-- define/          # common definition
+|   |   |-- define/          # 公共定义
 |   |   |-- pkg/             # 公共包(如类型定义、宏)
 |   |   |-- model/           # 公共参考模型(目前只包含mem)
 |   |   `-- utils/           # 公共工具类
@@ -20,6 +20,7 @@ my_verif_env/                # 验证环境根目录
 |   |   |-- model/           # CPU 行为模型(可选)
 |   |   |-- coverage/        # CPU 覆盖率模型
 |   |   |-- interface/       # CPU 接口
+|   |   |-- deprecated/      # CPU 中弃用的文件
 |   |   `-- pkg/             # CPU 专用包
 |   |-- cache/               # Cache 子系统
 |   |   |-- component/       # Cache 验证组件
@@ -27,6 +28,7 @@ my_verif_env/                # 验证环境根目录
 |   |   |-- model/           # Cache 行为模型(可选)
 |   |   |-- coverage/        # Cache 覆盖率模型
 |   |   |-- interface/       # Cache 接口
+|   |   |-- deprecated/      # Cache 中弃用的文件
 |   |   `-- pkg/             # Cache 专用包
 |   |-- ahb3/                # AHB3 子系统
 |   |   |-- component/       # AHB3 组件
@@ -34,6 +36,7 @@ my_verif_env/                # 验证环境根目录
 |   |   |-- monitor/         # AHB3 监视器
 |   |   |-- coverage/        # AHB3 覆盖率模型
 |   |   |-- interface/       # AHB3 接口
+|   |   |-- deprecated/      # AHB3 中弃用的文件
 |   |   `-- pkg/             # AHB3 专用包
 |   `-- top/                 # 顶层环境
 |       |-- env/             # 顶层环境类(整合 CPU、Cache、AHB3)

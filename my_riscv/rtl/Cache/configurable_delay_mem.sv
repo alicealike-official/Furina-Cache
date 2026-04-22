@@ -142,7 +142,7 @@ module configurable_delay_mem #(
                 mem_resp_valid_r <= 0;
             end
 
-            else if((curr_state == IDLE && latency_in == 0) || (curr_state == WAIT && current_latency == 1)) begin
+            else if(mem_req_valid && (curr_state == IDLE && latency_in == 0) || (curr_state == WAIT && current_latency == 1)) begin
                 mem_resp_valid_r <= 1;
             end
 
@@ -157,7 +157,7 @@ module configurable_delay_mem #(
         if (!rst_n) begin
             integer i;
             for (i = 0; i < MEM_SIZE; i = i + 1) begin
-                memory[i] <= 8'b0;
+                memory[i] <= i[7:0];
             end
         end
 
@@ -176,8 +176,8 @@ module configurable_delay_mem #(
     assign mem_resp_valid = mem_resp_valid_r;
     assign mem_resp_handshake = mem_resp_valid && mem_resp_ready;
 
-    assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? read_cache_line(mem_addr) : {8*Cache_Block_Size{1'b0}};
+    //assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? read_cache_line(mem_addr) : {8*Cache_Block_Size{1'b0}};
 
     //for debug
-    //assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? {8*Cache_Block_Size{1'b1}} : {8*Cache_Block_Size{1'b0}};
+    assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? {8*Cache_Block_Size{1'b1}} : {8*Cache_Block_Size{1'b0}};
 endmodule

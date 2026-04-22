@@ -18,6 +18,7 @@
 +incdir+../src/cache/component
 +incdir+../src/cache/component/agent
 +incdir+../src/cache/component/driver
++incdir+../src/cache/component/monitor
 +incdir+../src/cache/interface
 +incdir+../src/cache/model
 +incdir+../src/cache/pkg

@@ -16,7 +16,6 @@ task cpu_cache_sequence::body();
         `uvm_do_with(tr, {
             cpu_req == 1;
             cpu_wr_en == 1;
-            cpu_req_addr == 0;
         })
     end
 endtask

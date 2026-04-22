@@ -1,3 +1,8 @@
+//=================仿真配置===============//
+`define DEBUG
+
+
+
 
 `define DATA_ADDR_BUS  32
 `define DATA_WIDTH     32

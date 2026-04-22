@@ -25,6 +25,13 @@ function void cpu_driver::build_phase(uvm_phase phase);
 endfunction
     
 task cpu_driver::run_phase(uvm_phase phase);
+    wait(cache_vif.rst_n);
+    @(posedge cache_vif.clk);
+
+    `ifdef DEBUG
+    -> cache_vif.state_begin_to_driver;
+    `endif
+
     forever begin
         seq_item_port.get_next_item(req);
         drive_transaction(req);
@@ -33,15 +40,37 @@ task cpu_driver::run_phase(uvm_phase phase);
 endtask
     
 task cpu_driver::drive_transaction(cpu_req_transaction cpu_req_tr);
-    wait(cache_vif.rst_n);
-    $display(cpu_req_tr.convert2string());
-    cache_vif.cpu_req <= cpu_req_tr.cpu_req;
-    cache_vif.cpu_wr_en <= cpu_req_tr.cpu_wr_en;
-    cache_vif.cpu_req_addr <= cpu_req_tr.cpu_req_addr;
-    cache_vif.cpu_wdata <= cpu_req_tr.cpu_wdata;
+    // //发起请求（先拉高 valid）
+    // cache_vif.cpu_valid    <= 1;
+    // cache_vif.cpu_wr_en    <= cpu_req_tr.cpu_wr_en;
+    // cache_vif.cpu_req_addr <= cpu_req_tr.cpu_req_addr;
+    // cache_vif.cpu_wdata    <= cpu_req_tr.cpu_wdata;
 
-    wait(cache_vif.ready);  
-    // tr.cache_rdata = cache_vif.cache_rdata;
-    // tr.ready = cache_vif.ready; 
+    // //等待握手成功
+    // do begin
+    //     @(posedge cache_vif.clk);
+    // end while (!(cache_vif.cpu_valid && cache_vif.cpu_ready));
+
+    // //下一拍再拉低 valid
+    // @(posedge cache_vif.clk);
+    // cache_vif.cpu_valid <= 0;
+
+    // //等 cache 完成
+    // do begin
+    //     @(posedge cache_vif.clk);
+    // end while (!cache_vif.cpu_ready);
+        // 发起请求
+    cache_vif.cpu_valid    <= 1;
+    cache_vif.cpu_wr_en    <= cpu_req_tr.cpu_wr_en;
+    cache_vif.cpu_req_addr <= cpu_req_tr.cpu_req_addr;
+    cache_vif.cpu_wdata    <= cpu_req_tr.cpu_wdata;
+
+    // 只等 handshake
+    do begin
+        @(posedge cache_vif.clk);
+    end while (!(cache_vif.cpu_valid && cache_vif.cpu_ready));
+
+    // 下一拍撤 valid
     @(posedge cache_vif.clk);
+    cache_vif.cpu_valid <= 0;
 endtask

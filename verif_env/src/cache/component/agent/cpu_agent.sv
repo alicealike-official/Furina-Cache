@@ -1,6 +1,7 @@
 // cpu_agent.sv
 class cpu_agent extends uvm_agent;
     cpu_driver cpu_drv;
+    cpu_in_monitor cpu_in_mon;
     uvm_sequencer #(cpu_req_transaction) cpu_req_sqr;
     
     `uvm_component_utils(cpu_agent)
@@ -22,6 +23,7 @@ endclass
 function void cpu_agent::build_phase(uvm_phase phase);
     super.build_phase(phase);
     cpu_drv = cpu_driver::type_id::create("cpu_driver", this);
+    cpu_in_mon = cpu_in_monitor::type_id::create("cpu_in_monitor", this);
     cpu_req_sqr = uvm_sequencer #(cpu_req_transaction)::type_id::create("cpu_req_sqr", this);
 endfunction
     

@@ -1,18 +1,17 @@
 class mem_access_transaction extends uvm_sequence_item;
-    rand bit                            mem_req;     
-    rand bit                            mem_wr_en;  
-    rand bit [`DATA_ADDR_BUS-1 : 0]     mem_addr;     
-    rand bit [`DATA_WIDTH-1 : 0]        mem_wdata[`WORDS_PER_BLOCK];
-    rand bit                            mem_resp;
-    rand bit [`DATA_WIDTH-1 : 0]        mem_rdata[`WORDS_PER_BLOCK];
+    bit                            mem_req_valid;     
+    bit                            mem_wr_en;  
+    bit [`DATA_ADDR_BUS-1 : 0]     mem_addr;     
+    bit [`DATA_WIDTH-1 : 0]        mem_wdata[`WORDS_PER_BLOCK];
+    bit                            mem_resp_ready;
 
+    int trans_id;
+    static int next_id = 0;
     `uvm_object_utils(mem_access_transaction)
 
-    constraint addr_align {
-        mem_addr[1:0] == 2'b00;
-    }
     function new(string name = "mem_access_transaction");
         super.new();
+        trans_id = next_id++;
     endfunction
     extern virtual function string convert2string();
 endclass

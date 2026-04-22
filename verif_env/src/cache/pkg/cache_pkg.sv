@@ -6,6 +6,7 @@ package cache_pkg;
     `include "cpu_sequence.sv"
     `include "cache_base_virtual_sequence.sv"
     `include "cpu_driver.sv"
+    `include "cpu_in_monitor.sv"
     `include "cpu_agent.sv"
 //     `include "cache_base_transaction.sv"
 //     `include "cpu_cache_transaction.sv"
