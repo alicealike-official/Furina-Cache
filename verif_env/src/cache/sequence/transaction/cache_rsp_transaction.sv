@@ -1,7 +1,8 @@
 class cache_rsp_transaction extends uvm_sequence_item;
     //响应
     rand  bit [`DATA_WIDTH-1 : 0]     cache_rdata;    
-    rand  bit                         cpu_ready;
+    rand  bit                         cpu_req_ready;
+    rand  bit                         cpu_resp_valid;
 
     int trans_id;
     static int next_id = 0;

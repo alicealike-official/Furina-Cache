@@ -4,12 +4,18 @@ interface  cache_interface(
     input clk,
     input rst_n
 );
-    logic                                   cpu_valid;        // CPU访问请求
+    //cpu-cache握手信号
+    logic                                   cpu_req_valid;  
+    logic                                   cpu_req_ready; 
+    logic                                   cpu_resp_valid;
+    logic                                   cpu_resp_ready;
+
+    
     logic                                   cpu_wr_en;      // CPU写使能（1=写，0=读）
     logic   [`DATA_ADDR_BUS-1 : 0]          cpu_req_addr;   // CPU访问地址
     logic   [`DATA_WIDTH-1 : 0]             cpu_wdata;      // CPU写数据
     logic   [`DATA_WIDTH-1 : 0]             cache_rdata;    // Cache读数据
-    logic                                   cpu_ready;          // 访问完成信号
+ 
 
     logic                                   mem_req_valid;  // 内存请求
     logic                                   mem_req_ready;  //

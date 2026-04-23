@@ -14,7 +14,7 @@ task cpu_req_sequence::body();
     cpu_req_transaction tr;
     for (int i = 0; i < num_transactions; i++) begin
         `uvm_do_with(tr, {
-            cpu_valid == 1;
+            cpu_req_valid == 1;
             cpu_wr_en == 0;
             cpu_req_addr == 0;
         })

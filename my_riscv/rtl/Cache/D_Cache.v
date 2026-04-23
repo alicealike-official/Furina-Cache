@@ -11,12 +11,14 @@ module D_cache#(
     input  wire                             reset,
     
     // CPU <-> Cache 接口（读写操作）
-    input  wire                             cpu_valid,        // CPU访问请求
+    input  wire                             cpu_req_valid,        // CPU访问请求
     input  wire                             cpu_wr_en,      // CPU写使能（1=写，0=读）
     input  wire [DataAddrBus-1 : 0]         cpu_req_addr,   // CPU访问地址
     input  wire [DataWidth-1 : 0]           cpu_wdata,      // CPU写数据
     output wire [DataWidth-1 : 0]           cache_rdata,    // Cache读数据
-    output wire                             cpu_ready,          // 访问完成信号
+    output wire                             cpu_req_ready,          // 访问完成信号
+    output wire                             cpu_resp_valid,
+    input  wire                             cpu_resp_ready,
 
     // Cache -> Memory 请求通道
     output wire                             mem_req_valid,    // cache to mem request
@@ -90,14 +92,19 @@ module D_cache#(
     //====================状态机定义=============================//
 
     //================================生成cpu握手信号=================================//
-    wire cpu_handshake;
-    assign cpu_handshake = cpu_valid && cpu_ready;
+    wire cpu_req_handshake; //表示cache接受到了这个请求，要求保持一个周期时间
+    assign cpu_req_handshake = cpu_req_valid && cpu_req_ready;
+
+    wire cpu_resp_handshake; //表示cache处理完了这个请求，可以发送下一个请求了，要求保持一个周期
+    assign cpu_resp_handshake = cpu_resp_valid && cpu_resp_ready;
+
+
     //================================生成cpu握手信号=================================//
 
     //==================================alloc信号================================//
 
     wire alloc_enable_condition;//alloc使能
-    assign alloc_enable_condition = cpu_handshake && (curr_state == IDLE && ~hit_sign);
+    assign alloc_enable_condition = cpu_req_handshake && (curr_state == IDLE && ~hit_sign);
 
     wire [Num_Cache_Set-1:0] alloc_enable;//确认alloc使能的哪一路
     assign alloc_enable = alloc_enable_condition ? (1 << index_in) : {Num_Cache_Set{1'b0}};
@@ -118,8 +125,8 @@ module D_cache#(
     //================================辅助判断信号===============================//
     wire is_read_miss;//read miss
     wire is_write_miss;//write miss
-    assign is_read_miss = (curr_state == IDLE && ~hit_sign && cpu_handshake && ~cpu_wr_en);   
-    assign is_write_miss = (curr_state == IDLE && ~hit_sign && cpu_handshake && cpu_wr_en); 
+    assign is_read_miss = (curr_state == IDLE && ~hit_sign && cpu_req_handshake && ~cpu_wr_en);   
+    assign is_write_miss = (curr_state == IDLE && ~hit_sign && cpu_req_handshake && cpu_wr_en); 
 
     wire is_dirty;//判断替换行是否dirty
     assign is_dirty = (curr_state == DIRTY_CHECK && dirty[alloc_way][index_in]); 
@@ -150,25 +157,53 @@ module D_cache#(
     wire mem_req_valid_condition;
 
     assign mem_req_valid_condition = is_write_miss || (curr_state == DIRTY_CHECK) || (curr_state == WB && mem_resp_handshake);
-    // valid 寄存器
-    reg mem_req_valid_r;
-    always @(posedge clk or negedge reset) begin
-        if (!reset) begin
-            mem_req_valid_r <= 1'b0;
-        end
-        else if (mem_req_valid_r && mem_req_ready) begin
-            mem_req_valid_r <= 1'b0;  // 握手成功，清除
-        end
-        else if (mem_req_valid_condition && !mem_req_valid_r) begin
-            mem_req_valid_r <= 1'b1;  // 需要发请求，拉高
-        end
-    end
-    assign mem_req_valid = mem_req_valid_r;
+ 
 
     assign mem_resp_ready = (curr_state == WB) || (curr_state == MISS_WAIT);
 
     //================================生成mem握手信号=================================//
 
+    //================================valid寄存器==================================//
+    //cpu_resp_valid寄存器
+    wire cpu_resp_valid_condition;
+    assign cpu_resp_valid_condition = (curr_state == IDLE && hit_sign) || miss_done;
+    
+    // reg cpu_resp_valid_r;
+    // always @(posedge clk or negedge reset) begin
+    //     if (!reset) begin
+    //         cpu_resp_valid_r <= 1'b0;
+    //     end
+    //     else if (cpu_resp_valid_condition && !cpu_resp_valid_r) begin
+    //         cpu_resp_valid_r <= 1'b1;  // 需要发请求，拉高
+    //     end
+    //     else if (cpu_resp_valid_r && cpu_resp_ready) begin
+    //         cpu_resp_valid_r <= 1'b0;  // 握手成功，清除
+    //     end
+    //     else begin
+    //         cpu_resp_valid_r <= cpu_resp_valid_r;
+    //     end
+    // end
+
+    assign cpu_resp_valid = cpu_resp_valid_condition;
+
+       // valid 寄存器
+    reg mem_req_valid_r;
+    always @(posedge clk or negedge reset) begin
+        if (!reset) begin
+            mem_req_valid_r <= 1'b0;
+        end
+        else if (mem_req_valid_condition && !mem_req_valid_r) begin
+            mem_req_valid_r <= 1'b1;  // 需要发请求，拉高
+        end
+        else if (mem_req_valid_r && mem_req_ready) begin
+            mem_req_valid_r <= 1'b0;  // 握手成功，清除
+        end
+        else begin
+            mem_req_valid_r <= mem_req_valid_r;
+        end
+    end
+    assign mem_req_valid = mem_req_valid_r;
+    //================================valid寄存器==================================//
 
 
     //================================生成mem传输信号=================================//
@@ -190,14 +225,14 @@ module D_cache#(
 
 
     //============================cache to cpu signal===========================//
-    wire not_ready;
-    assign not_ready                = (cpu_valid && curr_state == IDLE && ~hit_sign) || 
-                                            (curr_state == DIRTY_CHECK) || 
-                                            (curr_state == WB) ||
-                                            (curr_state == MISS_WAIT && !mem_resp_handshake);
+    // wire not_ready;
+    // assign not_ready                = (cpu_valid && curr_state == IDLE && ~hit_sign) || 
+    //                                         (curr_state == DIRTY_CHECK) || 
+    //                                         (curr_state == WB) ||
+    //                                         (curr_state == MISS_WAIT && !mem_resp_handshake);
     //assign ready                    = (cpu_req && ((curr_state == IDLE && hit_sign) || miss_done)) || !cpu_req;
-    //assign ready                    = !not_ready;
-    assign cpu_ready                = (curr_state == IDLE);
+    //assign cpu_ready                    = !not_ready;
+    assign cpu_req_ready                = (curr_state == IDLE);
     assign cache_rdata              = (hit_sign) ? hit_rdata : alloc_data;
     //============================cache to cpu signal===========================//
 
@@ -206,14 +241,14 @@ module D_cache#(
     always @(*) begin
         case(curr_state)
             IDLE: begin
-                if (!cpu_valid || cpu_handshake && hit_sign) begin
+                if (!cpu_req_valid || cpu_req_handshake && hit_sign) begin
                     next_state = IDLE;
                 end
 
-                else if (cpu_handshake && cpu_wr_en && ~hit_sign) begin
+                else if (cpu_req_handshake && cpu_wr_en && ~hit_sign) begin
                     next_state = MISS_WAIT;
                 end
-                else if (cpu_handshake && ~cpu_wr_en && ~hit_sign)begin
+                else if (cpu_req_handshake && ~cpu_wr_en && ~hit_sign)begin
                     next_state = DIRTY_CHECK;
                 end
 
@@ -262,7 +297,7 @@ module D_cache#(
         else begin
             curr_state <= next_state;
 
-            if(cpu_handshake && cpu_wr_en && hit_sign && curr_state == IDLE)begin
+            if(cpu_req_handshake && cpu_wr_en && hit_sign && curr_state == IDLE)begin
                 cache_data[hit_way][index_in][8*offset_in +: DataWidth]     <= cpu_wdata;
                 dirty[hit_way][index_in]                                    <= 1'b1;
             end

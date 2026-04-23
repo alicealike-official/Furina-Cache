@@ -1,9 +1,10 @@
 class cpu_req_transaction extends uvm_sequence_item;
     //请求
-    rand  bit                           cpu_valid;    
+    rand  bit                           cpu_req_valid;
     rand  bit                           cpu_wr_en;    
     rand  bit [`DATA_ADDR_BUS-1 : 0]    cpu_req_addr;
     rand  bit [`DATA_WIDTH-1 : 0]       cpu_wdata;
+    rand  bit                           cpu_resp_ready;
 
     int trans_id;
     static int driver_id = 0;
@@ -19,11 +20,15 @@ class cpu_req_transaction extends uvm_sequence_item;
     }
 
     constraint no_cpu_req {
-        if (cpu_valid == 0) {
+        if (cpu_req_valid == 0) {
             cpu_wr_en == 0;
             cpu_req_addr == 0;
             cpu_wdata == 0; 
        }
+    }
+
+    constraint always_resp_ready {
+        cpu_resp_ready == 1;
     }
 
     function new(string name = "cpu_req_transaction");
@@ -37,12 +42,12 @@ function string cpu_req_transaction::convert2string();
     string info;
     if (cpu_wr_en) begin
         info = $sformatf("CPU[%0d]: enable: %s, req:%s, req_addr:%0d, wdata=%0d",
-                            trans_id, cpu_valid?"YES":"NO" ,"WR", cpu_req_addr, cpu_wdata);
+                            trans_id, cpu_req_valid?"YES":"NO" ,"WR", cpu_req_addr, cpu_wdata);
     end
 
     else begin
             info = $sformatf("CPU[%0d]: enable: %s, req:%s, req_addr:%0d",
-                            trans_id, cpu_valid?"YES":"NO", "RD", cpu_req_addr);
+                            trans_id, cpu_req_valid?"YES":"NO", "RD", cpu_req_addr);
     end
     return info;
 endfunction

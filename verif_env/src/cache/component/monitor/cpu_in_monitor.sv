@@ -45,11 +45,11 @@ task cpu_in_monitor::collect_transaction();
         tr = new();
         tr.trans_id = tr.monitor_id++;
         
-        tr.cpu_valid <= cache_vif.cpu_valid;
+        tr.cpu_req_valid <= cache_vif.cpu_req_valid;
         tr.cpu_wr_en <= cache_vif.cpu_wr_en;
         tr.cpu_req_addr <= cache_vif.cpu_req_addr;
         tr.cpu_wdata <= cache_vif.cpu_wdata;
-        while(!cache_vif.cpu_ready) begin
+        while(!cache_vif.cpu_req_ready) begin
            @(posedge cache_vif.clk);
         end
         @(posedge cache_vif.clk);
