@@ -1,6 +1,6 @@
 class cpu_in_monitor extends uvm_monitor;
     virtual cache_interface cache_vif;
-    uvm_blocking_put_port #(cpu_req_transaction) cpu_req_port;
+    uvm_analysis_port #(cpu_req_transaction) cpu_in_mon_port;
     
     `uvm_component_utils(cpu_in_monitor)
     
@@ -10,6 +10,8 @@ class cpu_in_monitor extends uvm_monitor;
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end
+
+        cpu_in_mon_port = new("cpu_in_mon_port", this);
     endfunction
     
 
@@ -37,18 +39,21 @@ task cpu_in_monitor::run_phase(uvm_phase phase);
 endtask
     
 task cpu_in_monitor::collect_transaction();
-    cpu_req_transaction tr;
+    
 
     forever begin
-        
+        cpu_req_transaction tr;
         @(negedge cache_vif.clk);
         tr = new();
         tr.trans_id = tr.monitor_id++;
         -> cache_vif.state_begin_to_mon;
-        tr.cpu_req_valid <= cache_vif.cpu_req_valid;
-        tr.cpu_wr_en <= cache_vif.cpu_wr_en;
-        tr.cpu_req_addr <= cache_vif.cpu_req_addr;
-        tr.cpu_wdata <= cache_vif.cpu_wdata;
+        tr.cpu_req_valid    = cache_vif.cpu_req_valid;
+        //$display("valid = %0d", tr.cpu_req_valid);
+        tr.cpu_wr_en        = cache_vif.cpu_wr_en;
+        tr.cpu_req_addr     = cache_vif.cpu_req_addr;
+        tr.cpu_wdata        = cache_vif.cpu_wdata;
+        tr.cpu_resp_ready   = cache_vif.cpu_resp_ready;
+        cpu_in_mon_port.write(tr);
         do begin
             @(posedge cache_vif.clk);
         end while (!(cache_vif.cpu_resp_valid));

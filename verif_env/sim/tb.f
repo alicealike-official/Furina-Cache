@@ -19,6 +19,7 @@
 +incdir+../src/cache/component/agent
 +incdir+../src/cache/component/driver
 +incdir+../src/cache/component/monitor
++incdir+../src/cache/component/scoreboard
 +incdir+../src/cache/interface
 +incdir+../src/cache/model
 +incdir+../src/cache/pkg
@@ -41,6 +42,10 @@
 ../src/cache/pkg/cache_pkg.sv
 //-----------package---------//
 
+
+//---------scoreboard--------//
+../src/cache/component/scoreboard/cpu_stimulus_scoreboard.sv
+//---------scoreboard--------//
 
 //---------environment-------//
 ../src/cache/component/cache_environment.sv

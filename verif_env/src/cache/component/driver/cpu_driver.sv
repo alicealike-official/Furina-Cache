@@ -1,6 +1,6 @@
 class cpu_driver extends uvm_driver #(cpu_req_transaction);
     virtual cache_interface cache_vif;
-    
+    uvm_analysis_port #(cpu_req_transaction) driver_port;
     `uvm_component_utils(cpu_driver)
     
     function new(string name = "cpu_driver",
@@ -9,6 +9,7 @@ class cpu_driver extends uvm_driver #(cpu_req_transaction);
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end
+        driver_port = new("driver_port", this);
     endfunction
     
 
@@ -35,6 +36,7 @@ task cpu_driver::run_phase(uvm_phase phase);
 
     forever begin
         seq_item_port.get_next_item(req);
+        
         drive_transaction(req);
         seq_item_port.item_done();
     end
@@ -62,7 +64,9 @@ task cpu_driver::drive_transaction(cpu_req_transaction cpu_req_tr);
     // end while (!cache_vif.cpu_ready);
         // 发起请求
     -> cache_vif.state_begin_to_drive;
-    cache_vif.cpu_req_valid     <= 1;
+    driver_port.write(cpu_req_tr);
+    //$display("driver valid= %0d", cpu_req_tr.cpu_req_valid);
+    cache_vif.cpu_req_valid     <= cpu_req_tr.cpu_req_valid;
     cache_vif.cpu_resp_ready    <= cpu_req_tr.cpu_resp_ready;
     cache_vif.cpu_wr_en         <= cpu_req_tr.cpu_wr_en;
     cache_vif.cpu_req_addr      <= cpu_req_tr.cpu_req_addr;

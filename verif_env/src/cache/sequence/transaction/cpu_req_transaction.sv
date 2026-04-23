@@ -36,6 +36,7 @@ class cpu_req_transaction extends uvm_sequence_item;
     endfunction
 
     extern virtual function string convert2string();
+    extern virtual function bit compare(uvm_object rhs, uvm_comparer = null);
 endclass
 
 function string cpu_req_transaction::convert2string();
@@ -50,4 +51,41 @@ function string cpu_req_transaction::convert2string();
                             trans_id, cpu_req_valid?"YES":"NO", "RD", cpu_req_addr);
     end
     return info;
+endfunction
+
+function bit cpu_req_transaction::compare(uvm_object rhs, uvm_comparer = null);
+        cpu_req_transaction tr;
+        bit match = 1'b1;
+
+        // 类型检查
+        if (!$cast(tr, rhs)) begin
+            `error("Type mismatch")
+            return 0;
+        end
+        
+        if (cpu_req_valid != tr.cpu_req_valid) begin
+            match = 0;
+            `info_med($sformatf("valid mismatch: %0h vs %0h",cpu_req_valid, tr.cpu_req_valid))
+        end
+
+        if (cpu_wr_en != tr.cpu_wr_en) begin
+            match = 0;
+            `info_med($sformatf("wr_en mismatch: %0h vs %0h",cpu_wr_en, tr.cpu_wr_en))
+        end
+        
+        if (cpu_req_addr != tr.cpu_req_addr) begin
+            match = 0;
+            `info_med($sformatf("addr mismatch: %0h vs %0h",cpu_req_addr, tr.cpu_req_addr))
+        end
+
+        if (cpu_wdata != tr.cpu_wdata) begin
+            match = 0;
+            `info_med($sformatf("write data mismatch: %0h vs %0h",cpu_wdata, tr.cpu_wdata))
+        end
+
+        if (cpu_resp_ready != tr.cpu_resp_ready) begin
+            match = 0;
+            `info_med($sformatf("resp ready mismatch: %0h vs %0h",cpu_resp_ready, tr.cpu_resp_ready))
+        end
+        return match;
 endfunction

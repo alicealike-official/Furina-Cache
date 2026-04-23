@@ -10,6 +10,7 @@ class cache_environment extends uvm_env;
     clk_rst_agent clk_rst_agt;
     clk_rst_config clk_rst_cfg;
     //cache_virtual_sequencer cache_vsqr;
+    cpu_stimulus_scoreboard cpu_stimulus_sbd;
 
     `uvm_component_utils(cache_environment)
     
@@ -34,6 +35,7 @@ function void cache_environment::build_phase(uvm_phase phase);
     clk_rst_agt = clk_rst_agent::type_id::create("clk_rst_agt", this);
 
     clk_rst_cfg = clk_rst_config::type_id::create("clk_rst_config");
+    cpu_stimulus_sbd = cpu_stimulus_scoreboard::type_id::create("cpu_stimulus_scoreboad", this);
     clk_rst_cfg.clock_period = 10;
     clk_rst_cfg.initial_reset_cycles = 1;
     // 通过 config_db 传递给 driver
@@ -47,4 +49,6 @@ function void cache_environment::connect_phase(uvm_phase phase);
         null, "*", "cpu_req_sqr", cpu_agt.cpu_req_sqr);
     //uvm_config_db #(uvm_sequencer #(mem_cache_transaction))::set(
     //    null, "*", "mem_cache_sqr", mem_cache_agt.sequencer);
+    cpu_agt.cpu_drv.driver_port.connect(cpu_stimulus_sbd.driver_export);
+    cpu_agt.cpu_in_mon.cpu_in_mon_port.connect(cpu_stimulus_sbd.monitor_export);
 endfunction
