@@ -27,7 +27,7 @@ endfunction
     
 task cpu_in_monitor::run_phase(uvm_phase phase);
     wait(cache_vif.rst_n);
-    @(posedge cache_vif.clk);
+    repeat(3)@(posedge cache_vif.clk);
     `ifdef DEBUG
     ->cache_vif.state_begin_to_mon;
     `endif
@@ -44,16 +44,14 @@ task cpu_in_monitor::collect_transaction();
         @(negedge cache_vif.clk);
         tr = new();
         tr.trans_id = tr.monitor_id++;
-        
+        -> cache_vif.state_begin_to_mon;
         tr.cpu_req_valid <= cache_vif.cpu_req_valid;
         tr.cpu_wr_en <= cache_vif.cpu_wr_en;
         tr.cpu_req_addr <= cache_vif.cpu_req_addr;
         tr.cpu_wdata <= cache_vif.cpu_wdata;
-        while(!cache_vif.cpu_req_ready) begin
-           @(posedge cache_vif.clk);
-        end
-        @(posedge cache_vif.clk);
-        $display({"MONITOR: ",tr.convert2string()});
+        do begin
+            @(posedge cache_vif.clk);
+        end while (!(cache_vif.cpu_resp_valid));
 
         //cpu_req_port.write(tr);
     end
