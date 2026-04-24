@@ -165,7 +165,18 @@ module configurable_delay_mem #(
         end
 
         else begin
-            mem_wr_en_r <= 
+            if(mem_req_handshake) begin
+                mem_wr_en_r <= mem_wr_en;
+                mem_addr_r <= mem_addr;
+                mem_wdata_r <= mem_wdata;
+            end
+
+            if (mem_resp_handshake) begin
+                mem_wr_en_r <= 0;
+                mem_addr_r <= 0;
+                mem_wdata_r <= 0;
+            end
+        end
     end
 
     always @(posedge clk or negedge rst_n) begin
@@ -178,8 +189,8 @@ module configurable_delay_mem #(
         end
 
         else begin
-            if (mem_resp_handshake && mem_wr_en ) begin
-                write_cache_line(mem_addr, mem_wdata_r);
+            if (mem_resp_handshake && mem_wr_en_r ) begin
+                write_cache_line(mem_addr_r, mem_wdata_r);
             end
         end
     end
@@ -192,7 +203,7 @@ module configurable_delay_mem #(
     assign mem_resp_valid = mem_resp_valid_r;
     assign mem_resp_handshake = mem_resp_valid && mem_resp_ready;
 
-    assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? read_cache_line(mem_addr) : {8*Cache_Block_Size{1'b0}};
+    assign mem_rdata = (mem_resp_valid && !mem_wr_en_r) ? read_cache_line(mem_addr_r) : {8*Cache_Block_Size{1'b0}};
 
     //for debug
     //assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? {8*Cache_Block_Size{1'b1}} : {8*Cache_Block_Size{1'b0}};
