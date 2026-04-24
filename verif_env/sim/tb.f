@@ -48,6 +48,7 @@
 
 //---------scoreboard--------//
 ../src/cache/component/scoreboard/cpu_stimulus_scoreboard.sv
+../src/cache/component/scoreboard/mem_req_scoreboard.sv
 //---------scoreboard--------//
 
 //---------environment-------//

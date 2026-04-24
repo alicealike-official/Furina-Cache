@@ -1,4 +1,4 @@
-// filename: d_cache_model.sv
+//d_cache_model.sv
 `ifndef D_CACHE_MODEL__SV
 `define D_CACHE_MODEL__SV
 `include "uvm_macros.svh"
@@ -9,14 +9,7 @@ import clk_rst_pkg::*;
 import cache_pkg::*;
 class d_cache_model extends uvm_component;
     `uvm_component_utils(d_cache_model)
-    
-    // // 配置参数
-    // parameter int `NUM_CACHE_SET = 32;
-    // parameter int Cache_Block_Size = 64;  // 字节
-    // parameter int `NUM_CACHE_WAY = 4;
-    // parameter int `DATA_WIDTH = 32;   // 位
-    // parameter int `DATA_ADDR_BUS = 32;
-    
+       
     // 计算派生参数
     localparam int Offset_Width = $clog2(`CACHE_BLOCK_SIZE);     // 块内偏移位数 (6 bits for 64B)
     localparam int Index_Width = $clog2(`NUM_CACHE_SET);        // 组索引位数 (5 bits for 32 sets)
@@ -168,9 +161,6 @@ task d_cache_model::mem_thread();
         mem_rsp_transaction rsp;
         mem_rsp_fifo.get(rsp);
         mem_rsp_mb.put(rsp);
-        // last_mem_rsp = mem_rsp_transaction::type_id::create("last_mem_rsp");
-        // last_mem_rsp.copy(rsp);
-        // -> mem_done_evt;
     end
 endtask
 
@@ -343,29 +333,22 @@ task d_cache_model::process_cpu_request(cpu_req_transaction req);
         
         // 选择替换行
         status.alloc_way = select_alloc_way(index);
-        
-        // 如果替换行有效且脏，写回
+
         if (cache[index][status.alloc_way].valid && cache[index][status.alloc_way].dirty) begin
-            
             tr_write = new();
             tr_write.mem_addr = {cache[index][status.alloc_way].tag, index, {Offset_Width{1'b0}}};
+            //tr_write.mem_addr = {cache[index][status.alloc_way].tag, index, offset};
             tr_write.mem_wr_en = 1'b1;
             //tr_write.mem_wdata = new[`WORDS_PER_BLOCK];
-        
             // 组装写回数据（连续的字）
             for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
                 tr_write.mem_wdata[i] = cache[index][status.alloc_way].data[i];
             end
-        
             mem_req_port.write(tr_write);
             writeback_count++;
-        
             `info_debug($sformatf("Write back: index=%0d, way=%0d, addr=0x%0h",
                     index, status.alloc_way, tr_write.mem_addr))
-            
-            
             mem_rsp_mb.get(rsp_write);
-
             //last_mem_rsp = rsp_write;
             cache[index][status.alloc_way].dirty = 1'b0;
         end
@@ -376,20 +359,18 @@ task d_cache_model::process_cpu_request(cpu_req_transaction req);
         tr_read.mem_addr = {tag, index, {Offset_Width{1'b0}}};
         tr_read.mem_wr_en = 1'b0;
         mem_req_port.write(tr_read);
-    
         `info_debug($sformatf("Fetch line: index=%0d, way=%0d, tag=0x%0h, addr=0x%0h",
                 index, status.alloc_way, tag, tr_read.mem_addr))
-        //access_memory_blocking();
-        
-        
         mem_rsp_mb.get(rsp_read);
-
         //last_mem_rsp = rsp_read;
         fetch_line(index, status.alloc_way, tag, rsp_read);
         // 处理当前请求
+
         if (req.cpu_wr_en) begin
             write_word_to_cache(index, status.alloc_way, word_offset, req.cpu_wdata);
         end
+        
+
         
         // 准备响应数据
         rsp = cache_rsp_transaction::type_id::create("rsp");

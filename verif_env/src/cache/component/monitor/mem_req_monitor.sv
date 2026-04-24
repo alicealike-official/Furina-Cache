@@ -41,18 +41,20 @@ task mem_req_monitor::collect_transaction();
     forever begin
         mem_req_transaction tr;
         tr = new();
-        do begin
-            @(posedge cache_vif.clk);
-        end while (!(cache_vif.mem_req_valid && cache_vif.mem_req_ready));
+        // do begin
+        //     @(posedge cache_vif.clk);
+        // end while (!(cache_vif.mem_req_valid && cache_vif.mem_req_ready));
 
-        @(negedge cache_vif.clk);
-        -> cache_vif.mem_req_monitor_evt;
+        // @(negedge cache_vif.clk);
+        @(posedge cache_vif.clk iff cache_vif.mem_req_valid && cache_vif.mem_req_ready);
+        
         tr.mem_wr_en = cache_vif.mem_wr_en;
         tr.mem_addr = cache_vif.mem_addr;
         // for (int idx = 0; idx < `WORDS_PER_BLOCK; idx++) begin
         //     tr.mem_wdata[idx] = cache_vif.mem_wdata[(idx+1)*`DATA_WIDTH - 1 : idx * `DATA_WIDTH];
         // end
         {>>{tr.mem_wdata}} = cache_vif.mem_wdata;
+        -> cache_vif.mem_req_monitor_evt;
         mem_req_mon_port.write(tr);
     end
 endtask

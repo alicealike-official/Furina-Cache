@@ -60,7 +60,7 @@ task cache_out_monitor::collect_transaction();
         tr.trans_id        = tr.monitor_id++;
         tr.cpu_req_ready  = cache_vif.cpu_req_ready;
         tr.cache_rdata    = cache_vif.cache_rdata;
-        $display("rdate = %0x", cache_vif.cache_rdata);
+        //$display("rdate = %0x", cache_vif.cache_rdata);
         tr.cpu_resp_valid = cache_vif.cpu_resp_valid;
         cache_out_mon_port.write(tr);
     end

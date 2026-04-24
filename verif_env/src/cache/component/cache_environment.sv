@@ -10,7 +10,13 @@ class cache_environment extends uvm_env;
     clk_rst_agent clk_rst_agt;
     clk_rst_config clk_rst_cfg;
     //cache_virtual_sequencer cache_vsqr;
+
+    //-------------scoreboard-------------//
     cpu_stimulus_scoreboard cpu_stimulus_sbd;
+    mem_req_scoreboard mem_req_sbd;
+    //-------------scoreboard-------------//
+
+
     d_cache_model d_cache_mdl;
 
     `uvm_component_utils(cache_environment)
@@ -36,7 +42,10 @@ function void cache_environment::build_phase(uvm_phase phase);
     clk_rst_agt = clk_rst_agent::type_id::create("clk_rst_agt", this);
 
     clk_rst_cfg = clk_rst_config::type_id::create("clk_rst_config");
+
     cpu_stimulus_sbd = cpu_stimulus_scoreboard::type_id::create("cpu_stimulus_scoreboad", this);
+    mem_req_sbd = mem_req_scoreboard::type_id::create("mem_req_scoreboard", this);
+
     d_cache_mdl = d_cache_model::type_id::create("d_cache_model", this);
     clk_rst_cfg.clock_period = 10;
     clk_rst_cfg.initial_reset_cycles = 1;
@@ -54,10 +63,15 @@ function void cache_environment::connect_phase(uvm_phase phase);
     
     //agent连接scoreboard
     cpu_agt.cpu_drv.driver_port.connect(cpu_stimulus_sbd.driver_export);
+
     cpu_agt.cpu_in_mon.cpu_in_mon_port.connect(cpu_stimulus_sbd.monitor_export);
+    cpu_agt.mem_req_mon.mem_req_mon_port.connect(mem_req_sbd.monitor_export);
 
     //agent连接ref_model
     cpu_agt.cpu_in_mon.cpu_in_mon_port.connect(d_cache_mdl.cpu_req_fifo.analysis_export);
     cpu_agt.mem_rsp_mon.mem_rsp_mon_port.connect(d_cache_mdl.mem_rsp_fifo.analysis_export);
+
+    //ref_model连接scoreboard
+    d_cache_mdl.mem_req_port.connect(mem_req_sbd.ref_model_export);
 
 endfunction
