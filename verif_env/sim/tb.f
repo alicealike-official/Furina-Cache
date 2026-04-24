@@ -42,6 +42,9 @@
 ../src/cache/pkg/cache_pkg.sv
 //-----------package---------//
 
+//---------reference model--------//
+../src/cache/model/d_cache_model.sv
+//---------reference model--------//
 
 //---------scoreboard--------//
 ../src/cache/component/scoreboard/cpu_stimulus_scoreboard.sv

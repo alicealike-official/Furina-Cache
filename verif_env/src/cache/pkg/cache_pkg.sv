@@ -2,21 +2,27 @@ package cache_pkg;
     `include "define.svh"
     `include "uvm_macros.svh"
     import uvm_pkg::*;
+    //transaction
     `include "cpu_req_transaction.sv"
-    `include "cpu_sequence.sv"
+    `include "cache_rsp_transaction.sv"
+    `include "mem_req_transaction.sv"
+    `include "mem_rsp_transaction.sv"
+
+
+    `include "cpu_req_sequence.sv"
+
+
     `include "cache_base_virtual_sequence.sv"
+
+    //driver
     `include "cpu_driver.sv"
+
+    //monitor
     `include "cpu_in_monitor.sv"
+    `include "cache_out_monitor.sv"
+    `include "mem_req_monitor.sv"
+    `include "mem_rsp_monitor.sv"
+
+    //agent
     `include "cpu_agent.sv"
-//     `include "cache_base_transaction.sv"
-//     `include "cpu_cache_transaction.sv"
-//     `include "mem_cache_transaction.sv"
-//     `include "cache_transaction.sv"
-//     `include "cpu_cache_sequence.sv"
-//     `include "mem_cache_sequence.sv"
-//     `include "cache_base_virtual_sequence.sv"
-//     `include "cpu_cache_driver.sv"
-//     `include "mem_cache_driver.sv"
-//     `include "cpu_cache_agent.sv"
-//     `include "mem_cache_agent.sv"
 endpackage

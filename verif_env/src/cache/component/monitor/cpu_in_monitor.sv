@@ -48,7 +48,6 @@ task cpu_in_monitor::collect_transaction();
         tr.trans_id = tr.monitor_id++;
         -> cache_vif.state_begin_to_mon;
         tr.cpu_req_valid    = cache_vif.cpu_req_valid;
-        //$display("valid = %0d", tr.cpu_req_valid);
         tr.cpu_wr_en        = cache_vif.cpu_wr_en;
         tr.cpu_req_addr     = cache_vif.cpu_req_addr;
         tr.cpu_wdata        = cache_vif.cpu_wdata;

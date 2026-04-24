@@ -5,12 +5,12 @@ class cache_rsp_transaction extends uvm_sequence_item;
     rand  bit                         cpu_resp_valid;
 
     int trans_id;
-    static int next_id = 0;
+    static int scoreboard_id = 0;
+    static int monitor_id    = 0;
     `uvm_object_utils(cache_rsp_transaction)
 
     function new(string name = "cache_rsp_transaction");
         super.new();
-        trans_id = next_id++;
     endfunction
 
     extern virtual function string convert2string();
