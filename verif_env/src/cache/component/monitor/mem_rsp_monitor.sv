@@ -46,6 +46,7 @@ task mem_rsp_monitor::collect_transaction();
         end while (!(cache_vif.mem_resp_valid && cache_vif.mem_resp_ready));
 
         @(negedge cache_vif.clk);
+        -> cache_vif.mem_rsp_monitor_evt;
         // for (int idx = 0; idx < `WORDS_PER_BLOCK; idx++) begin
         //     tr.mem_rdata[idx] = cache_vif.mem_rdata[(idx+1)*`DATA_WIDTH - 1 : idx * `DATA_WIDTH];
         // end

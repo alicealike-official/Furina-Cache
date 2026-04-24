@@ -30,9 +30,6 @@ endfunction
 task cpu_in_monitor::run_phase(uvm_phase phase);
     wait(cache_vif.rst_n);
     repeat(3)@(posedge cache_vif.clk);
-    `ifdef DEBUG
-    ->cache_vif.state_begin_to_mon;
-    `endif
     fork
         collect_transaction();
     join
@@ -46,7 +43,7 @@ task cpu_in_monitor::collect_transaction();
         @(negedge cache_vif.clk);
         tr = new();
         tr.trans_id = tr.monitor_id++;
-        -> cache_vif.state_begin_to_mon;
+        -> cache_vif.cpu_in_monitor_evt;
         tr.cpu_req_valid    = cache_vif.cpu_req_valid;
         tr.cpu_wr_en        = cache_vif.cpu_wr_en;
         tr.cpu_req_addr     = cache_vif.cpu_req_addr;

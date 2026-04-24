@@ -338,7 +338,7 @@ task d_cache_model::process_cpu_request(cpu_req_transaction req);
     else begin
         // 缓存未命中
         miss_count++;
-        `info_med($sformatf("MISS: addr=0x%0h, tag=0x%0h, index=%0d",
+        `info_high($sformatf("MISS: addr=0x%0h, tag=0x%0h, index=%0d",
                     req.cpu_req_addr, tag, index))
         
         // 选择替换行

@@ -30,10 +30,6 @@ task cpu_driver::run_phase(uvm_phase phase);
     cache_vif.cpu_req_valid    <= 0;
     repeat(3) @(posedge cache_vif.clk);
 
-    `ifdef DEBUG
-    -> cache_vif.state_begin_to_driver;
-    `endif
-
     forever begin
         seq_item_port.get_next_item(req);
         
@@ -43,26 +39,6 @@ task cpu_driver::run_phase(uvm_phase phase);
 endtask
     
 task cpu_driver::drive_transaction(cpu_req_transaction cpu_req_tr);
-    // //发起请求（先拉高 valid）
-    // cache_vif.cpu_valid    <= 1;
-    // cache_vif.cpu_wr_en    <= cpu_req_tr.cpu_wr_en;
-    // cache_vif.cpu_req_addr <= cpu_req_tr.cpu_req_addr;
-    // cache_vif.cpu_wdata    <= cpu_req_tr.cpu_wdata;
-
-    // //等待握手成功
-    // do begin
-    //     @(posedge cache_vif.clk);
-    // end while (!(cache_vif.cpu_valid && cache_vif.cpu_ready));
-
-    // //下一拍再拉低 valid
-    // @(posedge cache_vif.clk);
-    // cache_vif.cpu_valid <= 0;
-
-    // //等 cache 完成
-    // do begin
-    //     @(posedge cache_vif.clk);
-    // end while (!cache_vif.cpu_ready);
-        // 发起请求
     -> cache_vif.state_begin_to_drive;
     driver_port.write(cpu_req_tr);
     //$display("driver valid= %0d", cpu_req_tr.cpu_req_valid);
@@ -77,7 +53,4 @@ task cpu_driver::drive_transaction(cpu_req_transaction cpu_req_tr);
         @(posedge cache_vif.clk);
     end while (!(cache_vif.cpu_resp_valid && cpu_req_tr.cpu_resp_ready));
 
-    // 下一拍撤 valid
-    // @(posedge cache_vif.clk);
-    // cache_vif.cpu_valid <= 0;
 endtask

@@ -81,6 +81,12 @@ module D_cache#(
     end
     //=============优先编码器==========//
 
+    //====================内存信号锁存器=============================//
+    reg [DataAddrBus-1 : 0]         mem_addr_r;
+    reg [8*Cache_Block_Size-1 : 0]  mem_wdata_r;
+    reg                             mem_wr_en_r;
+    //====================内存信号锁存器=============================//
+
     //====================状态机定义=============================//
     localparam IDLE         = 2'b00;
     localparam DIRTY_CHECK  = 2'b01;
@@ -168,25 +174,35 @@ module D_cache#(
     wire cpu_resp_valid_condition;
     assign cpu_resp_valid_condition = (curr_state == IDLE && hit_sign) || miss_done;
     
-    // reg cpu_resp_valid_r;
-    // always @(posedge clk or negedge reset) begin
-    //     if (!reset) begin
-    //         cpu_resp_valid_r <= 1'b0;
-    //     end
-    //     else if (cpu_resp_valid_condition && !cpu_resp_valid_r) begin
-    //         cpu_resp_valid_r <= 1'b1;  // 需要发请求，拉高
-    //     end
-    //     else if (cpu_resp_valid_r && cpu_resp_ready) begin
-    //         cpu_resp_valid_r <= 1'b0;  // 握手成功，清除
-    //     end
-    //     else begin
-    //         cpu_resp_valid_r <= cpu_resp_valid_r;
-    //     end
-    // end
 
     assign cpu_resp_valid = cpu_resp_valid_condition;
 
-       // valid 寄存器
+
+    //================================生成mem控制信号=================================//
+    //读写使能信号，判断cache是否要读写mem
+    wire mem_wr_en_high;
+    wire mem_wr_en_low;
+    assign mem_wr_en_high = is_dirty;
+    assign mem_wr_en_low  = (curr_state == WB && mem_resp_handshake) || is_not_dirty || (is_write_miss);
+    //assign mem_wr_en = is_dirty || (curr_state == WB && !mem_resp_handshake);
+
+    //内存地址信号
+    wire mem_addr_select_cpu;
+    wire mem_addr_select_alloc;
+    assign mem_addr_select_cpu   = mem_wr_en_low;
+    assign mem_addr_select_alloc = mem_wr_en_high;
+
+
+
+    // assign mem_addr = (is_write_miss || is_not_dirty || wb_done) ? cpu_req_addr :
+    //               (is_write_back) ? alloc_addr :
+    //               32'b0;
+
+    //内存写数据
+    //assign mem_wdata = cache_data[alloc_way][index_in];  // 写回数据
+    //================================生成mem控制信号=================================//
+
+    //================================内存信号锁存器更新==========================//
     reg mem_req_valid_r;
     always @(posedge clk or negedge reset) begin
         if (!reset) begin
@@ -203,21 +219,59 @@ module D_cache#(
         end
     end
     assign mem_req_valid = mem_req_valid_r;
-    //================================valid寄存器==================================//
+
+    always @(posedge clk or negedge reset) begin
+        if(!reset) begin
+            mem_wr_en_r <= 0;
+        end
+
+        else begin
+            if (mem_wr_en_high) begin
+                mem_wr_en_r <= 1;
+            end
+
+            if (mem_wr_en_low) begin
+                mem_wr_en_r <= 0;
+            end
+        end
+    end
+    assign mem_wr_en = mem_wr_en_r;
+    
+    always @(posedge clk or negedge reset) begin
+        if(!reset) begin
+            mem_addr_r <= {DataWidth{1'b0}};
+        end
+
+        else begin
+            if (mem_addr_select_alloc) begin
+                mem_addr_r <= alloc_addr;
+            end
+
+            if (mem_wr_en_low) begin
+                mem_addr_r <= cpu_req_addr;
+            end
+        end
+    end
+    assign mem_addr = mem_addr_r;
+
+    always @(posedge clk or negedge reset) begin
+        if(!reset) begin
+            mem_wdata_r <= {8*Cache_Block_Size{1'b0}};
+        end
+
+        else begin
+            if (mem_wr_en_high) begin
+                mem_wdata_r <= cache_data[alloc_way][index_in];
+            end
+        end
+    end
+    assign mem_wdata = mem_wdata_r;
 
 
-    //================================生成mem传输信号=================================//
-    //读写使能信号，判断cache是否要读写mem
-    assign mem_wr_en = is_dirty || (curr_state == WB && !mem_resp_handshake);
+    //================================内存信号锁存器更新==========================//
 
-    //内存地址信号
-    assign mem_addr = (is_write_miss || is_not_dirty || wb_done) ? cpu_req_addr :
-                  (is_write_back) ? alloc_addr :
-                  32'b0;
 
-    //内存写数据
-    assign mem_wdata = cache_data[alloc_way][index_in];  // 写回数据
-    //================================生成mem传输信号=================================//
+
 
 
 

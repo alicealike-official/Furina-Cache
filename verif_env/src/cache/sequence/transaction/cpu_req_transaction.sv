@@ -19,6 +19,10 @@ class cpu_req_transaction extends uvm_sequence_item;
         (cpu_wr_en == 0) -> (cpu_wdata == 0);
     }
 
+    constraint wr_en_dist {
+        cpu_wr_en dist {0 := 50, 1 := 50};
+    }
+    
     constraint no_cpu_req {
         if (cpu_req_valid == 0) {
             cpu_wr_en == 0;

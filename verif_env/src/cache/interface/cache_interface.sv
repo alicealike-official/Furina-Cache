@@ -30,10 +30,13 @@ interface  cache_interface(
 
     //for debug
     `ifdef DEBUG
-    event state_begin_to_driver;
     event state_begin_to_drive;
 
-    event state_begin_to_mon;
+    event cpu_in_monitor_evt;
+    event cache_out_monitor_evt;
+    event mem_req_monitor_evt;
+    event mem_rsp_monitor_evt;
+
     event wait_ready_end_driver;
 
     logic [1:0] curr_state;

@@ -20,7 +20,7 @@ module configurable_delay_mem #(
 );
 
     //====================内存存储体==============================//
-    reg [7:0] memory [0:MEM_SIZE];
+    reg [7:0] memory [MEM_SIZE];
     //====================内存存储体==============================//
 
 
@@ -42,6 +42,11 @@ module configurable_delay_mem #(
     wire mem_resp_handshake;
     wire mem_req_handshake;
 
+    //========================锁存请求信号=========================//
+    reg mem_wr_en_r;
+    reg [31:0] mem_addr_r;
+    reg [31:0] mem_wdata_r;
+    //========================锁存请求信号=========================//
     
     // 读写函数
     function [8*Cache_Block_Size-1 : 0] read_cache_line(input [31:0] addr);
@@ -152,18 +157,29 @@ module configurable_delay_mem #(
         end
     end
 
+    always @(posedge clk or negedge rst_n) begin
+        if(!rst_n) begin
+            mem_wr_en_r <= 0;
+            mem_addr_r <= 0;
+            mem_wdata_r <= 0;
+        end
+
+        else begin
+            mem_wr_en_r <= 
+    end
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            integer i;
+            bit [31:0] i;
             for (i = 0; i < MEM_SIZE; i = i + 1) begin
                 memory[i] <= i[7:0];
+                //memory[i] <= 0;
             end
         end
 
         else begin
             if (mem_resp_handshake && mem_wr_en ) begin
-                write_cache_line(mem_addr, mem_wdata);
+                write_cache_line(mem_addr, mem_wdata_r);
             end
         end
     end
@@ -176,8 +192,8 @@ module configurable_delay_mem #(
     assign mem_resp_valid = mem_resp_valid_r;
     assign mem_resp_handshake = mem_resp_valid && mem_resp_ready;
 
-    //assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? read_cache_line(mem_addr) : {8*Cache_Block_Size{1'b0}};
+    assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? read_cache_line(mem_addr) : {8*Cache_Block_Size{1'b0}};
 
     //for debug
-    assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? {8*Cache_Block_Size{1'b1}} : {8*Cache_Block_Size{1'b0}};
+    //assign mem_rdata = (mem_resp_valid && !mem_wr_en) ? {8*Cache_Block_Size{1'b1}} : {8*Cache_Block_Size{1'b0}};
 endmodule

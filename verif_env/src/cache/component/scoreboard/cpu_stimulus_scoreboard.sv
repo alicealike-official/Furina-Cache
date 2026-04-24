@@ -96,7 +96,7 @@ function void cpu_stimulus_scoreboard::compare_transactions(
 
     if (expected_tr.compare(actual_tr)) begin
         match_count++;
-        `info_med($sformatf("MATCH: Expected vs Actual matches! (Total matches: %0d)", 
+        `info_high($sformatf("MATCH: Expected vs Actual matches! (Total matches: %0d)", 
                   match_count))
     end 
     else begin

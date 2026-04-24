@@ -46,6 +46,7 @@ task mem_req_monitor::collect_transaction();
         end while (!(cache_vif.mem_req_valid && cache_vif.mem_req_ready));
 
         @(negedge cache_vif.clk);
+        -> cache_vif.mem_req_monitor_evt;
         tr.mem_wr_en = cache_vif.mem_wr_en;
         tr.mem_addr = cache_vif.mem_addr;
         // for (int idx = 0; idx < `WORDS_PER_BLOCK; idx++) begin
