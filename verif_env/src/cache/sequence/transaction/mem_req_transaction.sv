@@ -46,6 +46,9 @@ function bit mem_req_transaction::compare(uvm_object rhs, uvm_comparer = null);
         if (mem_wdata != tr.mem_wdata) begin
             match = 0;
             `info_med($sformatf("write data mismatch"))
+            for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
+                `info_med($sformatf("wd[%0d]: %0h vs %0h", i, mem_wdata[i], tr.mem_wdata[i]))
+            end
         end
         return match;
 endfunction

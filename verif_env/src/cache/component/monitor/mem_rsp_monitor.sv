@@ -41,16 +41,21 @@ task mem_rsp_monitor::collect_transaction();
     forever begin
         mem_rsp_transaction tr;
         tr = new();
-        do begin
-            @(posedge cache_vif.clk);
-        end while (!(cache_vif.mem_resp_valid && cache_vif.mem_resp_ready));
+        // do begin
+        //     @(posedge cache_vif.clk);
+        // end while (!(cache_vif.mem_resp_valid && cache_vif.mem_resp_ready));
 
-        @(negedge cache_vif.clk);
+        // @(negedge cache_vif.clk);
+        @(posedge cache_vif.clk iff cache_vif.mem_resp_valid && cache_vif.mem_resp_ready && !cache_vif.mem_wr_en);
         -> cache_vif.mem_rsp_monitor_evt;
         // for (int idx = 0; idx < `WORDS_PER_BLOCK; idx++) begin
         //     tr.mem_rdata[idx] = cache_vif.mem_rdata[(idx+1)*`DATA_WIDTH - 1 : idx * `DATA_WIDTH];
         // end
-        {>>{tr.mem_rdata}} = cache_vif.mem_rdata;
+
+        {<<{tr.mem_rdata}} = cache_vif.mem_rdata;
+        for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
+            //$display("read_word[%0d]=%h", i, tr.mem_rdata[i]);
+        end
         mem_rsp_mon_port.write(tr);
     end
 endtask

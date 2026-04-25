@@ -210,32 +210,32 @@ module configurable_delay_mem(
     // assign mem_rdata = (mem_resp_valid && !mem_wr_en_r) ?
     //                    block_mem[read_block_addr] : {8*`CACHE_BLOCK_SIZE{1'b0}};
 
-    reg [8*`CACHE_BLOCK_SIZE-1 : 0] mem_rdata_reg;
+    // reg [8*`CACHE_BLOCK_SIZE-1 : 0] mem_rdata_reg;
 
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            mem_rdata_reg <= '0;
-        end else begin
-            if (mem_resp_handshake && !mem_wr_en_r) begin
-                // 在握手成功且为读时，从 block_mem 中读取
-                mem_rdata_reg <= block_mem[get_block_addr(mem_addr_r)];
-            end else if (mem_resp_handshake) begin
-                // 写回时数据无意义，可清零
-                mem_rdata_reg <= '0;
-            end
-            // 其余情况保持
-        end
-    end
-
-    assign mem_rdata = mem_rdata_reg;  // 如果端口声明为 wire，改为 output wire，用 assign
-    // always_comb begin
-    //     if (mem_resp_valid && !mem_wr_en_r) begin
-    //         mem_rdata = block_mem[get_block_addr(mem_addr_r)];
-    //     end
-    //     else begin
-    //         mem_rdata = '0;
+    // always @(posedge clk or negedge rst_n) begin
+    //     if (!rst_n) begin
+    //         mem_rdata_reg <= '0;
+    //     end else begin
+    //         if (mem_resp_handshake && !mem_wr_en_r) begin
+    //             // 在握手成功且为读时，从 block_mem 中读取
+    //             mem_rdata_reg <= block_mem[get_block_addr(mem_addr_r)];
+    //         end else if (mem_resp_handshake) begin
+    //             // 写回时数据无意义，可清零
+    //             mem_rdata_reg <= '0;
+    //         end
+    //         // 其余情况保持
     //     end
     // end
+
+    // assign mem_rdata = mem_rdata_reg;  // 如果端口声明为 wire，改为 output wire，用 assign
+    always_comb begin
+        if (mem_resp_valid && !mem_wr_en_r) begin
+            mem_rdata = block_mem[get_block_addr(mem_addr_r)];
+        end
+        else begin
+            mem_rdata = '0;
+        end
+    end
 
     //===========================寄存器更新===========================//
 

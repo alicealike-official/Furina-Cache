@@ -110,6 +110,7 @@ endclass
 // Build Phase
 function void d_cache_model::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    set_report_verbosity_level(UVM_DEBUG);         // 只影响本组件
 endfunction
 
 
@@ -290,7 +291,7 @@ task d_cache_model::process_cpu_request(cpu_req_transaction req);
     cache_rsp_transaction rsp;
     mem_req_transaction tr_write;
     mem_req_transaction tr_read;
-    mem_rsp_transaction rsp_write;
+    //mem_rsp_transaction rsp_write;
     mem_rsp_transaction rsp_read;
     
     rsp = new();
@@ -333,7 +334,8 @@ task d_cache_model::process_cpu_request(cpu_req_transaction req);
         
         // 选择替换行
         status.alloc_way = select_alloc_way(index);
-
+        //$display("alloc way = %d", status.alloc_way);
+        //$display("dirty = %d", cache[index][status.alloc_way].dirty);
         if (cache[index][status.alloc_way].valid && cache[index][status.alloc_way].dirty) begin
             tr_write = new();
             tr_write.mem_addr = {cache[index][status.alloc_way].tag, index, {Offset_Width{1'b0}}};
@@ -343,12 +345,13 @@ task d_cache_model::process_cpu_request(cpu_req_transaction req);
             // 组装写回数据（连续的字）
             for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
                 tr_write.mem_wdata[i] = cache[index][status.alloc_way].data[i];
+                //$display("ref model write:%0h", tr_write.mem_wdata[i]);
             end
             mem_req_port.write(tr_write);
             writeback_count++;
             `info_debug($sformatf("Write back: index=%0d, way=%0d, addr=0x%0h",
                     index, status.alloc_way, tr_write.mem_addr))
-            mem_rsp_mb.get(rsp_write);
+            //mem_rsp_mb.get(rsp_write);
             //last_mem_rsp = rsp_write;
             cache[index][status.alloc_way].dirty = 1'b0;
         end
@@ -363,11 +366,13 @@ task d_cache_model::process_cpu_request(cpu_req_transaction req);
                 index, status.alloc_way, tag, tr_read.mem_addr))
         mem_rsp_mb.get(rsp_read);
         //last_mem_rsp = rsp_read;
+        //$display("read_data : %0h", rsp_read.mem_rdata);
         fetch_line(index, status.alloc_way, tag, rsp_read);
         // 处理当前请求
 
         if (req.cpu_wr_en) begin
             write_word_to_cache(index, status.alloc_way, word_offset, req.cpu_wdata);
+            //$display("cpu_wdata = %0h", req.cpu_wdata);
         end
         
 

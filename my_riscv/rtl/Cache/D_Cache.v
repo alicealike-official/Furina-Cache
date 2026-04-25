@@ -32,23 +32,26 @@ module D_cache#(
     output wire                             mem_resp_ready,   // cache to mem ready
     input  wire [8*Cache_Block_Size-1 : 0]  mem_rdata
 );
-    localparam Index_Width  = $clog2(Num_Cache_Set);
-    localparam Offset_Width = $clog2(Cache_Block_Size);
-    localparam Way_Width    = $clog2(Num_Cache_Way);
-    localparam Tag_Width    = DataAddrBus - Offset_Width - Index_Width;
+    localparam Index_Width      = $clog2(Num_Cache_Set);
+    localparam Offset_Width     = $clog2(Cache_Block_Size);
+    localparam Way_Width        = $clog2(Num_Cache_Way);
+    localparam Tag_Width        = DataAddrBus - Offset_Width - Index_Width;
+    localparam Words_Per_Block   = Cache_Block_Size / (DataWidth / 8);
+    //localparam Words_Width      = $clog2(Words_Per_Block);
 
     //===============================cache存储内容=======================//
     reg                             valid[Num_Cache_Way][Num_Cache_Set];
     reg                             dirty[Num_Cache_Way][Num_Cache_Set];
     reg [Tag_Width-1 : 0]           tag[Num_Cache_Way][Num_Cache_Set];
-    reg [8*Cache_Block_Size-1 : 0]  cache_data[Num_Cache_Way][Num_Cache_Set];
+    reg [DataWidth-1 : 0]           cache_data[Num_Cache_Way][Num_Cache_Set][Words_Per_Block];
     //===============================cache存储内容=======================//
 
     //==============================地址分解===============================//
-    wire [Index_Width-1 : 0]    index_in;
-    wire [Tag_Width-1 : 0]      tag_in;
-    wire [Offset_Width-1 : 0]   offset_in;
-
+    wire [Index_Width-1 : 0]            index_in;
+    wire [Tag_Width-1 : 0]              tag_in;
+    wire [Offset_Width-1 : 0]           offset_in;
+    wire [$clog2(Words_Per_Block)-1 : 0]  word_offset;
+    assign word_offset = offset_in >> $clog2(DataWidth/8);
     assign {tag_in, index_in, offset_in} = cpu_req_addr;
     //==============================地址分解===============================//
 
@@ -109,11 +112,7 @@ module D_cache#(
 
     //==================================alloc信号================================//
 
-    wire alloc_enable_condition;//alloc使能
-    assign alloc_enable_condition = cpu_req_handshake && (curr_state == IDLE && ~hit_sign);
 
-    wire [Num_Cache_Set-1:0] alloc_enable;//确认alloc使能的哪一路
-    assign alloc_enable = alloc_enable_condition ? (1 << index_in) : {Num_Cache_Set{1'b0}};
 
     wire [Way_Width-1 : 0] alloc_way [Num_Cache_Set];
     wire [Way_Width-1 : 0] curr_alloc_way;//由FIFO counter确认
@@ -122,10 +121,10 @@ module D_cache#(
     assign alloc_addr = {tag[curr_alloc_way][index_in], index_in, {Offset_Width{1'b0}}};
 
     wire [DataWidth-1 : 0] hit_rdata;
-    assign hit_rdata = (~cpu_wr_en) ? cache_data[hit_way][index_in][8*offset_in +: DataWidth] : {DataWidth{1'b0}};
+    assign hit_rdata = (~cpu_wr_en) ? cache_data[hit_way][index_in][word_offset] : {DataWidth{1'b0}};
 
     wire [DataWidth-1 : 0] alloc_data;
-    assign alloc_data = mem_rdata[8*offset_in +: DataWidth];
+    assign alloc_data = mem_rdata[word_offset*DataWidth +: DataWidth];
     //==================================alloc信号================================//
 
 
@@ -237,13 +236,21 @@ module D_cache#(
             if (write_req_condition) begin
                 mem_wr_en_r <= 1;
                 mem_addr_r <= alloc_addr;
-                mem_wdata_r <= cache_data[curr_alloc_way][index_in];
+                for (int i = 0; i < Words_Per_Block; i++) begin
+                    mem_wdata_r[i*DataWidth +: DataWidth] <= cache_data[curr_alloc_way][index_in][i];
+                end
+                $display("[RTL] time=%0t data=%h", $time, mem_wdata_r);
             end
 
             //if (mem_wr_en_low) begin
             if (read_req_condition) begin
                 mem_wr_en_r <= 0;
-                mem_addr_r <= cpu_req_addr;
+                //mem_addr_r <= cpu_req_addr;
+                mem_addr_r <= {tag_in, index_in, {Offset_Width{1'b0}}};
+            end
+
+            if (mem_resp_handshake) begin
+                mem_wdata_r <= 0;
             end
         end
     end
@@ -358,7 +365,9 @@ module D_cache#(
                     valid[n][p] <= 1'b0;
                     dirty[n][p] <= 1'b0;
                     tag[n][p]   <= {Tag_Width{1'b0}};
-                    cache_data[n][p]  <= {8*Cache_Block_Size{1'b0}};
+                    for (int i = 0; i < Words_Per_Block; i++) begin
+                        cache_data[n][p][i]  <= {DataWidth{1'b0}};
+                    end
                 end
             end
             curr_state <= IDLE;
@@ -390,7 +399,7 @@ module D_cache#(
 
 
             if(cpu_req_handshake && cpu_wr_en && hit_sign && curr_state == IDLE)begin
-                cache_data[hit_way][index_in][8*offset_in +: DataWidth]     <= cpu_wdata;
+                cache_data[hit_way][index_in][word_offset]                  <= cpu_wdata;
                 dirty[hit_way][index_in]                                    <= 1'b1;
             end
 
@@ -401,22 +410,52 @@ module D_cache#(
             if(miss_done) begin
                 valid[curr_alloc_way][index_in] <=1'b1;
                 tag[curr_alloc_way][index_in] <= tag_in;
+
+
+
                 if (cpu_wr_en) begin
-                    cache_data[curr_alloc_way][index_in] <= 
-                        (mem_rdata & ~(({DataWidth{1'b1}} << (offset_in * 8)))) |
-                        ({cpu_wdata} << (offset_in * 8));
+                    // cache_data[curr_alloc_way][index_in] <= 
+                    //     (mem_rdata & ~(({DataWidth{1'b1}} << (offset_in * 8)))) |
+                    //     ({cpu_wdata} << (offset_in * 8));
+                    // 在 miss_done 时，写操作改为：
+                // cache_data[curr_alloc_way][index_in] <= 
+                //     (mem_rdata & ~(512'(32'hFFFFFFFF) << (offset_in * 8))) |
+                //     (512'(cpu_wdata) << (offset_in * 8));
+                    //cache_data[curr_alloc_way][index_in] <= mem_rdata;
+
+                    //cache_data[curr_alloc_way][index_in][offset_in*8 +: DataWidth] <= cpu_wdata;
+                    //for debug
+                    for (int i = 0; i < Words_Per_Block; i++) begin
+                        if (i == word_offset) begin
+                            cache_data[curr_alloc_way][index_in][i] <= cpu_wdata;
+                        end
+
+                        else begin
+                            cache_data[curr_alloc_way][index_in][i] <= 
+                            mem_rdata[i*DataWidth +: DataWidth];
+                        end
+                    end
+                    //cache_data[curr_alloc_way][index_in][word_offset] <= cpu_wdata;
+                    //$display("WR: Index=%0d, Way=%0h, offset=%0d, data=%0h, cache=%0h", index_in, curr_alloc_way,offset_in, cpu_wdata, cache_data[curr_alloc_way][index_in][8*offset_in +: DataWidth]);
+                    
                     dirty[curr_alloc_way][index_in] <= 1'b1;  // 写操作标记脏
                 end
 
                 else begin
-                    cache_data[curr_alloc_way][index_in] <= mem_rdata;
+                    for (int i = 0; i < Words_Per_Block; i++) begin
+                        cache_data[curr_alloc_way][index_in][i] <= 
+                            mem_rdata[i*DataWidth +: DataWidth];
+                    end
                     dirty[curr_alloc_way][index_in] <= 1'b0;
                 end
             end
         end 
     end
 
+    //for debug
 
+    wire [DataWidth-1:0] cache_debug_date;
+    assign cache_debug_date = cache_data[0][11][7];
 
 
 
@@ -425,6 +464,14 @@ module D_cache#(
 
     //==================================状态机时序===========================//
 
+
+
+    wire alloc_enable_condition;//alloc使能
+    //assign alloc_enable_condition = cpu_req_handshake && (curr_state == IDLE && ~hit_sign);
+    assign alloc_enable_condition = is_dirty;
+
+    wire [Num_Cache_Set-1:0] alloc_enable;//确认alloc使能的哪一路
+    assign alloc_enable = alloc_enable_condition ? (1 << index_in) : {Num_Cache_Set{1'b0}};
     //============================FIFO替换策略========================//
     generate
         for (genvar set = 0; set < Num_Cache_Set; set++) begin : fifo_inst_gen

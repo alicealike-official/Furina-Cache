@@ -47,14 +47,22 @@ task mem_req_monitor::collect_transaction();
 
         // @(negedge cache_vif.clk);
         @(posedge cache_vif.clk iff cache_vif.mem_req_valid && cache_vif.mem_req_ready);
-        
+        @(negedge cache_vif.clk);
         tr.mem_wr_en = cache_vif.mem_wr_en;
         tr.mem_addr = cache_vif.mem_addr;
         // for (int idx = 0; idx < `WORDS_PER_BLOCK; idx++) begin
         //     tr.mem_wdata[idx] = cache_vif.mem_wdata[(idx+1)*`DATA_WIDTH - 1 : idx * `DATA_WIDTH];
         // end
-        {>>{tr.mem_wdata}} = cache_vif.mem_wdata;
+        {<<{tr.mem_wdata}} = cache_vif.mem_wdata;
+        // for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
+        //     tr.mem_wdata[i] = cache_vif.mem_wdata[i*`DATA_WIDTH +: `DATA_WIDTH];
+        // end
+        for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
+            //$display("write_word[%0d]=%h", i, tr.mem_wdata[i]);
+        end
+        //$display("data=%h", cache_vif.mem_wdata);
         -> cache_vif.mem_req_monitor_evt;
+        $display("[MON] time=%0t data=%h", $time, cache_vif.mem_wdata);
         mem_req_mon_port.write(tr);
     end
 endtask
