@@ -53,10 +53,10 @@ task mem_req_monitor::collect_transaction();
         // for (int idx = 0; idx < `WORDS_PER_BLOCK; idx++) begin
         //     tr.mem_wdata[idx] = cache_vif.mem_wdata[(idx+1)*`DATA_WIDTH - 1 : idx * `DATA_WIDTH];
         // end
-        {<<{tr.mem_wdata}} = cache_vif.mem_wdata;
-        // for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
-        //     tr.mem_wdata[i] = cache_vif.mem_wdata[i*`DATA_WIDTH +: `DATA_WIDTH];
-        // end
+        //{<<{tr.mem_wdata}} = cache_vif.mem_wdata;
+        for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
+            tr.mem_wdata[i] = cache_vif.mem_wdata[i*`DATA_WIDTH +: `DATA_WIDTH];
+        end
         for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
             //$display("write_word[%0d]=%h", i, tr.mem_wdata[i]);
         end

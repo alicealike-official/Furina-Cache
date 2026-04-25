@@ -1,7 +1,7 @@
 class cpu_req_sequence extends uvm_sequence #(cpu_req_transaction);
     `uvm_object_utils(cpu_req_sequence)
     
-    int num_transactions = 10;
+    int num_transactions = 10000;
 
     function new(string name = "cpu_req_sequence");
         super.new();

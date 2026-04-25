@@ -51,11 +51,13 @@ task mem_rsp_monitor::collect_transaction();
         // for (int idx = 0; idx < `WORDS_PER_BLOCK; idx++) begin
         //     tr.mem_rdata[idx] = cache_vif.mem_rdata[(idx+1)*`DATA_WIDTH - 1 : idx * `DATA_WIDTH];
         // end
-
-        {<<{tr.mem_rdata}} = cache_vif.mem_rdata;
         for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
-            //$display("read_word[%0d]=%h", i, tr.mem_rdata[i]);
+            tr.mem_rdata[i] = cache_vif.mem_rdata[i*`DATA_WIDTH +: `DATA_WIDTH];
         end
+        //{<<{tr.mem_rdata}} = cache_vif.mem_rdata;
+        //for (int i = 0; i < `WORDS_PER_BLOCK; i++) begin
+            //$display("read_word[%0d]=%h", i, tr.mem_rdata[i]);
+        //end
         mem_rsp_mon_port.write(tr);
     end
 endtask
