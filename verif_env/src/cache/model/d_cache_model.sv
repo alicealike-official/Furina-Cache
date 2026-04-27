@@ -110,7 +110,7 @@ endclass
 // Build Phase
 function void d_cache_model::build_phase(uvm_phase phase);
     super.build_phase(phase);
-    set_report_verbosity_level(UVM_DEBUG);         // 只影响本组件
+    //set_report_verbosity_level(UVM_DEBUG);         // 只影响本组件
 endfunction
 
 
@@ -398,17 +398,29 @@ endtask
 // 报告统计信息
 function void d_cache_model::report_stats();
     int total_access = hit_count + miss_count;
-    real hit_rate = (total_access > 0) ? (hit_count * 100.0 / total_access) : 0;
+    real hit_rate = (total_access > 0) ? (hit_count * 1.0 / total_access) : 0;
     
-    `info( 
-        $sformatf({"\n=== D-Cache Statistics ===\n",
-                  "Total accesses: %0d\n",
-                  "Hits: %0d\n",
-                  "Misses: %0d\n",
-                  "Hit rate: %.2f%%\n",
-                  "Writebacks: %0d\n",
-                  "=========================="},
-                  total_access, hit_count, miss_count, hit_rate, writeback_count))
+    $display("\n");
+    $display("╔════════════════════════════════════════════════╗");
+    $display("║  FINAL SUMMARY FOR        %20s ║", get_type_name());
+    $display("╠════════════════════════════════════════════════╣");
+    $display("║     Total accessses    :  %20d ║", total_access);
+    $display("║           Hits         :  %20d ║", hit_count);
+    $display("║          Missses       :  %20d ║", miss_count);
+    $display("║         Hit rate       :  %20.2f ║", hit_rate);
+    $display("║        Writebacks      :  %20d ║", writeback_count);
+    $display("╚════════════════════════════════════════════════╝");
+    $display("\n");
+
+    // `info( 
+    //     $sformatf({"\n=== D-Cache Statistics ===\n",
+    //               "Total accesses: %0d\n",
+    //               "Hits: %0d\n",
+    //               "Misses: %0d\n",
+    //               "Hit rate: %.2f%%\n",
+    //               "Writebacks: %0d\n",
+    //               "=========================="},
+    //               total_access, hit_count, miss_count, hit_rate, writeback_count))
 endfunction
 
 function void d_cache_model::report_phase(uvm_phase phase);

@@ -14,6 +14,7 @@ class cache_environment extends uvm_env;
     //-------------scoreboard-------------//
     cpu_stimulus_scoreboard cpu_stimulus_sbd;
     mem_req_scoreboard mem_req_sbd;
+    cache_data_scoreboard cache_data_sbd;
     //-------------scoreboard-------------//
 
 
@@ -45,12 +46,14 @@ function void cache_environment::build_phase(uvm_phase phase);
 
     cpu_stimulus_sbd = cpu_stimulus_scoreboard::type_id::create("cpu_stimulus_scoreboad", this);
     mem_req_sbd = mem_req_scoreboard::type_id::create("mem_req_scoreboard", this);
+    cache_data_sbd = cache_data_scoreboard::type_id::create("cache_data_scoreboard", this);
 
     d_cache_mdl = d_cache_model::type_id::create("d_cache_model", this);
     clk_rst_cfg.clock_period = 10;
     clk_rst_cfg.initial_reset_cycles = 1;
     // 通过 config_db 传递给 driver
     uvm_config_db#(clk_rst_config)::set(this, "*", "clk_rst_config", clk_rst_cfg);
+    uvm_config_db#(d_cache_model)::set(this, "*", "d_cache_mdl", d_cache_mdl);
 endfunction
 
 

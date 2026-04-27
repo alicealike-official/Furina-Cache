@@ -82,6 +82,8 @@ module tb_top;
         // uvm_config_db#(virtual ID_interface)::set(null, "*", "ID_vif", ID_vif);
         uvm_config_db#(virtual clk_rst_interface)::set(null,"*","clk_rst_vif",clk_rst_vif);
         uvm_config_db#(virtual cache_interface)::set(null,"*","cache_vif",cache_vif);
+
+        uvm_config_db#(virtual cache_debug_interface)::set(null,"*","cache_dbg_vif",u_D_cache.u_dbg_if);
         // // 启动UVM测试
         run_test("cache_basic_test");
     end

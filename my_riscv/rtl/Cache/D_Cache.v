@@ -239,7 +239,7 @@ module D_cache#(
                 for (int i = 0; i < Words_Per_Block; i++) begin
                     mem_wdata_r[i*DataWidth +: DataWidth] <= cache_data[curr_alloc_way][index_in][i];
                 end
-                $display("[RTL] time=%0t data=%h", $time, mem_wdata_r);
+               // $display("[RTL] time=%0t data=%h", $time, mem_wdata_r);
             end
 
             //if (mem_wr_en_low) begin

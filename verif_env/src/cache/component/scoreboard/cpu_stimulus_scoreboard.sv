@@ -44,7 +44,7 @@ class cpu_stimulus_scoreboard extends uvm_scoreboard;
         cpu_req_transaction actual_tr
     );
 
-    extern virtual function void extract_phase(uvm_phase phase);
+    extern virtual function void report_phase(uvm_phase phase);
 endclass
 
 
@@ -109,8 +109,27 @@ endfunction
 
 
 // 报告阶段
-function void cpu_stimulus_scoreboard::extract_phase(uvm_phase phase);
-    super.extract_phase(phase);
-    `info($sformatf("Final Report:\n  Expected: %0d\n  Actual: %0d\n  Matches: %0d\n  Mismatches: %0d", 
-              expected_count, actual_count, match_count, mismatch_count))
+function void cpu_stimulus_scoreboard::report_phase(uvm_phase phase);
+    super.report_phase(phase);
+        // ========== 2. 最终报告（汇总统计） ==========
+    $display("\n");
+    $display("╔════════════════════════════════════════════════╗");
+    $display("║  FINAL SUMMARY FOR     %20s ║", get_type_name());
+    $display("╠════════════════════════════════════════════════╣");
+    $display("║  Expected cpu request  :  %20d ║", expected_count);
+    $display("║   Actual cpu request   :  %20d ║", actual_count);
+    $display("║         Matches        :  %20d ║", match_count);
+    $display("║        Mismatches      :  %20d ║", mismatch_count);
+    $display("╠════════════════════════════════════════════════╣");
+    if (mismatch_count == 0) begin
+    $display("║                     PASS                       ║");
+    end else begin
+    $display("║             FAIL with %0d mismatches           ║", mismatch_count);
+    end
+    $display("╚════════════════════════════════════════════════╝");
+    $display("\n");
+
+
+    // `info($sformatf("Final Report:\n  Expected: %0d\n  Actual: %0d\n  Matches: %0d\n  Mismatches: %0d", 
+    //           expected_count, actual_count, match_count, mismatch_count))
 endfunction

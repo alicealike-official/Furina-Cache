@@ -15,6 +15,7 @@
 
 //-----------cache-----------//
 +incdir+../src/cache
++incdir+../src/cache/bind
 +incdir+../src/cache/component
 +incdir+../src/cache/component/agent
 +incdir+../src/cache/component/driver
@@ -34,8 +35,12 @@
 //-----------interface-------//
 ../src/common/interface/clk_rst_interface.sv
 ../src/cache/interface/cache_interface.sv
+../src/cache/interface/cache_debug_interface.sv
 //-----------interface-------//
 
+//-----------bind-------//
+../src/cache/bind/bind_cache.sv
+//-----------bind-------//
 
 //-----------package---------//
 ../src/common/pkg/clk_rst_pkg.sv
@@ -49,6 +54,7 @@
 //---------scoreboard--------//
 ../src/cache/component/scoreboard/cpu_stimulus_scoreboard.sv
 ../src/cache/component/scoreboard/mem_req_scoreboard.sv
+../src/cache/component/scoreboard/cache_data_scoreboard.sv
 //---------scoreboard--------//
 
 //---------environment-------//

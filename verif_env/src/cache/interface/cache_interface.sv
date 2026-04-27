@@ -38,6 +38,7 @@ interface  cache_interface(
     event mem_rsp_monitor_evt;
 
     event wait_ready_end_driver;
+    event begin_to_compare;
 
     logic [1:0] curr_state;
     `endif

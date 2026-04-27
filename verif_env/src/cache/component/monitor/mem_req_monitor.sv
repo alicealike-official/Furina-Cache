@@ -62,7 +62,7 @@ task mem_req_monitor::collect_transaction();
         end
         //$display("data=%h", cache_vif.mem_wdata);
         -> cache_vif.mem_req_monitor_evt;
-        $display("[MON] time=%0t data=%h", $time, cache_vif.mem_wdata);
+       // $display("[MON] time=%0t data=%h", $time, cache_vif.mem_wdata);
         mem_req_mon_port.write(tr);
     end
 endtask

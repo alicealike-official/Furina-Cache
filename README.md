@@ -28,6 +28,7 @@ my_verif_env/                # 验证环境根目录
 |   |   |-- model/           # Cache 行为模型(可选)
 |   |   |-- coverage/        # Cache 覆盖率模型
 |   |   |-- interface/       # Cache 接口
+|   |   |-- bind/            # Cache Bind文件
 |   |   |-- deprecated/      # Cache 中弃用的文件
 |   |   `-- pkg/             # Cache 专用包
 |   |-- ahb3/                # AHB3 子系统

@@ -10,3 +10,4 @@ verif_env/sim/ucli.key
 verif_env/sim/novas.*
 verif_env/sim/verdiLog
 verif_env/sim/inter.*
+verif_env/sim/.__solver_cache__
