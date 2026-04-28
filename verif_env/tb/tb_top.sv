@@ -67,6 +67,11 @@ module tb_top;
         .mem_resp_ready(cache_vif.mem_resp_ready),
         .mem_rdata(cache_vif.mem_rdata)
     );
+
+
+    cache_assertions u_cache_assert(
+        .dbg_if(u_D_cache.u_dbg_if)
+    );
     
     // ====================================================
     // UVM配置和启动

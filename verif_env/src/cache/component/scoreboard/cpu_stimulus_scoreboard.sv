@@ -18,11 +18,17 @@ class cpu_stimulus_scoreboard extends uvm_scoreboard;
     uvm_tlm_analysis_fifo #(cpu_req_transaction) expected_fifo;
     uvm_tlm_analysis_fifo #(cpu_req_transaction) actual_fifo;
     // 统计信息
-    int match_count;
-    int mismatch_count;
+    int match_count = 0;
+    int mismatch_count = 0;
 
-    int expected_count;
-    int actual_count;
+    int expected_count = 0;
+    int actual_count = 0;
+
+    int expected_write_count = 0;
+    int expected_read_count = 0;
+
+    int actual_write_count = 0;
+    int actual_read_count = 0;
     
     function new(string name = "cpu_stimulus_scoreboard", 
                     uvm_component parent = null);
@@ -57,6 +63,13 @@ function void cpu_stimulus_scoreboard::write_driver(cpu_req_transaction tr);
         expected_count++;
         `info_high($sformatf("Expected transaction received: %s", 
                 tr.convert2string()))
+        if(tr.cpu_wr_en) begin
+            expected_write_count++;
+        end
+
+        else begin
+            expected_read_count++;
+        end
     end
 endfunction
     
@@ -71,6 +84,14 @@ function void cpu_stimulus_scoreboard::write_monitor(cpu_req_transaction tr);
         actual_count++;
         `info_high($sformatf("Actual transaction received: %s", 
                 tr.convert2string()))
+        
+        if(tr.cpu_wr_en) begin
+            actual_write_count++;
+        end
+
+        else begin
+            actual_read_count++;
+        end
     end
 endfunction
     
@@ -117,7 +138,11 @@ function void cpu_stimulus_scoreboard::report_phase(uvm_phase phase);
     $display("║  FINAL SUMMARY FOR     %20s ║", get_type_name());
     $display("╠════════════════════════════════════════════════╣");
     $display("║  Expected cpu request  :  %20d ║", expected_count);
+    $display("║ Expected write request :  %20d ║", actual_write_count);
+    $display("║ Expected read  request :  %20d ║", actual_read_count);
     $display("║   Actual cpu request   :  %20d ║", actual_count);
+    $display("║   Actual write request :  %20d ║", actual_write_count);
+    $display("║   Actual read request  :  %20d ║", actual_read_count);
     $display("║         Matches        :  %20d ║", match_count);
     $display("║        Mismatches      :  %20d ║", mismatch_count);
     $display("╠════════════════════════════════════════════════╣");

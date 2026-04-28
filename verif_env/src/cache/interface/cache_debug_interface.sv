@@ -55,7 +55,10 @@ interface cache_debug_interface(
                 cache_data [`NUM_CACHE_WAY][`NUM_CACHE_SET][`WORDS_PER_BLOCK],
 
     input logic [$clog2(`NUM_CACHE_WAY)-1:0]
-                alloc_way [`NUM_CACHE_SET]
+                alloc_way [`NUM_CACHE_SET],
+    input logic miss_done,
+    input logic [$clog2(`NUM_CACHE_SET)-1:0] index_in,
+    input logic [$clog2(`NUM_CACHE_WAY)-1:0] curr_alloc_way
 );
 
 endinterface

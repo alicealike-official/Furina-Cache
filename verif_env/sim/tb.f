@@ -27,7 +27,8 @@
 +incdir+../src/cache/sequence
 +incdir+../src/cache/sequence/transaction
 +incdir+../src/cache/sequence/basic
-+incdir+../src/cache/sequence/directed
++incdir+../src/cache/sequence/function_check
++incdir+../src/cache/sequence/state_management
 //-----------cache-----------//
 
 //---------------------------//
@@ -42,6 +43,7 @@
 
 //-----------bind-------//
 ../src/cache/bind/bind_cache.sv
+../src/cache/bind/cache_assertions.sv
 //-----------bind-------//
 
 //-----------package---------//
@@ -69,11 +71,14 @@
 
 ../test/cache/basic/cache_basic_test.sv
 
-../test/cache/directed/cache_read_hit_test.sv
-../test/cache/directed/cache_read_miss_test.sv
-../test/cache/directed/cache_write_hit_test.sv
-../test/cache/directed/cache_write_miss_test.sv
-../test/cache/directed/cache_write_read_test.sv
+../test/cache/function_check/cache_read_hit_test.sv
+../test/cache/function_check/cache_read_miss_test.sv
+../test/cache/function_check/cache_write_hit_test.sv
+../test/cache/function_check/cache_write_miss_test.sv
+../test/cache/function_check/cache_write_read_test.sv
+
+
+../test/cache/state_management/cache_tag_match_test.sv
 //-------------test----------//
 
 
