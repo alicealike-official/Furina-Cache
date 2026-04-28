@@ -13,7 +13,7 @@ module fifo_counter #(
     
     // 更新 FIFO 指针
     always @(posedge clk or negedge reset) begin
-        if (reset) begin
+        if (!reset) begin
             fifo_ptr <= 0;
         end 
         else if (alloc_enable) begin

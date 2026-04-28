@@ -123,7 +123,7 @@ function void cache_data_scoreboard::compare_cache_state();
                 valid_errors++;
                 err_msg = $sformatf("valid mismatch set%0d way%0d, cache:%0d vs mdl:%0d", 
                         set, way, cache_dbg_vif.valid[way][set], d_cache_mdl.cache[set][way].valid);
-                `error(err_msg)
+                //`error(err_msg)
                 if (error_log.size() < max_errors_to_log) error_log.push_back(err_msg);
             end
             // dirty
@@ -132,7 +132,7 @@ function void cache_data_scoreboard::compare_cache_state();
                 dirty_errors++;
                 err_msg = $sformatf("dirty mismatch set%0d way%0d, cache:%0d vs mdl:%0d", set, way,
                         cache_dbg_vif.dirty[way][set], d_cache_mdl.cache[set][way].dirty);
-                `error(err_msg)
+                //`error(err_msg)
                 if (error_log.size() < max_errors_to_log) error_log.push_back(err_msg);
             end
             // tag
@@ -141,7 +141,7 @@ function void cache_data_scoreboard::compare_cache_state();
                 tag_errors++;
                 err_msg = $sformatf("tag mismatch set%0d way%0d, cache:%0h vs mdl:%0h", set, way,
                         cache_dbg_vif.tag[way][set], d_cache_mdl.cache[set][way].tag);
-                `error(err_msg)
+                //`error(err_msg)
                 if (error_log.size() < max_errors_to_log) error_log.push_back(err_msg);
             end
             // data
@@ -151,7 +151,7 @@ function void cache_data_scoreboard::compare_cache_state();
                     data_errors++;
                     err_msg = $sformatf("data mismatch set%0d way%0d word%0d, cache:%0h vs mdl:%0h", 
                             set, way, w, cache_dbg_vif.cache_data[way][set][w], d_cache_mdl.cache[set][way].data[w]);
-                    `error(err_msg)
+                    //`error(err_msg)
                     if (error_log.size() < max_errors_to_log) error_log.push_back(err_msg);
                 end
             end

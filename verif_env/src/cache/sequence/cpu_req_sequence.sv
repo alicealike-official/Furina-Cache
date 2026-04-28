@@ -23,6 +23,10 @@ task cpu_req_sequence::body();
             cpu_req_addr < 10000;
         })
     end
+    // logic [$clog2(`NUM_CACHE_SET)-1:0] index = 0;
+    // logic [$clog2(`CACHE_BLOCK_SIZE)-1:0] offset = 0;
+
+    // logic [$clog2(`DATA_ADDR_BUS)-$clog2(`NUM_CACHE_SET)-$clog2(`CACHE_BLOCK_SIZE) - 1:0] tag=1;
 
 
     // `uvm_do_with(tr, {
@@ -34,7 +38,7 @@ task cpu_req_sequence::body();
 
     // `uvm_do_with(tr, {
     //     cpu_req_valid   == 1;
-    //     cpu_req_addr    == 32'h0005_0000;
+    //     cpu_req_addr    == {tag, index, offset};
     //     cpu_wr_en       == 1;
     //     cpu_wdata       == 32'hffff_ffff;
     // })

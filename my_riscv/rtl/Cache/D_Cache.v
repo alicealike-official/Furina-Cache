@@ -37,7 +37,6 @@ module D_cache#(
     localparam Way_Width        = $clog2(Num_Cache_Way);
     localparam Tag_Width        = DataAddrBus - Offset_Width - Index_Width;
     localparam Words_Per_Block   = Cache_Block_Size / (DataWidth / 8);
-    //localparam Words_Width      = $clog2(Words_Per_Block);
 
     //===============================cache存储内容=======================//
     reg                             valid[Num_Cache_Way][Num_Cache_Set];
@@ -130,10 +129,6 @@ module D_cache#(
 
 
     //================================辅助判断信号===============================//
-    // wire is_read_miss;//read miss
-    // wire is_write_miss;//write miss
-    // assign is_read_miss = (curr_state == IDLE && ~hit_sign && cpu_req_handshake && ~cpu_wr_en);   
-    // assign is_write_miss = (curr_state == IDLE && ~hit_sign && cpu_req_handshake && cpu_wr_en); 
 
     wire is_dirty;//判断替换行是否dirty
     assign is_dirty = (curr_state == DIRTY_CHECK && dirty[curr_alloc_way][index_in]); 
@@ -184,31 +179,6 @@ module D_cache#(
 
     assign cpu_resp_valid = cpu_resp_valid_condition;
 
-
-    //================================生成mem控制信号=================================//
-    //读写使能信号，判断cache是否要读写mem
-    // wire mem_wr_en_high;
-    // wire mem_wr_en_low;
-    // assign mem_wr_en_high = is_dirty;
-    // assign mem_wr_en_low  = (curr_state == WB && mem_resp_handshake) || is_not_dirty || (is_write_miss);
-    //assign mem_wr_en = is_dirty || (curr_state == WB && !mem_resp_handshake);
-
-    //内存地址信号
-    // wire mem_addr_select_cpu;
-    // wire mem_addr_select_alloc;
-    // assign mem_addr_select_cpu   = mem_wr_en_low;
-    // assign mem_addr_select_alloc = mem_wr_en_high;
-
-
-
-    // assign mem_addr = (is_write_miss || is_not_dirty || wb_done) ? cpu_req_addr :
-    //               (is_write_back) ? alloc_addr :
-    //               32'b0;
-
-    //内存写数据
-    //assign mem_wdata = cache_data[curr_alloc_way][index_in];  // 写回数据
-    //================================生成mem控制信号=================================//
-
     //================================内存信号锁存器更新==========================//
     reg mem_req_valid_r;
     always @(posedge clk or negedge reset) begin
@@ -239,10 +209,7 @@ module D_cache#(
                 for (int i = 0; i < Words_Per_Block; i++) begin
                     mem_wdata_r[i*DataWidth +: DataWidth] <= cache_data[curr_alloc_way][index_in][i];
                 end
-               // $display("[RTL] time=%0t data=%h", $time, mem_wdata_r);
             end
-
-            //if (mem_wr_en_low) begin
             if (read_req_condition) begin
                 mem_wr_en_r <= 0;
                 //mem_addr_r <= cpu_req_addr;
@@ -255,35 +222,7 @@ module D_cache#(
         end
     end
     assign mem_wr_en = mem_wr_en_r;
-    
-    // always @(posedge clk or negedge reset) begin
-    //     if(!reset) begin
-
-    //     end
-
-    //     else begin
-    //         if (mem_addr_select_alloc) begin
-
-    //         end
-
-    //         if (mem_wr_en_low) begin
-
-    //         end
-    //     end
-    // end
     assign mem_addr = mem_addr_r;
-
-    // always @(posedge clk or negedge reset) begin
-    //     if(!reset) begin
-
-    //     end
-
-    //     else begin
-    //         if (mem_wr_en_high) begin
-  
-    //         end
-    //     end
-    // end
     assign mem_wdata = mem_wdata_r;
 
 
@@ -298,13 +237,6 @@ module D_cache#(
 
 
     //============================cache to cpu signal===========================//
-    // wire not_ready;
-    // assign not_ready                = (cpu_valid && curr_state == IDLE && ~hit_sign) || 
-    //                                         (curr_state == DIRTY_CHECK) || 
-    //                                         (curr_state == WB) ||
-    //                                         (curr_state == MISS_WAIT && !mem_resp_handshake);
-    //assign ready                    = (cpu_req && ((curr_state == IDLE && hit_sign) || miss_done)) || !cpu_req;
-    //assign cpu_ready                    = !not_ready;
     assign cpu_req_ready                = (curr_state == IDLE);
     assign cache_rdata              = (hit_sign) ? hit_rdata : alloc_data;
     //============================cache to cpu signal===========================//
@@ -317,13 +249,6 @@ module D_cache#(
                 if (!cpu_req_valid || cpu_req_handshake && hit_sign) begin
                     next_state = IDLE;
                 end
-
-                // else if (cpu_req_handshake && cpu_wr_en && ~hit_sign) begin
-                //     next_state = MISS_WAIT;
-                // end
-                // else if (cpu_req_handshake && ~cpu_wr_en && ~hit_sign)begin
-                //     next_state = DIRTY_CHECK;
-                // end
 
                 else if (cpu_req_handshake && ~hit_sign) begin
                     next_state = DIRTY_CHECK;
@@ -375,29 +300,6 @@ module D_cache#(
 
         else begin
             curr_state <= next_state;
-
-            // //valid
-            // if (miss_done) begin
-            //     valid[curr_alloc_way][index_in] <= 1'b1;
-            // end
-
-
-            // //dirty
-            // if (cpu_req_handshake && cpu_wr_en && curr_state == IDLE) begin
-            //     dirty[curr_alloc_way][index_in] <= 1'b1;
-            // end
-
-            // if (is_dirty) begin
-            //     dirty[curr_alloc_way][index_in] <= 1'b0;
-            // end
-
-
-            // //tag
-            // if(miss_done) begin
-            //     tag[curr_alloc_way][index_in] <= tag_in;
-            // end
-
-
             if(cpu_req_handshake && cpu_wr_en && hit_sign && curr_state == IDLE)begin
                 cache_data[hit_way][index_in][word_offset]                  <= cpu_wdata;
                 dirty[hit_way][index_in]                                    <= 1'b1;
@@ -414,17 +316,6 @@ module D_cache#(
 
 
                 if (cpu_wr_en) begin
-                    // cache_data[curr_alloc_way][index_in] <= 
-                    //     (mem_rdata & ~(({DataWidth{1'b1}} << (offset_in * 8)))) |
-                    //     ({cpu_wdata} << (offset_in * 8));
-                    // 在 miss_done 时，写操作改为：
-                // cache_data[curr_alloc_way][index_in] <= 
-                //     (mem_rdata & ~(512'(32'hFFFFFFFF) << (offset_in * 8))) |
-                //     (512'(cpu_wdata) << (offset_in * 8));
-                    //cache_data[curr_alloc_way][index_in] <= mem_rdata;
-
-                    //cache_data[curr_alloc_way][index_in][offset_in*8 +: DataWidth] <= cpu_wdata;
-                    //for debug
                     for (int i = 0; i < Words_Per_Block; i++) begin
                         if (i == word_offset) begin
                             cache_data[curr_alloc_way][index_in][i] <= cpu_wdata;
@@ -434,10 +325,7 @@ module D_cache#(
                             cache_data[curr_alloc_way][index_in][i] <= 
                             mem_rdata[i*DataWidth +: DataWidth];
                         end
-                    end
-                    //cache_data[curr_alloc_way][index_in][word_offset] <= cpu_wdata;
-                    //$display("WR: Index=%0d, Way=%0h, offset=%0d, data=%0h, cache=%0h", index_in, curr_alloc_way,offset_in, cpu_wdata, cache_data[curr_alloc_way][index_in][8*offset_in +: DataWidth]);
-                    
+                    end  
                     dirty[curr_alloc_way][index_in] <= 1'b1;  // 写操作标记脏
                 end
 
@@ -452,11 +340,6 @@ module D_cache#(
         end 
     end
 
-    //for debug
-
-    wire [DataWidth-1:0] cache_debug_date;
-    assign cache_debug_date = cache_data[0][11][7];
-
 
 
 
@@ -467,11 +350,10 @@ module D_cache#(
 
 
     wire alloc_enable_condition;//alloc使能
-    //assign alloc_enable_condition = cpu_req_handshake && (curr_state == IDLE && ~hit_sign);
-    assign alloc_enable_condition = is_dirty;
+    assign alloc_enable_condition = miss_done;
 
     wire [Num_Cache_Set-1:0] alloc_enable;//确认alloc使能的哪一路
-    assign alloc_enable = alloc_enable_condition ? (1 << index_in) : {Num_Cache_Set{1'b0}};
+    assign alloc_enable = alloc_enable_condition ? (32'b1 << index_in) : {Num_Cache_Set{1'b0}};
     //============================FIFO替换策略========================//
     generate
         for (genvar set = 0; set < Num_Cache_Set; set++) begin : fifo_inst_gen
