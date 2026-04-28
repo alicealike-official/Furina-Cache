@@ -26,6 +26,8 @@
 +incdir+../src/cache/pkg
 +incdir+../src/cache/sequence
 +incdir+../src/cache/sequence/transaction
++incdir+../src/cache/sequence/basic
++incdir+../src/cache/sequence/directed
 //-----------cache-----------//
 
 //---------------------------//
@@ -64,7 +66,14 @@
 
 //-------------test----------//
 ../test/common/clock_smoke_test.sv
-../test/cache/cache_basic_test.sv
+
+../test/cache/basic/cache_basic_test.sv
+
+../test/cache/directed/cache_read_hit_test.sv
+../test/cache/directed/cache_read_miss_test.sv
+../test/cache/directed/cache_write_hit_test.sv
+../test/cache/directed/cache_write_miss_test.sv
+../test/cache/directed/cache_write_read_test.sv
 //-------------test----------//
 
 

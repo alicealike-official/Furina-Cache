@@ -9,7 +9,12 @@ package cache_pkg;
     `include "mem_rsp_transaction.sv"
 
 
-    `include "cpu_req_sequence.sv"
+    `include "cpu_basic_sequence.sv"
+    `include "cpu_read_hit_sequence.sv"
+    `include "cpu_read_miss_sequence.sv"
+    `include "cpu_write_hit_sequence.sv"
+    `include "cpu_write_miss_sequence.sv"
+    `include "cpu_write_read_sequence.sv"
 
 
     `include "cache_base_virtual_sequence.sv"

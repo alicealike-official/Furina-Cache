@@ -10,13 +10,13 @@ class cache_base_virtual_sequence extends uvm_sequence;
 endclass
 
 task cache_base_virtual_sequence::body();
-    cpu_req_sequence cpu_req_seq;
+    cpu_basic_sequence cpu_req_seq;
 
     if(!uvm_config_db #(uvm_sequencer #(cpu_req_transaction))::get(
         null, "", "cpu_req_sqr", cpu_req_sqr))
     `fatal("CPU sequencer not found in config_db")
 
-    cpu_req_seq = cpu_req_sequence::type_id::create("cpu_req_seq");
+    cpu_req_seq = cpu_basic_sequence::type_id::create("cpu_req_seq");
 
     fork
         cpu_req_seq.start(cpu_req_sqr);

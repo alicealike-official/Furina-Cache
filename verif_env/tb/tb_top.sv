@@ -85,7 +85,7 @@ module tb_top;
 
         uvm_config_db#(virtual cache_debug_interface)::set(null,"*","cache_dbg_vif",u_D_cache.u_dbg_if);
         // // 启动UVM测试
-        run_test("cache_basic_test");
+        run_test();
     end
     
     // ====================================================

@@ -6,7 +6,7 @@ TB = ./tb.f
 UVM_HOME = /home/alicealike1022/tools/uvm/uvm-1.2
 
 
-WORK_DIR = work
+WORK_DIR = work/
 WAVE_DIR = $(WORK_DIR)/wave
 LOG_DIR = $(WORK_DIR)/log
 RUN_DIR = $(WORK_DIR)/run
@@ -51,6 +51,7 @@ vcs_simulate: $(SIMV) $(DUMP_TCL)
 	$(SIMV) \
     +fsdb+autoflush \
 	+wave=$(WAVEFORM) \
+	+UVM_TESTNAME=$(TEST_NAME)
 	-ucli -do $(DUMP_TCL) \
 	-l $(VCS_SIM_LOG)
 
@@ -67,7 +68,7 @@ run_verdi:
 
 
 clean:
-	rm -rf $(WORK_DIR) novas.* novas_dump.log ucli.key verdiLog/ inter.fsdb tr_db.log
+	rm -rf $(WORK_DIR) novas.* novas_dump.log ucli.key verdiLog/ inter.fsdb tr_db.log script/regression_logs
 
 help:
 	@echo "Available targets:"
