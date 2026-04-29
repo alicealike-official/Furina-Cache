@@ -27,8 +27,8 @@
 +incdir+../src/cache/sequence
 +incdir+../src/cache/sequence/transaction
 +incdir+../src/cache/sequence/basic
-+incdir+../src/cache/sequence/function_check
-+incdir+../src/cache/sequence/state_management
++incdir+../src/cache/sequence/directed
++incdir+../src/cache/sequence/random
 //-----------cache-----------//
 
 //---------------------------//
@@ -71,14 +71,19 @@
 
 ../test/cache/basic/cache_basic_test.sv
 
-../test/cache/function_check/cache_read_hit_test.sv
-../test/cache/function_check/cache_read_miss_test.sv
-../test/cache/function_check/cache_write_hit_test.sv
-../test/cache/function_check/cache_write_miss_test.sv
-../test/cache/function_check/cache_write_read_test.sv
+../test/cache/directed/cache_read_hit_test.sv
+../test/cache/directed/cache_read_miss_test.sv
+../test/cache/directed/cache_write_hit_test.sv
+../test/cache/directed/cache_write_miss_test.sv
+../test/cache/directed/cache_write_read_test.sv
 
 
-../test/cache/state_management/cache_tag_match_test.sv
+../test/cache/directed/cache_tag_match_test.sv
+../test/cache/directed/cache_multi_write_and_writeback_test.sv
+../test/cache/directed/cache_fill_full_test.sv
+../test/cache/directed/cache_fifo_fill_test.sv
+
+../test/cache/random/cache_random_test.sv
 //-------------test----------//
 
 

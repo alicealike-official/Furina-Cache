@@ -58,7 +58,29 @@ interface cache_debug_interface(
                 alloc_way [`NUM_CACHE_SET],
     input logic miss_done,
     input logic [$clog2(`NUM_CACHE_SET)-1:0] index_in,
-    input logic [$clog2(`NUM_CACHE_WAY)-1:0] curr_alloc_way
+    input logic [$clog2(`NUM_CACHE_WAY)-1:0] curr_alloc_way,
+    input logic cpu_req_handshake,
+    input logic hit_sign,
+    input logic [$clog2(`NUM_CACHE_WAY)-1:0] hit_way,
+    input logic cpu_wr_en,
+   // input logic miss_done,
+    input logic wb_done,
+    input logic mem_req_valid,
+    input logic mem_req_ready,
+    input logic mem_resp_ready,
+    input logic mem_resp_valid,
+    input logic mem_wr_en,
+    input logic [`DATA_ADDR_BUS-1:0] mem_addr,
+    input logic [8*`CACHE_BLOCK_SIZE-1:0] mem_wdata,
+    input logic [8*`CACHE_BLOCK_SIZE-1:0] mem_rdata,
+    input logic [1:0] curr_state,
+    input logic cpu_req_valid,
+    input logic cpu_req_ready,
+    input logic [`DATA_ADDR_BUS-1:0] cpu_req_addr,
+    input logic [`DATA_WIDTH-1:0] cpu_wdata,
+    input logic cpu_resp_ready,
+    input logic cpu_resp_valid,
+    input logic [`DATA_WIDTH-1:0] cache_rdata
 );
 
 endinterface

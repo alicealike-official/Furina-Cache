@@ -11,14 +11,20 @@ package cache_pkg;
 
     `include "cpu_basic_sequence.sv"
 
-    //功能测试
+    //directed
     `include "cpu_read_hit_sequence.sv"
     `include "cpu_read_miss_sequence.sv"
     `include "cpu_write_hit_sequence.sv"
     `include "cpu_write_miss_sequence.sv"
     `include "cpu_write_read_sequence.sv"
-
     `include "cpu_tag_match_sequence.sv"
+    `include "cpu_multi_write_and_writeback_sequence.sv"
+    `include "cpu_fill_full_sequence.sv"
+    `include "cpu_fifo_fill_sequence.sv"
+
+
+    //random
+    `include "cpu_random_sequence.sv"
 
 
     `include "cache_base_virtual_sequence.sv"

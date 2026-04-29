@@ -312,9 +312,6 @@ module D_cache#(
             if(miss_done) begin
                 valid[curr_alloc_way][index_in] <=1'b1;
                 tag[curr_alloc_way][index_in] <= tag_in;
-
-
-
                 if (cpu_wr_en) begin
                     for (int i = 0; i < Words_Per_Block; i++) begin
                         if (i == word_offset) begin
