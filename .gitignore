@@ -12,3 +12,6 @@ verif_env/sim/verdiLog
 verif_env/sim/inter.*
 verif_env/sim/.__solver_cache__
 verif_env/sim/script/regression_logs
+verif_env/sim/simv.vdb
+verif_env/sim/urgReport
+verif_env/sim/cm.log

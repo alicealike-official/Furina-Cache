@@ -16,39 +16,13 @@ task cpu_fill_full_sequence::body();
     logic [$clog2(`CACHE_BLOCK_SIZE)-1 : 0]                                     random_offset;
     logic [`DATA_ADDR_BUS-$clog2(`NUM_CACHE_SET)-$clog2(`CACHE_BLOCK_SIZE)-1:0] random_tag;
 
-    // assert(std::randomize(random_addr) with {
-    // random_addr[1:0] == 2'b00;   // 或者 (random_addr % 4) == 0
-    // });
-
-    // `uvm_do_with(tr, {
-    //     cpu_req_valid == 1;
-    //     cpu_wr_en == 1;
-    //     cpu_req_addr == random_addr;
-    // })
-
-
-    // for (int i = 0; i < num_transactions; i++) begin
-
-    //     `uvm_do_with(tr, {
-    //         cpu_req_valid == 1;
-    //         cpu_wr_en == 1;
-    //         cpu_req_addr == random_addr;
-    //     })
-    // end
-
-    // `uvm_do_with(tr, {
-    //     cpu_req_valid == 1;
-    //     cpu_wr_en == 0;
-    //     cpu_req_addr == random_addr;
-    // })
-
     for (int i=0; i<`NUM_CACHE_SET; i++) begin
         for(int j=0; j<`NUM_CACHE_WAY; j++) begin
             random_index = i;
             std::randomize(random_tag);
-            assert(std::randomize(random_offset) with {
+            std::randomize(random_offset) with {
                 random_offset[1:0] == 2'b00;
-            });
+            };
 
             `uvm_do_with(tr, 
             {

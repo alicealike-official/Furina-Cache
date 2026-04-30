@@ -40,6 +40,8 @@ vcs_compile: $(DIRS)
 		$(UVM_HOME)/src/uvm.sv \
 		$(UVM_HOME)/src/dpi/uvm_dpi.cc \
 		-Mdir=$(CSRC_DIR) \
+		-cm line+cond+fsm+branch+tgl+assert \
+  		-cm_dir $(WORK_DIR)/simv.vdb \
         -f $(DUT) -f $(TB) \
         +vcs+lic+wait \
 		-kdb \
@@ -51,7 +53,10 @@ vcs_simulate: $(SIMV) $(DUMP_TCL)
 	$(SIMV) \
     +fsdb+autoflush \
 	+wave=$(WAVEFORM) \
-	+UVM_TESTNAME=$(TEST_NAME)
+	+UVM_TESTNAME=$(TEST_NAME) \
+	-cm line+cond+fsm+branch+tgl+assert \
+	-cm_dir  $(WORK_DIR)/simv.vdb \
+	-cm_name $(TEST_NAME) \
 	-ucli -do $(DUMP_TCL) \
 	-l $(VCS_SIM_LOG)
 
@@ -60,6 +65,8 @@ vcs_simulate_verdi: $(SIMV) $(DUMP_TCL)
     +fsdb+autoflush \
 	+wave=$(WAVEFORM) \
 	-ucli -do $(DUMP_TCL) \
+	-cm line+cond+fsm+branch+tgl+assert \
+    -cm_dir simv.vdb \
     -l $(VCS_SIM_LOG) \
 	+UVM_VERDI_TRACE="UVM_AWARE+HIER" -gui=verdi
 
@@ -68,8 +75,15 @@ run_verdi:
 
 
 clean:
-	rm -rf $(WORK_DIR) novas.* novas_dump.log ucli.key verdiLog/ inter.fsdb tr_db.log script/regression_logs
+	rm -rf $(WORK_DIR) novas.* novas_dump.log ucli.key verdiLog/ inter.fsdb tr_db.log script/regression_logs urgReport cm.log
 
+merge_cov:
+	urg -dir $(WORK_DIR)/simv.vdb
+
+TEST_SCRIPTS := $(wildcard ./script/run_*_test.py)
+
+run_regression:
+	python3 ./script/regression_test.py --script $(TEST_SCRIPTS)
 help:
 	@echo "Available targets:"
 	@echo "  vcs_all              - 完整流程：清理 + 编译 + 仿真"

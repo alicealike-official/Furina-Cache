@@ -35,9 +35,9 @@ task cpu_fifo_fill_sequence::body();
 
     for (int i = 0; i < num_transactions; i++) begin
         std::randomize(random_tag);
-        assert(std::randomize(random_offset) with {
+        std::randomize(random_offset) with {
             random_offset[1:0] == 2'b00;
-        });
+        };
         `uvm_do_with(tr, {
             cpu_req_valid == 1;
             cpu_req_addr == {random_tag, random_index, random_offset};

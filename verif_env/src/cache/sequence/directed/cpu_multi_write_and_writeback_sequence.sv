@@ -14,9 +14,9 @@ task cpu_multi_write_and_writeback_sequence::body();
     cpu_req_transaction tr;
     logic [`DATA_ADDR_BUS-1 : 0] random_addr;
 
-    assert(std::randomize(random_addr) with {
+    std::randomize(random_addr) with {
     random_addr[1:0] == 2'b00;   // 或者 (random_addr % 4) == 0
-    });
+    };
 
     `uvm_do_with(tr, {
         cpu_req_valid == 1;

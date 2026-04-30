@@ -71,6 +71,10 @@ task clk_rst_driver::set_reset();
         clk_rst_vif.rst_n_drv <= 0;
         #(this.reset_time);
         clk_rst_vif.rst_n_drv <= 1;
+        #(this.reset_time);
+        clk_rst_vif.rst_n_drv <= 0;
+        #(this.reset_time);
+        clk_rst_vif.rst_n_drv <= 1;
 endtask
 
 function void clk_rst_driver::update_timing();

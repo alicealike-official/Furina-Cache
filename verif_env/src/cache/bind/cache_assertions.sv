@@ -16,13 +16,13 @@ module cache_assertions (
         for(j=0;j<`NUM_CACHE_SET;j++) begin
 
             // reset拉低瞬间
-            assert property (
+            async_reset_check : assert property (
                 @(negedge dbg_if.reset) ##1 (dbg_if.valid[i][j] == 0)
             ) else
                 $error("Async reset failed valid[%0d][%0d]",i,j);
 
             // reset保持期间
-            assert property (
+            hold_reset_check : assert property (
                 @(posedge dbg_if.clk) !dbg_if.reset |-> (dbg_if.valid[i][j] == 0)
             ) else
                 $error( "Reset hold failed valid[%0d][%0d]",i,j);
@@ -37,7 +37,7 @@ module cache_assertions (
     // 还需要注意curr_alloc_way和index_in的值，应该保持为条件发生时的只，因为操作符号|=>要延迟到下一拍检查
     generate
         for(j=0;j<`NUM_CACHE_SET;j++) begin : MISS_VALID
-            assert property (@(posedge dbg_if.clk)
+            fetch_valid : assert property (@(posedge dbg_if.clk)
                 $rose(dbg_if.miss_done)
                 |=> dbg_if.valid[
                         $past(dbg_if.curr_alloc_way)
@@ -72,7 +72,7 @@ module cache_assertions (
             );
             endproperty
 
-            assert property(p_dirty_change_has_reason) else $error("Dirty unchanged when condition comes!!!");
+            dirty_change_has_reason : assert property(p_dirty_change_has_reason) else $error("Dirty unchanged when condition comes!!!");
         end
     end
     endgenerate
@@ -80,17 +80,6 @@ module cache_assertions (
     // ===================== 断言4: 同一地址不会出现在多个 Way 中 =====================
     // 对于同一个 index，不能有两个不同的 way 同时 valid 且 tag 相等。
     // 这需要在每次 valid 或 tag 变化时检查。
-    // generate
-    //     for (i = 0; i < `NUM_CACHE_WAY; i++) begin : gen_i
-    //         for (j = i+1; j < `NUM_CACHE_WAY; j++) begin : gen_j
-    //             assert property (
-    //                 @(posedge dbg_if.clk) disable iff (!dbg_if.reset)
-    //                 (dbg_if.valid[i][*] && dbg_if.valid[j][*]) && (dbg_if.tag[i][*] == dbg_if.tag[j][*])
-    //                 |-> 0;
-    //             ) else $error("Same tag appears in two ways for same index");
-    //         end
-    //     end
-    // endgenerate
 
 genvar s;
 generate
@@ -98,7 +87,7 @@ generate
         for (i = 0; i < `NUM_CACHE_WAY; i++) begin : gen_i
             for (j = i+1; j < `NUM_CACHE_WAY; j++) begin : gen_j
 
-                assert property (
+                way_differ_check : assert property (
                     @(posedge dbg_if.clk)
                     disable iff (!dbg_if.reset)
 
@@ -169,7 +158,7 @@ property p_writeback_only_when_dirty_evicted;
 
 endproperty
 
-assert property (p_writeback_only_when_dirty_evicted)
+writeback_only_when_dirty_evicted : assert property (p_writeback_only_when_dirty_evicted)
     else $error("Illegal writeback: mem write issued without dirty victim eviction");
 
 //============================================================
@@ -216,14 +205,14 @@ property p_cpu_req_stable_when_stall;
     );
 endproperty
 
-assert property (p_cpu_req_stable_when_stall)
+cpu_req_stable_when_stall : assert property (p_cpu_req_stable_when_stall)
     else $error("CPU request changed while stalled");
 
 
-//------------------------------------------------------------
-// CPU-2:
-// cache响应valid拉高后，若CPU未ready，响应必须保持
-//------------------------------------------------------------
+// //------------------------------------------------------------
+// // CPU-2:
+// // cache响应valid拉高后，若CPU未ready，响应必须保持
+// //------------------------------------------------------------
 property p_cpu_resp_stable_when_wait;
     @(posedge dbg_if.clk)
     disable iff (!dbg_if.reset)
@@ -238,7 +227,7 @@ property p_cpu_resp_stable_when_wait;
     );
 endproperty
 
-assert property (p_cpu_resp_stable_when_wait)
+cpu_resp_stable_when_wait : assert property (p_cpu_resp_stable_when_wait)
     else $error("CPU response changed while waiting for cpu_resp_ready");
 
 
@@ -257,7 +246,7 @@ property p_cpu_no_accept_when_busy;
     (!dbg_if.cpu_req_ready);
 endproperty
 
-assert property (p_cpu_no_accept_when_busy)
+cpu_no_accept_when_busy : assert property (p_cpu_no_accept_when_busy)
     else $error("Cache accepted CPU request while busy");
 
 
@@ -288,7 +277,7 @@ property p_mem_req_stable_when_stall;
     );
 endproperty
 
-assert property (p_mem_req_stable_when_stall)
+mem_req_stable_when_stall : assert property (p_mem_req_stable_when_stall)
     else $error("Memory request changed before handshake");
 
 
@@ -304,7 +293,7 @@ property p_mem_wr_en_known;
     dbg_if.mem_req_valid |-> !$isunknown(dbg_if.mem_wr_en);
 endproperty
 
-assert property (p_mem_wr_en_known)
+mem_wr_en_known : assert property (p_mem_wr_en_known)
     else $error("mem_wr_en unknown during mem request");
 
 
@@ -330,7 +319,7 @@ property p_mem_resp_only_when_expected;
      dbg_if.curr_state == 2'b11);
 endproperty
 
-assert property (p_mem_resp_only_when_expected)
+mem_resp_only_when_expected : assert property (p_mem_resp_only_when_expected)
     else $error("Unexpected memory response received");
 
 
@@ -353,7 +342,7 @@ property p_mem_resp_stable_when_stall;
     );
 endproperty
 
-assert property (p_mem_resp_stable_when_stall)
+mem_resp_stable_when_stall : assert property (p_mem_resp_stable_when_stall)
     else $error("Memory response changed while stalled");
 
 
@@ -379,7 +368,7 @@ property p_mem_req_eventually_get_resp;
     ##[1:$] (dbg_if.mem_resp_valid && dbg_if.mem_resp_ready);
 endproperty
 
-assert property (p_mem_req_eventually_get_resp)
+mem_req_eventually_get_resp : assert property (p_mem_req_eventually_get_resp)
     else $error("Memory request never got response");
 
 
@@ -399,7 +388,7 @@ property p_no_spurious_mem_resp;
     !dbg_if.mem_resp_valid;
 endproperty
 
-assert property (p_no_spurious_mem_resp)
+no_spurious_mem_resp : assert property (p_no_spurious_mem_resp)
     else $error("Spurious memory response while cache idle");
 
 
@@ -448,7 +437,7 @@ property p_hit_resp_immediate;
     dbg_if.cpu_resp_valid;
 endproperty
 
-assert property (p_hit_resp_immediate)
+hit_resp_immediate : assert property (p_hit_resp_immediate)
     else $error("Hit latency violation: hit request did not respond immediately");
 
 
@@ -473,7 +462,7 @@ property p_hit_no_miss_transition;
     (dbg_if.curr_state == 2'b00);
 endproperty
 
-assert property (p_hit_no_miss_transition)
+hit_no_miss_transition : assert property (p_hit_no_miss_transition)
     else $error("Hit request incorrectly entered miss flow");
 
 
@@ -502,7 +491,7 @@ property p_miss_enter_miss_flow;
     (dbg_if.curr_state == 2'b01);
 endproperty
 
-assert property (p_miss_enter_miss_flow)
+miss_enter_miss_flow : assert property (p_miss_enter_miss_flow)
     else $error("Miss latency violation: miss did not enter DIRTY_CHECK");
 
 
@@ -535,7 +524,7 @@ property p_miss_no_early_cpu_response;
     );
 endproperty
 
-assert property (p_miss_no_early_cpu_response)
+miss_no_early_cpu_response : assert property (p_miss_no_early_cpu_response)
     else $error("Miss latency violation: cpu responded before memory completed");
 
 
@@ -568,7 +557,7 @@ property p_miss_resp_after_mem_done;
     dbg_if.cpu_resp_valid;
 endproperty
 
-assert property (p_miss_resp_after_mem_done)
+miss_resp_after_mem_done : assert property (p_miss_resp_after_mem_done)
     else $error("Miss latency violation: no CPU response when miss completed");
 
 
@@ -590,7 +579,7 @@ property p_miss_busy_blocks_cpu;
     !dbg_if.cpu_req_ready;
 endproperty
 
-assert property (p_miss_busy_blocks_cpu)
+miss_busy_blocks_cpu : assert property (p_miss_busy_blocks_cpu)
     else $error("Miss flow violation: cache accepted new CPU request while busy");
 endmodule
 `endif

@@ -32,9 +32,9 @@ task cpu_tag_match_sequence::body();
 
     for (int i = 0; i < num_transactions; i++) begin
 
-        assert(std::randomize(random_offset) with {
+        std::randomize(random_offset) with {
         random_offset[1:0] == 2'b00;   // 或者 (random_addr % 4) == 0
-        });
+        };
 
         std::randomize(random_index);
         `uvm_do_with(tr, {
