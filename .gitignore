@@ -1,8 +1,3 @@
-my_riscv/sim/work/                                                                      
-my_riscv/sim/novas_dump.log
-my_riscv/sim/tr_db.log
-my_riscv/sim/ucli.key
-my_riscv/sim/novas.*
 verif_env/sim/work/
 verif_env/sim/novas_dump.log
 verif_env/sim/tr_db.log
@@ -15,3 +10,4 @@ verif_env/sim/script/regression_logs
 verif_env/sim/simv.vdb
 verif_env/sim/urgReport
 verif_env/sim/cm.log
+.deprecated

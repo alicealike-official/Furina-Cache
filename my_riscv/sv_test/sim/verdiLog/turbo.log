@@ -1,3 +1,0 @@
-Command Line: /home/alicealike1022/Downloads/synopsis/verdi2018/verdi/Verdi_O-2018.09-SP2/platform/LINUXAMD64/bin/Novas -i -simflow -simBin ./v_sim/simv -simDelim +fsdb+autoflush -l v_sim/vcs_sim.log +UVM_VERDI_TRACE=UVM_AWARE+HIER
-uname(Linux ubuntu 5.15.0-139-generic #149~20.04.1-Ubuntu SMP Wed Apr 16 08:29:56 UTC 2025 x86_64)
-au time 1909.620188 63.845766 31.553647 delta 314114048 314114048 total 689848320 689848320
