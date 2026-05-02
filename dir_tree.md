@@ -1,0 +1,39 @@
+```
+verif_env/                # 验证环境根目录
+|-- docs/                    # 文档目录
+|   |-- cpu/                 # CPU 相关文档
+|   |-- cache/               # Cache 相关文档
+|   |-- ahb3/                # AHB3 相关文档
+|   `-- top/                 # 顶层环境文档
+|-- src/                     # 源代码目录
+|   |-- common/              # 公共组件(跨子系统共享)
+|   |   |-- component        # 公共组件(如时钟模块的driver和agent)
+|   |   |-- interface/       # 公共接口(如时钟/复位)
+|   |   |-- config/          # 公共配置类
+|   |   |-- define/          # 公共定义
+|   |   |-- pkg/             # 公共包(如类型定义、宏)
+|   |   |-- model/           # 公共参考模型(目前只包含mem)
+|   |   `-- utils/           # 公共工具类
+|   |-- cache/               # Cache 子系统
+|   |   |-- component/       # Cache 验证组件
+|   |   |-- sequence/        # Cache 测试序列(包含tr)
+|   |   |-- model/           # Cache 行为模型(可选)
+|   |   |-- coverage/        # Cache 覆盖率模型
+|   |   |-- interface/       # Cache 接口
+|   |   |-- bind/            # Cache Bind文件
+|   |   |-- deprecated/      # Cache 中弃用的文件
+|   |   `-- pkg/             # Cache 专用包
+|   `-- top/                 # 顶层环境
+|       |-- env/             # 顶层环境类(整合 CPU、Cache、AHB3)
+|       |-- sequence/        # 顶层虚拟序列
+|       `-- config/          # 顶层环境配置
+|-- test/                    # 测试用例目录
+|   |-- cache/               # Cache 单独测试
+|   `-- integration/         # 集成测试(CPU + Cache + AHB3)
+|-- sim/                     # 仿真脚本目录
+|   |-- Makefile             # 顶层构建脚本
+|   `-- integration.mk       # 集成测试构建脚本
+|-- tb/                      # 测试平台目录
+|   |-- top.sv               # 顶层测试平台(例化 DUT、接口、验证环境)
+`-- README.md                # 项目说明
+```

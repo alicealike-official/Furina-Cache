@@ -1,39 +1,24 @@
-```
-verif_env/                # 验证环境根目录
-|-- docs/                    # 文档目录
-|   |-- cpu/                 # CPU 相关文档
-|   |-- cache/               # Cache 相关文档
-|   |-- ahb3/                # AHB3 相关文档
-|   `-- top/                 # 顶层环境文档
-|-- src/                     # 源代码目录
-|   |-- common/              # 公共组件(跨子系统共享)
-|   |   |-- component        # 公共组件(如时钟模块的driver和agent)
-|   |   |-- interface/       # 公共接口(如时钟/复位)
-|   |   |-- config/          # 公共配置类
-|   |   |-- define/          # 公共定义
-|   |   |-- pkg/             # 公共包(如类型定义、宏)
-|   |   |-- model/           # 公共参考模型(目前只包含mem)
-|   |   `-- utils/           # 公共工具类
-|   |-- cache/               # Cache 子系统
-|   |   |-- component/       # Cache 验证组件
-|   |   |-- sequence/        # Cache 测试序列(包含tr)
-|   |   |-- model/           # Cache 行为模型(可选)
-|   |   |-- coverage/        # Cache 覆盖率模型
-|   |   |-- interface/       # Cache 接口
-|   |   |-- bind/            # Cache Bind文件
-|   |   |-- deprecated/      # Cache 中弃用的文件
-|   |   `-- pkg/             # Cache 专用包
-|   `-- top/                 # 顶层环境
-|       |-- env/             # 顶层环境类(整合 CPU、Cache、AHB3)
-|       |-- sequence/        # 顶层虚拟序列
-|       `-- config/          # 顶层环境配置
-|-- test/                    # 测试用例目录
-|   |-- cache/               # Cache 单独测试
-|   `-- integration/         # 集成测试(CPU + Cache + AHB3)
-|-- sim/                     # 仿真脚本目录
-|   |-- Makefile             # 顶层构建脚本
-|   `-- integration.mk       # 集成测试构建脚本
-|-- tb/                      # 测试平台目录
-|   |-- top.sv               # 顶层测试平台(例化 DUT、接口、验证环境)
-`-- README.md                # 项目说明
-```
+# Furina-Cache
+
+## 项目介绍
+Furina-Cache 是一个用基于Verilog实现的 Cache 子系统。  
+- 包含可综合的 RTL 设计  
+- 配套 UVM 验证环境  
+- 独立的行为级内存模型  
+
+## 功能完成情况
+| 功能模块 | 状态 | 备注 |
+|----------|------|------|
+| Cache的RTL设计    | ✅ 已实现 | 非流水线 |
+| Cache的uvm验证环境    | ✅ 已实现 | 已通过绝大多数case，但是有些测试和验证点还待补充，咕咕咕 |
+| sv内存模型    | ✅ 已实现 | 固定延迟部分有bug，待修改 |
+| 拓展cache和mem的接口协议为AXI | ❌ 未实现 | 2.0计划 |
+| AXI协议uvm验证环境 | ❌ 未实现 | 2.0计划 |
+| 带延迟的mem模型 | ❌ 未实现 | 2.0计划 |
+
+## 待扩展的功能
+- [ ] AXI 总线接口封装（当前为简单总线或私有协议）  
+- [ ] 流水线化 Cache 控制逻辑（提高频率）  
+- [ ] 多级 Cache 结构（如 L1 ↔ L2）  
+- [ ] DMA 直接内存访问与 Cache 一致性交互  
+- [ ] 多核 Cache 一致性协议（如 MESI/MOESI）
