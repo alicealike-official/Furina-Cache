@@ -3,7 +3,7 @@
 export TEST_NAME = Test
 DUT = ./dut.f
 TB = ./tb.f
-UVM_HOME = /home/alicealike1022/tools/uvm/uvm-1.2
+UVM_HOME = ../uvm-1.2
 
 
 WORK_DIR = work/
