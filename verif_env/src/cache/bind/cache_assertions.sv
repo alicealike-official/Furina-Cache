@@ -1,6 +1,5 @@
 // bind_assertions.sv
-`ifndef BIND_CACHE_ASSERTIONS_SV
-`define BIND_CACHE_ASSERTIONS_SV
+`ifdef D_CACHE_TEST
 // `include "uvm_macros.svh"
 // import uvm_pkg::*;
 module cache_assertions (
@@ -582,4 +581,4 @@ endproperty
 miss_busy_blocks_cpu : assert property (p_miss_busy_blocks_cpu)
     else $error("Miss flow violation: cache accepted new CPU request while busy");
 endmodule
-`endif
+`endif 

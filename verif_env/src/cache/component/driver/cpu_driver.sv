@@ -44,9 +44,12 @@ task cpu_driver::drive_transaction(cpu_req_transaction cpu_req_tr);
     //$display("driver valid= %0d", cpu_req_tr.cpu_req_valid);
     cache_vif.cpu_req_valid     <= cpu_req_tr.cpu_req_valid;
     cache_vif.cpu_resp_ready    <= cpu_req_tr.cpu_resp_ready;
-    cache_vif.cpu_wr_en         <= cpu_req_tr.cpu_wr_en;
-    cache_vif.cpu_req_addr      <= cpu_req_tr.cpu_req_addr;
+    `ifdef D_CACHE_TEST
     cache_vif.cpu_wdata         <= cpu_req_tr.cpu_wdata;
+    cache_vif.cpu_wr_en         <= cpu_req_tr.cpu_wr_en;
+    `endif
+    cache_vif.cpu_req_addr      <= cpu_req_tr.cpu_req_addr;
+
 
     // 只等 handshake
     do begin

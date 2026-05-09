@@ -27,6 +27,7 @@ module tb_top;
     
     // DUT内部连接信号
 
+    `ifdef D_CACHE_TEST
     D_cache #(
             .Num_Cache_Set(`NUM_CACHE_SET),
             .Cache_Block_Size(`CACHE_BLOCK_SIZE),
@@ -53,6 +54,36 @@ module tb_top;
                 .mem_resp_ready(cache_vif.mem_resp_ready),
                 .mem_rdata(cache_vif.mem_rdata)
     );
+    `endif
+
+    `ifdef I_CACHE_TEST
+    I_cache #(
+            .Num_Cache_Set(`NUM_CACHE_SET),
+            .Cache_Block_Size(`CACHE_BLOCK_SIZE),
+            .Num_Cache_Way(`NUM_CACHE_WAY),
+            .DataAddrBus(`DATA_ADDR_BUS),
+            .DataWidth(`DATA_WIDTH)
+    ) u_I_cache(
+                .clk(cache_vif.clk),
+                .reset(cache_vif.rst_n),
+                .cpu_req_valid(cache_vif.cpu_req_valid),
+                //.cpu_wr_en(cache_vif.cpu_wr_en),
+                .cpu_req_addr(cache_vif.cpu_req_addr),
+                //.cpu_wdata(cache_vif.cpu_wdata),
+                .cache_rdata(cache_vif.cache_rdata), 
+                .cpu_req_ready(cache_vif.cpu_req_ready),
+                .cpu_resp_valid(cache_vif.cpu_resp_valid),
+                .cpu_resp_ready(cache_vif.cpu_resp_ready),
+                .mem_req_valid(cache_vif.mem_req_valid),
+                .mem_req_ready(cache_vif.mem_req_ready),
+                .mem_wr_en(cache_vif.mem_wr_en),
+                .mem_addr(cache_vif.mem_addr),
+                //.mem_wdata(cache_vif.mem_wdata),
+                .mem_resp_valid(cache_vif.mem_resp_valid),
+                .mem_resp_ready(cache_vif.mem_resp_ready),
+                .mem_rdata(cache_vif.mem_rdata)
+    );
+    `endif
     
     configurable_delay_mem u_mem(
         .clk(cache_vif.clk),
@@ -69,9 +100,11 @@ module tb_top;
     );
 
 
+    `ifdef D_CACHE_TEST
     cache_assertions u_cache_assert(
         .dbg_if(u_D_cache.u_dbg_if)
     );
+    `endif 
     
     // ====================================================
     // UVM配置和启动
@@ -88,7 +121,13 @@ module tb_top;
         uvm_config_db#(virtual clk_rst_interface)::set(null,"*","clk_rst_vif",clk_rst_vif);
         uvm_config_db#(virtual cache_interface)::set(null,"*","cache_vif",cache_vif);
 
+        `ifdef D_CACHE_TEST
         uvm_config_db#(virtual cache_debug_interface)::set(null,"*","cache_dbg_vif",u_D_cache.u_dbg_if);
+        `endif
+
+        `ifdef I_CACHE_TEST
+        uvm_config_db#(virtual cache_debug_interface)::set(null,"*","cache_dbg_vif",u_I_cache.u_dbg_if);
+        `endif
         // // 启动UVM测试
         run_test();
     end

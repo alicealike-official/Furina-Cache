@@ -22,7 +22,9 @@ class cache_data_scoreboard extends uvm_scoreboard;
     
     // 按错误类型分类统计
     protected int valid_errors = 0;
+    `ifdef D_CACHE_TEST
     protected int dirty_errors = 0;
+    `endif
     protected int tag_errors = 0;
     protected int data_errors = 0;
     protected int fifo_ptr_errors = 0;
@@ -127,6 +129,7 @@ function void cache_data_scoreboard::compare_cache_state();
                 if (error_log.size() < max_errors_to_log) error_log.push_back(err_msg);
             end
             // dirty
+            `ifdef D_CACHE_TEST
             if (cache_dbg_vif.dirty[way][set] != d_cache_mdl.cache[set][way].dirty) begin
                 local_errors++;
                 dirty_errors++;
@@ -135,6 +138,7 @@ function void cache_data_scoreboard::compare_cache_state();
                 //`error(err_msg)
                 if (error_log.size() < max_errors_to_log) error_log.push_back(err_msg);
             end
+            `endif
             // tag
             if (cache_dbg_vif.tag[way][set] != d_cache_mdl.cache[set][way].tag) begin
                 local_errors++;
@@ -204,7 +208,9 @@ function void cache_data_scoreboard::report_phase(uvm_phase phase);
     $display("║  Mismatch per cycle    :  %20.2f ║", total_errors / (1.0 * total_compares));
     end
     $display("║    - Valid errors      :  %20d ║", valid_errors);
+    `ifdef D_CACHE_TEST
     $display("║    - Dirty errors      :  %20d ║", dirty_errors);
+    `endif
     $display("║    - Tag errors        :  %20d ║", tag_errors);
     $display("║    - Data errors       :  %20d ║", data_errors);
     $display("║    - FIFO ptr errors   :  %20d ║", fifo_ptr_errors);

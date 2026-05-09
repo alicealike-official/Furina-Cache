@@ -45,9 +45,13 @@ task cpu_in_monitor::collect_transaction();
         tr.trans_id = tr.monitor_id++;
         -> cache_vif.cpu_in_monitor_evt;
         tr.cpu_req_valid    = cache_vif.cpu_req_valid;
-        tr.cpu_wr_en        = cache_vif.cpu_wr_en;
         tr.cpu_req_addr     = cache_vif.cpu_req_addr;
+
+        `ifdef D_CACHE_TEST
+        tr.cpu_wr_en        = cache_vif.cpu_wr_en;
         tr.cpu_wdata        = cache_vif.cpu_wdata;
+        `endif
+        
         tr.cpu_resp_ready   = cache_vif.cpu_resp_ready;
         cpu_in_mon_port.write(tr);
         do begin

@@ -35,6 +35,13 @@ class cpu_req_transaction extends uvm_sequence_item;
         cpu_resp_ready == 1;
     }
 
+    `ifdef I_CACHE_TEST
+    constraint cpu_only_read {
+        cpu_wr_en == 0;
+    }
+    `endif
+
+
     function new(string name = "cpu_req_transaction");
         super.new();
     endfunction
@@ -72,21 +79,27 @@ function bit cpu_req_transaction::compare(uvm_object rhs, uvm_comparer = null);
             `info_med($sformatf("valid mismatch: %0h vs %0h",cpu_req_valid, tr.cpu_req_valid))
         end
 
+        `ifdef D_CACHE_TEST
         if (cpu_wr_en != tr.cpu_wr_en) begin
             match = 0;
             `info_med($sformatf("wr_en mismatch: %0h vs %0h",cpu_wr_en, tr.cpu_wr_en))
         end
-        
+        `endif
+
+
         if (cpu_req_addr != tr.cpu_req_addr) begin
             match = 0;
             `info_med($sformatf("addr mismatch: %0h vs %0h",cpu_req_addr, tr.cpu_req_addr))
         end
 
+        `ifdef D_CACHE_TEST
         if (cpu_wdata != tr.cpu_wdata) begin
             match = 0;
             `info_med($sformatf("write data mismatch: %0h vs %0h",cpu_wdata, tr.cpu_wdata))
         end
+        `endif
 
+        
         if (cpu_resp_ready != tr.cpu_resp_ready) begin
             match = 0;
             `info_med($sformatf("resp ready mismatch: %0h vs %0h",cpu_resp_ready, tr.cpu_resp_ready))

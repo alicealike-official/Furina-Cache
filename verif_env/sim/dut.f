@@ -4,6 +4,7 @@
 //-----------Cache------------//
 ../../Design/Cache/D_Cache.v
 ../../Design/Cache/fifo_counter.v
+../../Design/Cache/I_cache.v
 //-----------Cache------------//
 
 //-----------memory------------//
