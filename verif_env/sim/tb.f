@@ -31,66 +31,79 @@
 +incdir+../src/cache/sequence/random
 //-----------cache-----------//
 
+//-----------simple_test-----------//
++incdir+../simple_test/
+//-----------simple_test-----------//
+
+//---------------------------//
+//       simple test
+//---------------------------//
+
+../simple_test/tb_axi_master_micro_adapter.sv
+
+
+
+
+
+
 //---------------------------//
 //    testbench files
 //---------------------------//
 
-//-----------interface-------//
-../src/common/interface/clk_rst_interface.sv
-../src/cache/interface/cache_interface.sv
-../src/cache/interface/cache_debug_interface.sv
-//-----------interface-------//
+// //-----------interface-------//
+// ../src/common/interface/clk_rst_interface.sv
+// ../src/cache/interface/cache_interface.sv
+// ../src/cache/interface/cache_debug_interface.sv
+// //-----------interface-------//
 
-//-----------bind-------//
-../src/cache/bind/bind_cache.sv
-../src/cache/bind/cache_assertions.sv
-//-----------bind-------//
+// //-----------bind-------//
+// ../src/cache/bind/bind_cache.sv
+// ../src/cache/bind/cache_assertions.sv
+// //-----------bind-------//
 
-//-----------package---------//
-../src/common/pkg/clk_rst_pkg.sv
-../src/cache/pkg/cache_pkg.sv
-//-----------package---------//
+// //-----------package---------//
+// ../src/common/pkg/clk_rst_pkg.sv
+// ../src/cache/pkg/cache_pkg.sv
+// //-----------package---------//
 
-//---------reference model--------//
-../src/cache/model/d_cache_model.sv
-//---------reference model--------//
+// //---------reference model--------//
+// ../src/cache/model/d_cache_model.sv
+// //---------reference model--------//
 
-//---------scoreboard--------//
-../src/cache/component/scoreboard/cpu_stimulus_scoreboard.sv
-../src/cache/component/scoreboard/mem_req_scoreboard.sv
-../src/cache/component/scoreboard/cache_data_scoreboard.sv
-//---------scoreboard--------//
+// //---------scoreboard--------//
+// ../src/cache/component/scoreboard/cpu_stimulus_scoreboard.sv
+// ../src/cache/component/scoreboard/mem_req_scoreboard.sv
+// ../src/cache/component/scoreboard/cache_data_scoreboard.sv
+// //---------scoreboard--------//
 
-//---------environment-------//
-../src/cache/component/cache_environment.sv
-//---------environment-------//
-
-
-//-------------test----------//
-../test/common/clock_smoke_test.sv
-
-../test/cache/basic/cache_basic_test.sv
-
-../test/cache/directed/cache_read_hit_test.sv
-../test/cache/directed/cache_read_miss_test.sv
-../test/cache/directed/cache_write_hit_test.sv
-../test/cache/directed/cache_write_miss_test.sv
-../test/cache/directed/cache_write_read_test.sv
+// //---------environment-------//
+// ../src/cache/component/cache_environment.sv
+// //---------environment-------//
 
 
-../test/cache/directed/cache_tag_match_test.sv
-../test/cache/directed/cache_multi_write_and_writeback_test.sv
-../test/cache/directed/cache_fill_full_test.sv
-../test/cache/directed/cache_fifo_fill_test.sv
+// //-------------test----------//
+// ../test/common/clock_smoke_test.sv
 
-../test/cache/random/cache_random_test.sv
-//-------------test----------//
+// ../test/cache/basic/cache_basic_test.sv
+
+// ../test/cache/directed/cache_read_hit_test.sv
+// ../test/cache/directed/cache_read_miss_test.sv
+// ../test/cache/directed/cache_write_hit_test.sv
+// ../test/cache/directed/cache_write_miss_test.sv
+// ../test/cache/directed/cache_write_read_test.sv
 
 
-//-------------top-----------//
-../tb/tb_top.sv
-//-------------top-----------//
+// ../test/cache/directed/cache_tag_match_test.sv
+// ../test/cache/directed/cache_multi_write_and_writeback_test.sv
+// ../test/cache/directed/cache_fill_full_test.sv
+// ../test/cache/directed/cache_fifo_fill_test.sv
 
-// //-------------------------------mem test------------------------------//
-// ../tb/mem_tb.sv
+// ../test/cache/random/cache_random_test.sv
+// //-------------test----------//
+
+
+// //-------------top-----------//
+// ../tb/tb_top.sv
+// //-------------top-----------//
+
 

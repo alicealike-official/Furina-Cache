@@ -71,7 +71,7 @@ vcs_simulate_verdi: $(SIMV) $(DUMP_TCL)
 	+UVM_VERDI_TRACE="UVM_AWARE+HIER" -gui=verdi
 
 run_verdi:
-	verdi -nologo -sv -f $(TB) $(DUT) -ssf $(WAVEFORM) -logdir $(LOG_DIR) &
+	verdi -nologo -sv -f $(TB) -f $(DUT) -ssf $(WAVEFORM) -logdir $(LOG_DIR) &
 
 
 clean:
