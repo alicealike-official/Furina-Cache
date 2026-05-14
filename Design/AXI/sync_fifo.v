@@ -65,19 +65,21 @@ module sync_fifo #(
         end
     end
 
-    // 读数据（first-word fall-through：读使能后下一个周期数据有效）
-    reg [DATA_WIDTH-1:0] rd_data_reg;
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            rd_data_reg <= 0;
-        end
+    // 读数据（first-word fall-through）
+    // reg [DATA_WIDTH-1:0] rd_data_reg;
+    // always @(posedge clk or negedge rst_n) begin
+    //     if (!rst_n) begin
+    //         rd_data_reg <= 0;
+    //     end
 
-        else begin
-            if (rd_en && !empty) begin
-                rd_data_reg <= mem[rd_ptr[ADDR_WIDTH-1:0]];
-            end
-        end
-    end
-    assign rd_data = rd_data_reg;
+    //     else begin
+    //         if (rd_en && !empty) begin
+    //             rd_data_reg <= mem[rd_ptr[ADDR_WIDTH-1:0]];
+    //         end
+    //     end
+    // end
+    // assign rd_data = rd_data_reg;
+
+    assign rd_data = mem[rd_ptr[ADDR_WIDTH-1:0]];
 
 endmodule

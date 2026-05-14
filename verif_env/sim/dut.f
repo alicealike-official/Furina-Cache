@@ -10,5 +10,6 @@
 
 
 //-----------AXI------------//
-../../Design/AXI/axi_master_micro_adapter.v
+../../Design/AXI/sync_fifo.v
+../../Design/AXI/axi_master_micro_read_adapter.v
 //-----------AXI------------//

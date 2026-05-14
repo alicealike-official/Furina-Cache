@@ -39,7 +39,7 @@
 //       simple test
 //---------------------------//
 
-../simple_test/tb_axi_master_micro_adapter.sv
+../simple_test/tb_axi_master_micro_read_adapter.sv
 
 
 

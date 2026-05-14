@@ -7,9 +7,9 @@ module axi_master_micro_read_adapter #(
 ) (
     //====================Transaction Region==================//
     //----------------Transaction control signal----------//
-    input  wire                             start_read,     // 启动读突发（脉冲）
+    input  wire                             rd_req_valid,     // 启动读突发（脉冲）
     input  wire [AXI_ADDR_WIDTH-1:0]        addr,           // 起始地址
-    input  wire [7:0]                       burst_len,      // 突发长度
+    input  wire [7:0]                       burst_len,      // 突发长度=burst+1
     input  wire [2:0]                       burst_size,     // 每拍字节数（2^size）
     input  wire [1:0]                       burst_type,     // 突发类型（通常 INCR）
     input  wire [AXI_ID_WIDTH-1:0]          id,             // 事务 ID
@@ -110,14 +110,15 @@ module axi_master_micro_read_adapter #(
 
     // 读数据 FIFO
     wire [AXI_DATA_WIDTH-1:0] rdata_fifo_din;
-    wire                      rdata_fifo_wr_en;
+    wire                      rdata_fifo_push;
     wire                      rdata_fifo_full;
     wire [AXI_DATA_WIDTH-1:0] rdata_fifo_dout;
-    wire                      rdata_fifo_rd_en;
+    wire                      rdata_fifo_pop;
     wire                      rdata_fifo_empty;
     //-----------------------FIFO-----------------------//
 
     //-----------------------control signal-----------------------//
+    wire                        rd_req_handshake;
     wire                        m_axi_arhandshake;
     wire                        m_axi_rhandshake;
     wire                        rdata_handshake;
@@ -171,10 +172,10 @@ module axi_master_micro_read_adapter #(
 
     //-----------------------事务状态表-----------------------//
     //用于标记记录在FIFO里面事务的状态，包括有效标志、ID、剩余长度和错误响应
-    reg  [MAX_OSD-1:0]         entry_valid;
-    reg  [AXI_ID_WIDTH-1:0]    entry_id [0:MAX_OSD-1];
-    reg  [7:0]                 entry_len [0:MAX_OSD-1];
-    reg  [1:0]                 entry_err [0:MAX_OSD-1];
+    reg  [MAX_OSD-1:0]         translot_valid;
+    reg  [AXI_ID_WIDTH-1:0]    translot_id [0:MAX_OSD-1];
+    reg  [7:0]                 translot_len [0:MAX_OSD-1];
+    reg  [1:0]                 translot_err [0:MAX_OSD-1];
     //-----------------------事务状态表-----------------------//
 
     //-----------------------trans-----------------------//
@@ -242,11 +243,26 @@ module axi_master_micro_read_adapter #(
         begin
             find_by_id = 0;
             for (i=0; i<MAX_OSD; i=i+1) begin
-                if (entry_valid[i] && (entry_id[i] == id_in))
+                if (translot_valid[i] && (translot_id[i] == id_in)) begin
+                // if (translot_id[i] == id_in) begin
                     find_by_id[i] = 1'b1;
+                    break;
+                end
             end
         end
     endfunction
+
+    // 注：原函数注释掉了 translot_valid，这里保持相同逻辑（仅按 ID 匹配）
+// reg [MAX_OSD-1:0] find_by_id_comb;
+// always @(*) begin
+//     find_by_id_comb = {MAX_OSD{1'b0}};   // 默认全 0
+//     for (int i = 0; i < MAX_OSD; i = i + 1) begin
+//         if ((translot_id[i] == m_axi_rid)) begin
+//             find_by_id_comb[i] = 1'b1;
+//             break;                        // 只匹配第一个，综合为优先级编码
+//         end
+//     end
+// end
 
 
     // ============================================================//
@@ -256,15 +272,17 @@ module axi_master_micro_read_adapter #(
     // ============================================================//
 
     //-----------------------control signal-----------------------//
+    assign rd_req_handshake     = rd_req_valid && rd_req_ready;
     assign m_axi_arhandshake    = m_axi_arvalid && m_axi_arready;
     assign m_axi_rhandshake     = m_axi_rvalid && m_axi_rready;
     assign rdata_handshake      = rdata_valid && rdata_ready;
 
-    assign ar_send_enable       = !cmd_fifo_empty && (|(~entry_valid));
+    assign ar_send_enable       = !cmd_fifo_empty && (|(~translot_valid));
 
-    assign free_mask            = find_free(entry_valid);
+    assign free_mask            = find_free(translot_valid);
     assign entry_allocate       = cmd_fifo_pop;
     assign rdata_match          = find_by_id(m_axi_rid);
+    // assign rdata_match          = find_by_id_comb;
     assign read_done_condition  = m_axi_rhandshake && (|rdata_match) && m_axi_rlast;
     assign release_mask         = read_done_condition ? rdata_match : {MAX_OSD{1'b0}};
     assign entry_release        = (|release_mask);
@@ -272,9 +290,10 @@ module axi_master_micro_read_adapter #(
 
 
     //-----------------------cmd-FIFO-----------------------//
-    assign cmd_fifo_push        = start_read && rd_req_ready;
+    assign cmd_fifo_push        = rd_req_handshake;
     assign cmd_fifo_pop         = (ar_cur_state == AR_SEND) && m_axi_arhandshake;
-    assign cmd_fifo_din = {id, addr, len, size, burst, 1'b1};
+    // assign cmd_fifo_pop         = m_axi_arhandshake;
+    assign cmd_fifo_din = {id, addr, burst_len, burst_size, burst_type, 1'b1};
     assign {cmd_id, cmd_addr, cmd_len, cmd_size, cmd_burst, cmd_is_read} = cmd_fifo_dout;
     //-----------------------cmd-FIFO-----------------------//
 
@@ -348,7 +367,7 @@ module axi_master_micro_read_adapter #(
         if(!axi_aresetn) begin
             m_axi_arvalid_r     <= 1'b0;
             m_axi_arid_r        <= {AXI_ID_WIDTH{1'b0}};
-            m_axi_araddr_r      <= {AXI_ADDR_WIDTH_{1'b0}};
+            m_axi_araddr_r      <= {AXI_ADDR_WIDTH{1'b0}};
             m_axi_arlen_r       <= 8'b0;
             m_axi_arsize_r      <= 3'b0;
             m_axi_arburst_r     <= 2'b0;
@@ -376,23 +395,23 @@ module axi_master_micro_read_adapter #(
     integer j;
     always@(posedge axi_aclk or negedge axi_aresetn) begin
         if(!axi_aresetn) begin
-            entry_valid <= {MAX_OSD{1'b0}};
+            translot_valid <= {MAX_OSD{1'b0}};
             for (j=0; j<MAX_OSD; j=j+1) begin
-                entry_id[j]     <= {AXI_ID_WIDTH{1'b0}};
-                entry_len[j]    <= 8'b0;
-                entry_err[j]    <= 2'b0;
+                translot_id[j]     <= {AXI_ID_WIDTH{1'b0}};
+                translot_len[j]    <= 8'b0;
+                translot_err[j]    <= 2'b0;
             end
         end
 
         else begin
             // allocate
             if(entry_allocate) begin
-                entry_valid <= entry_valid | free_mask;
+                translot_valid <= translot_valid | free_mask;
                 for(j=0; j<MAX_OSD; j=j+1) begin
                     if(free_mask[j]) begin
-                        entry_id[j]     <= m_axi_arid_r;
-                        entry_len[j]    <= m_axi_arlen_r;
-                        entry_err[j]    <= 2'b0;
+                        translot_id[j]     <= m_axi_arid_r;
+                        translot_len[j]    <= m_axi_arlen_r;
+                        translot_err[j]    <= 2'b0;
                     end
                 end
             end
@@ -400,10 +419,10 @@ module axi_master_micro_read_adapter #(
             // refresh
             if (m_axi_rhandshake) begin
                 for(j=0; j<MAX_OSD; j=j+1) begin
-                    if(rdata_match[j] && entry_valid[j]) begin
-                        entry_len[j]    <= entry_len[j]-1;
+                    if(rdata_match[j] && translot_valid[j]) begin
+                        translot_len[j]    <= translot_len[j]-1;
                         if (m_axi_rlast) begin
-                            entry_err[j] <= m_axi_rresp;
+                            translot_err[j] <= m_axi_rresp;
                         end
                     end
                 end
@@ -411,12 +430,21 @@ module axi_master_micro_read_adapter #(
 
             // release
             if (entry_release) begin
-                entry_valid <= entry_valid & ~release_mask;
+                translot_valid <= translot_valid & ~release_mask;
             end 
-
-
         end
     end
+
+    // always@(posedge axi_aclk or negedge axi_aresetn) begin
+    //     if (!axi_aresetn) begin
+    //         translot_valid <= {MAX_OSD{1'b0}};
+    //         for (j=0; j<MAX_OSD; j=j+1) begin
+    //             translot_id[j]     <= {AXI_ID_WIDTH{1'b0}};
+    //             translot_len[j]    <= 8'b0;
+    //             translot_err[j]    <= 2'b0;
+    //         end
+    //     end
+    // end
     //-----------------------trans_lot reg-----------------------//
 
     //-----------------------trans reg-----------------------//
@@ -431,7 +459,7 @@ module axi_master_micro_read_adapter #(
             if(read_done_condition) begin
                 for(j=0; j<MAX_OSD; j=j+1) begin
                     if(rdata_match[j]) begin
-                        error_resp_r <= entry_err[j];
+                        error_resp_r <= translot_err[j];
                     end
                 end
             end
@@ -460,12 +488,14 @@ module axi_master_micro_read_adapter #(
     //-----------------------AR-----------------------//
 
     //-----------------------R-----------------------//
-    assign m_axi_rready     = !rdata_fifo_empty;
+    assign m_axi_rready     = !rdata_fifo_full;
     //-----------------------R-----------------------//
 
     //-----------------------Transaction-----------------------//
-    assign rd_req_ready     = !cmd_fifo_full && (|(~entry_valid));
+    assign rd_req_ready     = !cmd_fifo_full && (|(~translot_valid));
     assign read_done        = read_done_r;
     assign error_resp       = error_resp_r;
+    assign rdata_valid      = !rdata_fifo_empty;
     //-----------------------Transaction-----------------------//
 endmodule
+
