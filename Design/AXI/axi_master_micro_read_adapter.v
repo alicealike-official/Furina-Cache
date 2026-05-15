@@ -9,7 +9,7 @@ module axi_master_micro_read_adapter #(
     //----------------Transaction control signal----------//
     input  wire                             rd_req_valid,     // 启动读突发（脉冲）
     input  wire [AXI_ADDR_WIDTH-1:0]        addr,           // 起始地址
-    input  wire [7:0]                       burst_len,      // 突发长度=burst+1
+    input  wire [7:0]                       burst_len,      // 突发长度
     input  wire [2:0]                       burst_size,     // 每拍字节数（2^size）
     input  wire [1:0]                       burst_type,     // 突发类型（通常 INCR）
     input  wire [AXI_ID_WIDTH-1:0]          id,             // 事务 ID
@@ -133,6 +133,8 @@ module axi_master_micro_read_adapter #(
     wire                        entry_allocate;
     wire [MAX_OSD-1:0]          release_mask;
     wire                        entry_release;
+
+    wire                        has_pending_cmd;
     //-----------------------control signal-----------------------//
 
 
@@ -182,7 +184,14 @@ module axi_master_micro_read_adapter #(
     reg [1:0]   error_resp_r;
     reg         read_done_r;
     //-----------------------trans-----------------------//
-
+    
+    //-----------------------pipeline reg-----------------------//
+    // reg [AXI_ID_WIDTH-1:0]      pending_arid_r;
+    // reg [AXI_ADDR_WIDTH-1:0]    pending_araddr_r;
+    // reg [7:0]                   pending_arlen_r;
+    // reg [2:0]                   pending_arsize_r;
+    // reg [1:0]                   pending_arburst_r;
+    //-----------------------pipeline reg-----------------------//
 
     // ============================================================//
     //                                                             //
@@ -237,32 +246,32 @@ module axi_master_micro_read_adapter #(
         end
     endfunction
 
-    function [MAX_OSD-1:0] find_by_id;
-        input [AXI_ID_WIDTH-1:0] id_in;
-        integer i;
-        begin
-            find_by_id = 0;
-            for (i=0; i<MAX_OSD; i=i+1) begin
-                if (translot_valid[i] && (translot_id[i] == id_in)) begin
-                // if (translot_id[i] == id_in) begin
-                    find_by_id[i] = 1'b1;
-                    break;
-                end
-            end
-        end
-    endfunction
+    // function [MAX_OSD-1:0] find_by_id;
+    //     input [AXI_ID_WIDTH-1:0] id_in;
+    //     integer i;
+    //     begin
+    //         find_by_id = {MAX_OSD{1'b0}};
+    //         for (i=0; i<MAX_OSD; i=i+1) begin
+    //             if (translot_valid[i] && (translot_id[i] == id_in)) begin
+    //             // if (translot_id[i] == id_in) begin
+    //                 find_by_id[i] = 1'b1;
+    //                 break;
+    //             end
+    //         end
+    //     end
+    // endfunction
 
     // 注：原函数注释掉了 translot_valid，这里保持相同逻辑（仅按 ID 匹配）
-// reg [MAX_OSD-1:0] find_by_id_comb;
-// always @(*) begin
-//     find_by_id_comb = {MAX_OSD{1'b0}};   // 默认全 0
-//     for (int i = 0; i < MAX_OSD; i = i + 1) begin
-//         if ((translot_id[i] == m_axi_rid)) begin
-//             find_by_id_comb[i] = 1'b1;
-//             break;                        // 只匹配第一个，综合为优先级编码
-//         end
-//     end
-// end
+    reg [MAX_OSD-1:0] find_by_id_comb;
+    always @(*) begin
+        find_by_id_comb = {MAX_OSD{1'b0}};   // 默认全 0
+        for (int i = 0; i < MAX_OSD; i = i + 1) begin
+            if ((translot_id[i] == m_axi_rid) && translot_valid[i]) begin
+                find_by_id_comb[i] = 1'b1;
+                break;                        // 只匹配第一个，综合为优先级编码
+            end
+        end
+    end
 
 
     // ============================================================//
@@ -281,8 +290,8 @@ module axi_master_micro_read_adapter #(
 
     assign free_mask            = find_free(translot_valid);
     assign entry_allocate       = cmd_fifo_pop;
-    assign rdata_match          = find_by_id(m_axi_rid);
-    // assign rdata_match          = find_by_id_comb;
+    // assign rdata_match          = find_by_id(m_axi_rid);
+    assign rdata_match          = find_by_id_comb;
     assign read_done_condition  = m_axi_rhandshake && (|rdata_match) && m_axi_rlast;
     assign release_mask         = read_done_condition ? rdata_match : {MAX_OSD{1'b0}};
     assign entry_release        = (|release_mask);
@@ -388,8 +397,55 @@ module axi_master_micro_read_adapter #(
             end
         end
     end
+
+    // always@(posedge axi_aclk or negedge axi_aresetn) begin
+    //     if(!axi_aresetn) begin
+    //         m_axi_arvalid_r     <= 1'b0;
+    //         m_axi_arid_r        <= {AXI_ID_WIDTH{1'b0}};
+    //         m_axi_araddr_r      <= {AXI_ADDR_WIDTH{1'b0}};
+    //         m_axi_arlen_r       <= 8'b0;
+    //         m_axi_arsize_r      <= 3'b0;
+    //         m_axi_arburst_r     <= 2'b0;
+    //     end
+
+    //     else begin
+    //         if (has_pending_cmd) begin
+    //             m_axi_arvalid_r     <= 1'b1;
+    //             m_axi_arid_r        <= cmd_id;
+    //             m_axi_araddr_r      <= cmd_addr;
+    //             m_axi_arlen_r       <= cmd_len;
+    //             m_axi_arsize_r      <= cmd_size;
+    //             m_axi_arburst_r     <= cmd_burst;
+    //         end
+
+    //         if (ar_cur_state == AR_SEND && m_axi_arhandshake) begin
+    //             m_axi_arvalid_r <= 1'b0;
+    //         end
+    //     end
+    // end
     //-----------------------AR reg-----------------------//
 
+    //-----------------------pending reg-----------------------//
+    // always@(posedge axi_aclk or negedge axi_aresetn) begin
+    //     if(!axi_aresetn) begin
+    //         pending_arid_r      <= {AXI_ID_WIDTH{1'b0}};
+    //         pending_araddr_r    <= {AXI_ADDR_WIDTH{1'b0}};
+    //         pending_arlen_r     <= 8'b0;
+    //         pending_arsize_r    <= 3'b0;
+    //         pending_arburst_r   <= 2'b0;
+    //     end
+
+    //     else begin
+    //         if (!has_pending_cmd) begin
+    //             pending_arid_r      <= cmd_id;
+    //             pending_araddr_r    <= cmd_addr;
+    //             pending_arlen_r     <= cmd_len;
+    //             pending_arsize_r    <= cmd_size;
+    //             pending_arburst_r   <= cmd_burst;
+    //         end
+    //     end
+    // end
+    //-----------------------pending reg-----------------------//
 
     //-----------------------trans_lot reg-----------------------//
     integer j;
@@ -404,6 +460,11 @@ module axi_master_micro_read_adapter #(
         end
 
         else begin
+            // release
+            if (entry_release) begin
+                translot_valid <= translot_valid & ~release_mask;
+            end 
+
             // allocate
             if(entry_allocate) begin
                 translot_valid <= translot_valid | free_mask;
@@ -428,10 +489,7 @@ module axi_master_micro_read_adapter #(
                 end
             end
 
-            // release
-            if (entry_release) begin
-                translot_valid <= translot_valid & ~release_mask;
-            end 
+
         end
     end
 
