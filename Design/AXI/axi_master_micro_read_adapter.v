@@ -141,9 +141,9 @@ module axi_master_micro_read_adapter #(
     //-----------------------指令解包-----------------------//
     wire [AXI_ID_WIDTH-1:0]    cmd_id;
     wire [AXI_ADDR_WIDTH-1:0]  cmd_addr;
-    wire [7:0]                 cmd_len;
-    wire [2:0]                 cmd_size;
-    wire [1:0]                 cmd_burst;
+    wire [7:0]                 cmd_burst_len;
+    wire [2:0]                 cmd_burst_size;
+    wire [1:0]                 cmd_burst_type;
     wire                       cmd_is_read;
     //-----------------------指令解包-----------------------//
 
@@ -303,7 +303,7 @@ module axi_master_micro_read_adapter #(
     assign cmd_fifo_pop         = (ar_cur_state == AR_SEND) && m_axi_arhandshake;
     // assign cmd_fifo_pop         = m_axi_arhandshake;
     assign cmd_fifo_din = {id, addr, burst_len, burst_size, burst_type, 1'b1};
-    assign {cmd_id, cmd_addr, cmd_len, cmd_size, cmd_burst, cmd_is_read} = cmd_fifo_dout;
+    assign {cmd_id, cmd_addr, cmd_burst_len, cmd_burst_size, cmd_burst_type, cmd_is_read} = cmd_fifo_dout;
     //-----------------------cmd-FIFO-----------------------//
 
     //-----------------------rdata-FIFO-----------------------//
@@ -325,23 +325,25 @@ module axi_master_micro_read_adapter #(
     always@(*) begin
         case(ar_cur_state) 
             AR_IDLE: begin
-                if(ar_send_enable) begin
-                    ar_next_state = AR_SEND;
-                end
+                // if(ar_send_enable) begin
+                //     ar_next_state = AR_SEND;
+                // end
 
-                else begin
-                    ar_next_state = AR_IDLE;
-                end
+                // else begin
+                //     ar_next_state = AR_IDLE;
+                // end
+                ar_next_state = ar_send_enable ? AR_SEND : AR_IDLE;
             end
 
             AR_SEND: begin
-                if (m_axi_arhandshake) begin
-                    ar_next_state = AR_IDLE;
-                end
+                // if (m_axi_arhandshake) begin
+                //     ar_next_state = AR_IDLE;
+                // end
 
-                else begin
-                    ar_next_state = AR_SEND;
-                end
+                // else begin
+                //     ar_next_state = AR_SEND;
+                // end
+                ar_next_state = m_axi_arhandshake ? AR_IDLE : AR_SEND;
             end
 
             default: begin
@@ -387,9 +389,9 @@ module axi_master_micro_read_adapter #(
                 m_axi_arvalid_r     <= 1'b1;
                 m_axi_arid_r        <= cmd_id;
                 m_axi_araddr_r      <= cmd_addr;
-                m_axi_arlen_r       <= cmd_len;
-                m_axi_arsize_r      <= cmd_size;
-                m_axi_arburst_r     <= cmd_burst;
+                m_axi_arlen_r       <= cmd_burst_len;
+                m_axi_arsize_r      <= cmd_burst_size;
+                m_axi_arburst_r     <= cmd_burst_type;
             end
 
             if (ar_cur_state == AR_SEND && m_axi_arhandshake) begin
@@ -413,8 +415,8 @@ module axi_master_micro_read_adapter #(
     //             m_axi_arvalid_r     <= 1'b1;
     //             m_axi_arid_r        <= cmd_id;
     //             m_axi_araddr_r      <= cmd_addr;
-    //             m_axi_arlen_r       <= cmd_len;
-    //             m_axi_arsize_r      <= cmd_size;
+    //             m_axi_arlen_r       <= cmd_burst_len;
+    //             m_axi_arsize_r      <= cmd_burst_size;
     //             m_axi_arburst_r     <= cmd_burst;
     //         end
 
@@ -439,8 +441,8 @@ module axi_master_micro_read_adapter #(
     //         if (!has_pending_cmd) begin
     //             pending_arid_r      <= cmd_id;
     //             pending_araddr_r    <= cmd_addr;
-    //             pending_arlen_r     <= cmd_len;
-    //             pending_arsize_r    <= cmd_size;
+    //             pending_arlen_r     <= cmd_burst_len;
+    //             pending_arsize_r    <= cmd_burst_size;
     //             pending_arburst_r   <= cmd_burst;
     //         end
     //     end
