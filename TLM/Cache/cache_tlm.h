@@ -2,6 +2,7 @@
 #define CACHE_H
 
 #include <systemc>
+#include <queue>
 #include <tlm.h>
 #include <tlm_utils/simple_target_socket.h>
 #include <tlm_utils/simple_initiator_socket.h>
@@ -73,7 +74,7 @@ public:
     //构造函数
     Cache_tlm_model(
         sc_core::sc_module_name name,
-        conset CacheParams& params
+        const CacheParams& params
     );
     ~Cache_tlm_model();//delete
 
@@ -84,6 +85,7 @@ public:
 
 private:
     CacheParams params_;
+    std::vector<std::queue<unsigned>> fifo_queues_;
     struct CacheLine {
         sc_dt::sc_bit valid;
         sc_dt::sc_bit dirty;
@@ -98,15 +100,15 @@ private:
 
     //TODO
     // internal proc function
-    void handle_request(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay);
-    void read_miss_proc(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay,
-                        unsigned int index, unsigned int tag, unsigned int offset);
+    int handle_request(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay);
+    int read_miss_proc(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay,
+        unsigned int tag, unsigned int index, unsigned int offset, unsigned int way);
     
-    void write_miss_proc(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay,
-                        unsigned int index, unsigned int tag, unsigned int offset);
-    
-    void write_back(unsigned int index);
-    void fill_line();
+    int write_miss_proc(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay,
+        unsigned int tag, unsigned int index, unsigned int offset, unsigned int way);
+     
+    void write_back(unsigned int set_index, unsigned int way_index);
+    unsigned alloc_way (unsigned int index);
 };
 
 
