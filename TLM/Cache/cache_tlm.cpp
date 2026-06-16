@@ -13,6 +13,7 @@ Cache_tlm_model::Cache_tlm_model(
     sets_(params.num_sets, std::vector<CacheLine>(params.num_ways)),
     fifo_queues_(params.num_sets)
 {
+    cpu_socket.register_b_transport(this, &Cache_tlm_model::b_transport);
     for (auto& set : sets_) {
         for (auto& way : set) {
             way.data = new unsigned char[params_.line_size];

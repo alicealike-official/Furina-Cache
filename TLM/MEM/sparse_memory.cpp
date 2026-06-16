@@ -13,6 +13,7 @@ Sparse_Memory::Sparse_Memory(
     page_size_(page_size),
     latency_(latency)
 {
+    mem_receive_socket.register_b_transport(this, &Sparse_Memory::b_transport);
     assert((page_size & (page_size-1)) == 0);
     page_mask_ = page_size-1;
     page_offset_bits_ = static_cast<unsigned int> (std::log2(page_size));
