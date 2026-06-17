@@ -45,7 +45,7 @@ private:
         trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
         init_socket->b_transport(trans, delay);
         if (trans.get_response_status() == tlm::TLM_OK_RESPONSE) {
-            return "写入成功, addr=0x\n" + hex_str(addr) + ", data=0x" + hex_str(data) + ", delay=" + std::to_string(delay.value() / 1000) + "ns";
+            return "写入成功, addr=0x\n" + hex_str(addr) + ", data=0x" + hex_str(data) + ", delay=" + std::to_string(delay.value() / 1000) + "ns\n";
         } else {
             return "写入失败\n";
         }
@@ -61,7 +61,7 @@ private:
         trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
         init_socket->b_transport(trans, delay);
         if (trans.get_response_status() == tlm::TLM_OK_RESPONSE) {
-            return "读取成功, addr=0x\n" + hex_str(addr) + ", data=0x" + hex_str(data) + ", delay=" + std::to_string(delay.value() / 1000) + "ns";
+            return "读取成功, addr=0x\n" + hex_str(addr) + ", data=0x" + hex_str(data) + ", delay=" + std::to_string(delay.value() / 1000) + "ns\n";
         } else {
             return "读取失败\n";
         }

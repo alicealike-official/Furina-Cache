@@ -1,6 +1,4 @@
 #include "sparse_memory.h"
-#include <cassert>
-#include <cmath>
 
 
 Sparse_Memory::Sparse_Memory(
@@ -30,6 +28,8 @@ void Sparse_Memory::b_transport(
     sc_core::sc_time& delay
 ) {
     tlm::tlm_command cmd = trans.get_command();
+    // SC_REPORT_INFO("MEM", "Command is" + cmd_to_str(cmd));
+    SC_REPORT_INFO("MEM", (std::string("Command is ") + cmd_to_str(cmd)).c_str());
     uint64_t addr = trans.get_address();
     uint8_t* data_ptr = trans.get_data_ptr();
     unsigned data_len = trans.get_data_length();
@@ -62,23 +62,27 @@ void Sparse_Memory::b_transport(
     }
 
     // 如果在同一页
-    Page* page = get_page(addr, (cmd == tlm::TLM_WRITE_COMMAND));
+    Page* page = get_page(addr);
 
     if (page == nullptr) {
+        SC_REPORT_WARNING("MEM", "Page initial error");
         trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
         return;
     }
 
     unsigned offset = addr & page_mask_;
     if (cmd == tlm::TLM_READ_COMMAND) {
+        SC_REPORT_INFO("MEM", "Read Command");
         std::memcpy(data_ptr, page->data+offset, data_len);
     }
     else if (cmd == tlm::TLM_WRITE_COMMAND) {
+        SC_REPORT_INFO("MEM", "Write Command");
         std::memcpy(page->data+offset, data_ptr, data_len);
     }
     // 未知命令
     else {
         trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        SC_REPORT_ERROR("Sparse_Memory", ("Transaction failed"));
         return;
     }
 
@@ -88,8 +92,7 @@ void Sparse_Memory::b_transport(
 }
 
 Sparse_Memory::Page* Sparse_Memory::get_page(
-    uint64_t addr,
-    bool allocate
+    uint64_t addr
 ) {
     uint64_t page_base = page_align(addr);
 
@@ -97,18 +100,15 @@ Sparse_Memory::Page* Sparse_Memory::get_page(
     // 如果找到，返回it key-value中的第二个(value)
     auto it = page_table_.find(page_base);
     if (it != page_table_.end()) {
+        SC_REPORT_INFO("MEM", "Found exist page");
         return it -> second;
     }
 
-    //既没找到，也没有分配
-    if (!allocate) {    
-        return nullptr;
-    }
-
-    //没找到，但是分配了
+    //没找到，就需要分配了
     //堆上分配内存，返回函数不回收
     Page* page = new Page(page_base, page_size_);
     page_table_[page_base] = page;
+    SC_REPORT_INFO("MEM", "Create new page");
     return page;
 }
 

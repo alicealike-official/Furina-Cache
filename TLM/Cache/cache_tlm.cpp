@@ -42,7 +42,13 @@ void Cache_tlm_model::b_transport(
     tlm::tlm_generic_payload& trans, 
     sc_core::sc_time& delay
 ) {
-    handle_request(trans, delay);
+    if (handle_request(trans, delay)) {
+        SC_REPORT_INFO("Cache", "handle_request complete");
+    }
+
+    else {
+        SC_REPORT_ERROR("Cache", "handle_request error");
+    }
 }
 
 
@@ -58,6 +64,7 @@ int Cache_tlm_model:: handle_request(
 
     if (data_len > params_.line_size) {
         trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        SC_REPORT_WARNING("Cache", "data_len > line_size");
         return 0;
     }
 
@@ -88,15 +95,17 @@ int Cache_tlm_model:: handle_request(
     if (hit) {
         assert(hit_line != nullptr);
         if (cmd == tlm::TLM_READ_COMMAND) {
+            SC_REPORT_INFO("Cache", "Read Command");
             std::memcpy(data_ptr, hit_line->data+addr_offset, data_len);
         }
         else if (cmd == tlm::TLM_WRITE_COMMAND) {
+            SC_REPORT_INFO("Cache", "Write Command");
             std::memcpy(hit_line->data+addr_offset, data_ptr, data_len);
             hit_line->dirty = 1;
         }
 
         else {
-            // 未知命令
+            SC_REPORT_WARNING("Cache", "Unknown Command");
             return 0;
         }
 
@@ -109,14 +118,16 @@ int Cache_tlm_model:: handle_request(
     unsigned victim_way = alloc_way(addr_index);
 
     if (cmd == tlm::TLM_READ_COMMAND) {
+        SC_REPORT_INFO("Cache", "Read Command");
         return read_miss_proc(trans, delay, addr_tag, addr_index, addr_offset, victim_way);
     } 
     
     else if (cmd == tlm::TLM_WRITE_COMMAND) {
+        SC_REPORT_INFO("Cache", "Write Command");
         return write_miss_proc(trans, delay, addr_tag, addr_index, addr_offset, victim_way);
     }
     else {
-        //未知命令
+        SC_REPORT_INFO("Cache", "Unknown Command");
         return 0;
     }
 }
@@ -246,6 +257,7 @@ int Cache_tlm_model::write_miss_proc(
     if (mem_trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
         delete[] line_buf;
         trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        SC_REPORT_WARNING("Cache Write request", "MEM response error");
         return 0;
     }
 

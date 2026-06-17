@@ -4,6 +4,7 @@ CXXFLAGS = -std=c++17 -Wall -Wextra -g
 INCLUDES = -I$(SYSTEMC_HOME)/include \
 			-ICache \
 			-IMEM \
+			-Iutils \
 			-Itest
 
 LIBS = -L$(SYSTEMC_HOME)/lib-linux64 \
@@ -30,7 +31,7 @@ $(BUILD_DIR)/%.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 # 清理
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR)/*
 # 运行测试
 run: $(TARGET)
 	./$(TARGET)

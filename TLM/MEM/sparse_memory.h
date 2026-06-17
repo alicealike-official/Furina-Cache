@@ -7,6 +7,9 @@
 #include <unordered_map>
 #include <cstdint>
 #include <cstring>
+#include "utils.h"
+#include <cassert>
+#include <cmath>
 
 class Sparse_Memory : public sc_core::sc_module {
 
@@ -47,7 +50,7 @@ private:
     unsigned page_offset_bits_;
     double latency_;
 
-    Page* get_page(uint64_t addr, bool allocate = true);
+    Page* get_page(uint64_t addr);
     uint64_t page_align(uint64_t addr) const;
 };
 

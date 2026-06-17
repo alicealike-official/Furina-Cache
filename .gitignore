@@ -12,3 +12,4 @@ verif_env/sim/urgReport
 verif_env/sim/cm.log
 deprecated/
 TLM/build/
+.vscode/
