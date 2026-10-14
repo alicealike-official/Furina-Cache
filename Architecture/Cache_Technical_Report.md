@@ -113,7 +113,7 @@ reg [DataWidth-1:0] cache_data [Num_Cache_Way][Num_Cache_Set][Words_Per_Block]; 
 
 ### 3.3 状态机
 
-采用 4 状态有限状态机：
+ 采用 4 状态有限状态机：
 
 ```
           CPU请求且未命中
@@ -288,7 +288,7 @@ cache_data[alloc_way][index_in] <=
 
 ## 8. 参数配置指南
 
-修改 `D_Cache.v` / `I_cache.v` 模块实例化时的参数即可：
+修改 `D_Cache.v` / `I_cache.v` 模块实例化时的参数即可:
 
 ```verilog
 D_cache #(

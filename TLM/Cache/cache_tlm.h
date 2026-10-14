@@ -49,9 +49,9 @@ struct CacheParams
     }
 
     
-    // unsigned int way_index_bits() const {
-    //     return static_cast<unsigned int>(std::log2(num_ways));
-    // }
+    unsigned int way_index_bits() const {
+        return static_cast<unsigned int>(std::log2(num_ways));
+    }
 
 
     //初始化结构体

@@ -135,13 +135,13 @@ module tb_top;
     // ====================================================
     // 波形dump（用于仿真调试）
     // ====================================================
-    initial begin
-                // 根据命令行参数决定是否dump波形
-                    $display("Dumping waveform...");
-                    $fsdbDumpfile();
-                    $fsdbDumpvars();
-                    $fsdbDumpMDA();
-    end
+    // initial begin
+    //             // 根据命令行参数决定是否dump波形
+    //                 $display("Dumping waveform...");
+    //                 $fsdbDumpfile();
+    //                 $fsdbDumpvars();
+    //                 $fsdbDumpMDA();
+    // end
     
     // ====================================================
     // 仿真结束控制

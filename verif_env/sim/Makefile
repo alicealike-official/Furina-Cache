@@ -1,9 +1,12 @@
 #Makefile for simulink the project
 #-------------------------------------------------------
-export TEST_NAME = Test
+export TEST_NAME = cache_basic_test
 DUT = ./dut.f
 TB = ./tb.f
 UVM_HOME = ../uvm-1.2
+
+#可配置的线程数
+THREADS ?= 10
 
 
 WORK_DIR = work/
@@ -34,7 +37,7 @@ $(DUMP_TCL):
 vcs_all: clean vcs_compile vcs_simulate
 
 vcs_compile: $(DIRS)
-	vcs -notice -debug_acc+all -j8 -timescale=1ns/1ps \
+	vcs -notice -debug_acc+all -j$(THREADS) -timescale=1ns/1ps \
         -sverilog -LDFLAGS -rdynamic -full64 \
 		+incdir+$(UVM_HOME)/src/ \
 		$(UVM_HOME)/src/uvm.sv \
@@ -43,7 +46,6 @@ vcs_compile: $(DIRS)
 		-cm line+cond+fsm+branch+tgl+assert \
   		-cm_dir $(WORK_DIR)/simv.vdb \
         -f $(DUT) -f $(TB) \
-        +vcs+lic+wait \
 		-kdb \
 		-l $(VCS_COMP_LOG) \
 		-CFLAGS -DVCS \
@@ -60,22 +62,13 @@ vcs_simulate: $(SIMV) $(DUMP_TCL)
 	-ucli -do $(DUMP_TCL) \
 	-l $(VCS_SIM_LOG)
 
-vcs_simulate_verdi: $(SIMV) $(DUMP_TCL)
-	$(SIMV) \
-    +fsdb+autoflush \
-	+wave=$(WAVEFORM) \
-	-ucli -do $(DUMP_TCL) \
-	-cm line+cond+fsm+branch+tgl+assert \
-    -cm_dir simv.vdb \
-    -l $(VCS_SIM_LOG) \
-	+UVM_VERDI_TRACE="UVM_AWARE+HIER" -gui=verdi
 
 run_verdi:
 	verdi -nologo -sv -f $(TB) -f $(DUT) -ssf $(WAVEFORM) -logdir $(LOG_DIR) &
 
 
 clean:
-	rm -rf $(WORK_DIR) novas.* novas_dump.log ucli.key verdiLog/ inter.fsdb tr_db.log script/regression_logs urgReport cm.log
+	rm -rf $(WORK_DIR) novas.* novas_dump.log ucli.key verdiLog/ inter.fsdb tr_db.log script/regression_logs urgReport cm.log .fsm.sch.verilog.xml
 
 merge_cov:
 	urg -dir $(WORK_DIR)/simv.vdb
@@ -89,6 +82,5 @@ help:
 	@echo "  vcs_all              - 完整流程：清理 + 编译 + 仿真"
 	@echo "  vcs_compile          - 仅编译"
 	@echo "  vcs_simulate         - 仅仿真（需先编译）"
-	@echo "  vcs_simulate_verdi   - 仿真并用 Verdi 打开"
 	@echo "  run_verdi            - 单独打开 Verdi 查看波形"
 	@echo "  clean                - 清理所有仿真生成的文件"

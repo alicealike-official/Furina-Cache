@@ -1,15 +1,15 @@
-// //-----------Cache------------//
-// ../../Design/Cache/D_Cache.v
-// ../../Design/Cache/fifo_counter.v
-// ../../Design/Cache/I_cache.v
-// //-----------Cache------------//
+//-----------Cache------------//
+../../Design/Cache/D_Cache.v
+../../Design/Cache/fifo_counter.v
+../../Design/Cache/I_cache.v
+//-----------Cache------------//
 
-// //-----------memory------------//
-// ../../Design/memory_model/configurable_delay_mem.sv
-// //-----------memory------------//
+//-----------memory------------//
+../../Design/memory_model/configurable_delay_mem.sv
+//-----------memory------------//
 
 
-//-----------AXI------------//
-../../Design/AXI/sync_fifo.v
-../../Design/AXI/axi_master_micro_read_adapter.v
-//-----------AXI------------//
+// //-----------AXI------------//
+// ../../Design/AXI/sync_fifo.v
+// ../../Design/AXI/axi_master_micro_read_adapter.v
+// //-----------AXI------------//
