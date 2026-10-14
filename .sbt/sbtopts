@@ -1,0 +1,2 @@
+-Dsbt.override.build.repos=true
+-SBT_NATIVE_CLIENT=false

@@ -15,3 +15,7 @@ TLM/build/
 Design/AXI_adapter_ref/
 Design/AXI/AI/
 .vscode/
+.bsp/
+project/
+rtl/
+target/
