@@ -11,7 +11,7 @@ verif_env/sim/simv.vdb
 verif_env/sim/urgReport
 verif_env/sim/cm.log
 deprecated/
-TLM/build/
+RefModel/build/
 Design/AXI_adapter_ref/
 Design/AXI/AI/
 .vscode/

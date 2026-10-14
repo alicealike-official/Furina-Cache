@@ -7,12 +7,10 @@ INCLUDES = -I$(SYSTEMC_HOME)/include \
 			-Iutils \
 			-Itest
 
-LIBS = -L$(SYSTEMC_HOME)/lib-linux64 \
-		-lsystemc
+LIBS = -L$(SYSTEMC_HOME)/lib-linux64 
 
-SRCS = Cache/cache_tlm.cpp \
-		MEM/sparse_memory.cpp \
-		test/testbench.cpp
+SRCS = Cache/CacheMem.hpp \
+		test/test_cachemem.cpp 
 
 # build目录
 BUILD_DIR = build
