@@ -65,4 +65,13 @@ $(TOP_FULL_TARGET): $(BUILD_DIR)/test/test_cachetop_full.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 run-cachetop-full: cachetop-full
 	./$(TOP_FULL_TARGET)
-.PHONY: all clean run wbb run-wbb mshr run-mshr cachetop run-cachetop cachetop-full run-cachetop-full
+
+# ---- CacheTop 性能统计测试（初步）----
+PERF_TARGET = $(BUILD_DIR)/test_cachetop_perf
+perf: $(PERF_TARGET)
+$(PERF_TARGET): $(BUILD_DIR)/test/test_cachetop_perf.o
+	$(CXX) $(CXXFLAGS) -o $@ $^
+run-perf: perf
+	./$(PERF_TARGET)
+
+.PHONY: all clean run wbb run-wbb mshr run-mshr cachetop run-cachetop cachetop-full run-cachetop-full perf run-perf

@@ -43,8 +43,48 @@ namespace dcache {
 class CacheTop {
 public:
     // ---------- 响应队列条目 ----------
-    struct ReadResp  { Word rData = 0; CpuId id = 0; };
-    struct WriteResp { CpuId id = 0; };
+    // hit    : 该响应来自 Cache 命中（Stage2 直接命中）
+    // merged : 该响应来自 MSHR 合并 Slot（slot > 0），不是新分配条目
+    struct ReadResp  { Word rData = 0; CpuId id = 0; bool hit = false; bool merged = false; };
+    struct WriteResp { CpuId id = 0; bool hit = false; bool merged = false; };
+
+    // ---------- 性能观测（只读，不影响功能） ----------
+    // Stage2 冻结原因（多条件同时成立时按下面枚举顺序取第一个）
+    enum class StallReason {
+        NONE = 0,
+        RESP_FULL,       // 响应队列满
+        WBB_FULL,        // 脏 victim 但 WBB 无空槽
+        MSHR_FULL,       // 需要分配 MSHR 但条目满
+        NO_WAY,          // 需要 victim 但本组无可替换路（全锁/全忙）
+        MERGE_BLOCKED,   // MSHR 命中但不可合并（FILL 或 Slot 满）
+        WB_SAME          // 同地址写回未完成
+    };
+
+    struct PerfCounters {
+        uint64_t s1Accepted     = 0;   // Stage1 接收的 CPU 请求
+        uint64_t cpuReads       = 0;
+        uint64_t cpuWrites      = 0;
+        uint64_t readHits       = 0;   // Stage2 命中读
+        uint64_t writeHits      = 0;   // Stage2 命中写
+        uint64_t hitUnderMiss   = 0;   // 有 MSHR 未完成时仍命中的请求
+        uint64_t mshrAllocs     = 0;   // 未命中分配 MSHR 条目（含冷行填充）
+        uint64_t mshrMerges     = 0;   // 合并进已有 MSHR 条目（读+写）
+        uint64_t readMerges     = 0;
+        uint64_t writeMerges    = 0;
+        uint64_t evictions      = 0;   // victim 为 valid 的替换
+        uint64_t dirtyEvictions = 0;   // victim 为脏的替换
+        uint64_t writebacks     = 0;   // 装入 WBB 的写回行
+        uint64_t memReads       = 0;   // 内存读握手
+        uint64_t memWrites      = 0;   // 内存写握手
+        uint64_t cpuStallCycles = 0;   // cpu_valid && !cpu_ready 的拍数
+        uint64_t s2StallCycles  = 0;   // Stage2 冻结拍数
+        uint64_t stallRespFull    = 0;
+        uint64_t stallWbbFull     = 0;
+        uint64_t stallMshrFull    = 0;
+        uint64_t stallNoWay       = 0;
+        uint64_t stallMergeBlocked = 0;
+        uint64_t stallWbSame      = 0;
+    };
 
     // ================= 公共输入 =================
     // CPU 请求
@@ -74,9 +114,13 @@ public:
     bool  cpuReadResp_valid = false;
     Word  cpuReadResp_rData = 0;
     CpuId cpuReadResp_id    = 0;
+    bool  cpuReadResp_hit   = false;   // 观测：Cache 命中
+    bool  cpuReadResp_merged = false;  // 观测：MSHR 合并
 
     bool  cpuWriteResp_valid = false;
     CpuId cpuWriteResp_id    = 0;
+    bool  cpuWriteResp_hit   = false;
+    bool  cpuWriteResp_merged = false;
 
     bool  memReadReq_valid = false;
     Addr  memReadReq_addr  = 0;
@@ -122,7 +166,9 @@ public:
         // 输出
         cpu_ready = false;
         cpuReadResp_valid = false; cpuReadResp_rData = 0; cpuReadResp_id = 0;
+        cpuReadResp_hit = false; cpuReadResp_merged = false;
         cpuWriteResp_valid = false; cpuWriteResp_id = 0;
+        cpuWriteResp_hit = false; cpuWriteResp_merged = false;
         memReadReq_valid = false; memReadReq_addr = 0; memReadReq_id = 0;
         memWriteReq_valid = false; memWriteReq_addr = 0; memWriteReq_id = 0;
         memWriteReq_line.fill(0);
@@ -144,6 +190,10 @@ public:
         pushHitRead_ = false; pushHitWrite_ = false;
         pushReplayRead_ = false; pushReplayWrite_ = false;
         s1Fire_ = false;
+
+        // 性能观测
+        perf_ = PerfCounters{};
+        stallReason_ = StallReason::NONE;
     }
 
     // ================= 组合求值 =================
@@ -199,6 +249,23 @@ public:
            || reserveFail
         );
         s2Commit_ = s2Valid_ && !s2Stuck_;
+
+        // 冻结原因（只观测；多条件同时成立时按枚举顺序取第一个）
+        stallReason_ = StallReason::NONE;
+        if (s2Stuck_) {
+            if (respFull2)
+                stallReason_ = StallReason::RESP_FULL;
+            else if (reserveFail)
+                stallReason_ = StallReason::WBB_FULL;
+            else if (needEvict_ && !hasFree2)
+                stallReason_ = StallReason::MSHR_FULL;
+            else if (needEvict_ && !hasWay2)
+                stallReason_ = StallReason::NO_WAY;
+            else if (!hit_ && hitInMshr2_ && !canMerge2_)
+                stallReason_ = StallReason::MERGE_BLOCKED;
+            else if (!hit_ && wbSame2)
+                stallReason_ = StallReason::WB_SAME;
+        }
 
         // ---------- 5) Stage1：准入（§11.1） ----------
         const MSHR::MatchInfo m1 = mshr_.match(cTag, cIdx);
@@ -321,14 +388,23 @@ public:
         mshr_.replay_ready = replayPushOk_;
 
         // ---------- 12) 响应输出 ----------
-        cpuReadResp_valid = !readQ_.empty();
+        cpuReadResp_valid  = !readQ_.empty();
+        cpuReadResp_hit    = false;
+        cpuReadResp_merged = false;
         if (!readQ_.empty()) {
-            cpuReadResp_rData = readQ_.front().rData;
-            cpuReadResp_id    = readQ_.front().id;
+            cpuReadResp_rData  = readQ_.front().rData;
+            cpuReadResp_id     = readQ_.front().id;
+            cpuReadResp_hit    = readQ_.front().hit;
+            cpuReadResp_merged = readQ_.front().merged;
         }
-        cpuWriteResp_valid = !writeQ_.empty();
-        if (!writeQ_.empty())
-            cpuWriteResp_id = writeQ_.front().id;
+        cpuWriteResp_valid  = !writeQ_.empty();
+        cpuWriteResp_hit    = false;
+        cpuWriteResp_merged = false;
+        if (!writeQ_.empty()) {
+            cpuWriteResp_id     = writeQ_.front().id;
+            cpuWriteResp_hit    = writeQ_.front().hit;
+            cpuWriteResp_merged = writeQ_.front().merged;
+        }
 
         // ---------- 13) 命中读数据 + RAW 旁路（§6.6） ----------
         hitReadData_ = 0;
@@ -344,20 +420,64 @@ public:
     void tick() {
         eval();   // 确保所有模块输入与组合信号都是本拍的
 
+        // ---------- 性能计数（每拍一次；基于本拍组合结果与拍初状态） ----------
+        if (s1Fire_) {
+            ++perf_.s1Accepted;
+            if (cpu_wrEn) ++perf_.cpuWrites;
+            else          ++perf_.cpuReads;
+        }
+        if (s2Commit_ && hit_) {
+            if (s2WrEn_) ++perf_.writeHits;
+            else         ++perf_.readHits;
+            if (mshr_.validEntries() > 0) ++perf_.hitUnderMiss;
+        }
+        if (doMerge_) {
+            ++perf_.mshrMerges;
+            if (s2WrEn_) ++perf_.writeMerges;
+            else         ++perf_.readMerges;
+        }
+        if (commitEvict_) {
+            ++perf_.mshrAllocs;
+            // 拍初状态：cold fill 用的是 invalid way，不算替换
+            if (cache_.getValid(s2Index_, victimWay_)) {
+                ++perf_.evictions;
+                if (victimDirty_) ++perf_.dirtyEvictions;
+            }
+        }
+        if (pushPending_) ++perf_.writebacks;
+        if (memReadReq_valid  && memReadReq_ready)  ++perf_.memReads;
+        if (memWriteReq_valid && memWriteReq_ready) ++perf_.memWrites;
+
+        if (cpu_valid && !cpu_ready) ++perf_.cpuStallCycles;
+        if (s2Stuck_) {
+            ++perf_.s2StallCycles;
+            switch (stallReason_) {
+                case StallReason::RESP_FULL:     ++perf_.stallRespFull;     break;
+                case StallReason::WBB_FULL:      ++perf_.stallWbbFull;      break;
+                case StallReason::MSHR_FULL:     ++perf_.stallMshrFull;     break;
+                case StallReason::NO_WAY:        ++perf_.stallNoWay;        break;
+                case StallReason::MERGE_BLOCKED: ++perf_.stallMergeBlocked; break;
+                case StallReason::WB_SAME:       ++perf_.stallWbSame;       break;
+                case StallReason::NONE:          break;
+            }
+        }
+
         // 1) 响应弹出（先弹，允许同拍 push）
         if (cpuReadResp_ready  && !readQ_.empty())  readQ_.pop_front();
         if (cpuWriteResp_ready && !writeQ_.empty()) writeQ_.pop_front();
 
         // 2) 响应推入（命中优先于重放）
         if (pushHitRead_)
-            readQ_.push_back(ReadResp{ hitReadData_, s2Id_ });
+            readQ_.push_back(ReadResp{ hitReadData_, s2Id_, true, false });
         else if (pushReplayRead_)
-            readQ_.push_back(ReadResp{ replay_.rData, replay_.respID });
+            readQ_.push_back(ReadResp{ replay_.rData, replay_.respID, false,
+                                       replay_.slot > 0 });
 
         if (pushHitWrite_)
-            writeQ_.push_back(WriteResp{ s2Id_ });
+            writeQ_.push_back(WriteResp{ s2Id_, true, false });
         else if (pushReplayWrite_)
-            writeQ_.push_back(WriteResp{ replay_.respID });
+            writeQ_.push_back(WriteResp{ replay_.respID, false,
+                                         replay_.slot > 0 });
 
         // 3) Way Lock（与 MSHR 条目同生同死）
         if (commitEvict_)
@@ -427,6 +547,23 @@ public:
     // 测试专用：切换 CacheMem 的读/写采样顺序（默认写优先）。
     // 用于验证 §6.6 旁路与 §2.5 的 !wayLocked 旧快照窗口。
     void setCacheReadFirst(bool v) { cache_.readFirst = v; }
+
+    // 性能观测（只读；计数器在 tick() 中累加）
+    const PerfCounters& perf() const { return perf_; }
+    StallReason stallReason() const { return stallReason_; }
+
+    static const char* stallReasonName(StallReason r) {
+        switch (r) {
+            case StallReason::NONE:           return "none";
+            case StallReason::RESP_FULL:      return "respFull";
+            case StallReason::WBB_FULL:       return "wbbFull";
+            case StallReason::MSHR_FULL:      return "mshrFull";
+            case StallReason::NO_WAY:         return "noWay";
+            case StallReason::MERGE_BLOCKED:  return "mergeBlocked";
+            case StallReason::WB_SAME:        return "wbSame";
+        }
+        return "?";
+    }
 
     void dump(std::ostream& os = std::cout) const {
         os << "=== CacheTop dump ===\n";
@@ -544,6 +681,10 @@ private:
     bool pushHitWrite_ = false;
     bool pushReplayRead_ = false;
     bool pushReplayWrite_ = false;
+
+    // ---------- 性能观测 ----------
+    PerfCounters perf_{};
+    StallReason  stallReason_ = StallReason::NONE;
 };
 
 } // namespace dcache

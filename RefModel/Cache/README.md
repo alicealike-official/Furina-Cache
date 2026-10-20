@@ -123,7 +123,9 @@ Layer 1（`CacheMem` / `MSHR` / `WriteBackBuffer`）只做各自的存储与状�
 | 输入 | `memWriteResp_valid/id` | 内存写响应 |
 | 输出 | `cpu_ready` | Stage1 准入 |
 | 输出 | `cpuReadResp_valid/rData/id` | 读响应 |
+| 输出 | `cpuReadResp_hit/merged` | 观测：Cache 命中 / MSHR 合并 |
 | 输出 | `cpuWriteResp_valid/id` | 写响应 |
+| 输出 | `cpuWriteResp_hit/merged` | 观测：Cache 命中 / MSHR 合并 |
 | 输出 | `memReadReq_valid/addr/id` | 内存读请求（来自 MSHR） |
 | 输出 | `memWriteReq_valid/addr/line/id` | 内存写请求（来自 WBB） |
 
@@ -218,6 +220,48 @@ make run-mshr
 make run-wbb
 make run-cachetop
 make run-cachetop-full   # 内部数据 + 状态 + 随机影子模型 + 乱序响应
+make run-perf            # 局部性性能测试
 ```
 
 `MSHR` 与 `WriteBackBuffer` 带不变量自检（`checkInvariants()`），在调试构建下由 `tick()` 自动断言；`CacheMem` 提供 `get*` / `poke*` 供测试直接检查存储内容。
+
+---
+
+## 7. 局部性性能测试（`test_cachetop_perf.cpp`）
+
+`make run-perf` 运行一个受控的局部性工作负载（模式 A），而不是顺序流/纯随机/容量扫描：
+
+- **地址空间**：1024 个 Cache 行 = **64KB**（Cache 容量 8KB，工作集是 8 倍）。
+- **总指令数**：`1024 × 50 = 51,200` 条 L/S；L/S 比例 50/50，store 数据随机。
+- **模式**：每 100 条为一个 block：
+  - 偶数 block：下一条有 **60%** 概率与上一条**同地址**；
+  - 奇数 block：下一条 **0%** 同地址，总是随机选一个不同地址；
+  - 每 100 条切换一次，循环；共 512 个 block（256 个 60% + 256 个 0%）。
+- **地址**：`line × 64 + wordOff × 4`，随机 `line ∈ [1,1024]`、随机 `wordOff ∈ [0,15]`。
+
+输出：
+
+- **整体**：Cache 命中率 / 有效命中率（把 MSHR 合并算作未再读内存）、吞吐、延迟、MSHR/WBB/WayLock 占用、Stall 分解、内存流量。
+- **阶段拆分**：60% 同地址阶段 vs 0% 随机阶段。
+- **局部性拆分**：
+  - **同地址**（时间局部性）；
+  - **同行不同字**（空间局部性）；
+  - **不同行**（无局部性）。
+- **阶段 × 局部性矩阵**：直接看时间/空间局部性在不同阶段的表现。
+- 每次读响应都与按程序顺序维护的影子内存比对，确保统计来自正确执行。
+
+观测接口（只读，不改变行为）：
+
+```cpp
+const CacheTop::PerfCounters& p = top.perf();
+top.stallReason();          // 本拍 Stage2 冻结原因
+CacheTop::stallReasonName(top.stallReason());
+
+// 响应级观测
+top.cpuReadResp_hit;        // 该读响应来自 Cache 命中
+top.cpuReadResp_merged;     // 该读响应来自 MSHR 合并 Slot
+top.cpuWriteResp_hit;
+top.cpuWriteResp_merged;
+```
+
+> 说明：这是**功能级参考模型**上的局部性评估，不是 RTL 逐拍性能保证。绝对数值依赖 `rdLatency=8`、`wrLatency=8` 等外部假设；适合比较不同局部性模式/参数下的相对趋势。`same line, diff word` 在“1024 行均匀随机”下天然很少；如果要强化空间局部性，可以在生成器里让 40% 非重复地址偏向相邻行/同一行其他字。
