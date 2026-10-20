@@ -329,6 +329,111 @@ static void test_match_and_full() {
 }
 
 // -------------------------------------------------------------
+// T6：同拍 merge + mem response（断言误伤的回归）
+//   Stage2 拍初看到 MISS_WAIT，合并应提交；同拍 mem_rd_resp 把条目转入 FILL。
+// -------------------------------------------------------------
+static void test_merge_same_cycle_as_resp() {
+    std::cout << "[T6] 同拍 merge + mem response ... ";
+
+    MSHR m;
+    const Tag T = 0x500;
+    const int IDX = 1, WOFF = 2;
+
+    m.alloc_req = MSHR::AllocReq{ true, T, IDX, 0, false, 0, WOFF, 1, -1 };
+    tick(m);
+    m.alloc_req = MSHR::AllocReq{};
+
+    auto s = m.sendReq();
+    assert(s.en && s.entry == 0);
+    m.mem_rd_ready = true;
+    tick(m);
+    m.mem_rd_ready = false;
+    assert(m.entry(0).state == MSHR::State::MISS_WAIT);
+
+    // 关键窗口：同一拍既有内存响应，又有同地址合并
+    const Line L = makeLine(0x9000);
+    m.merge_req   = MSHR::MergeReq{ true, 0, true, 0xDEADBEEF, WOFF, 2 };
+    m.mem_rd_resp = MSHR::MemRdResp{ true, 0, L };
+    tick(m);
+    m.merge_req   = MSHR::MergeReq{};
+    m.mem_rd_resp = MSHR::MemRdResp{};
+
+    assert(m.entry(0).state == MSHR::State::FILL);
+    assert(m.entry(0).validCnt == 2);
+    assert(m.entry(0).hasWriteSlot);
+
+    // 合并的写应进入 mergedData
+    auto f = m.fillReq();
+    assert(f.en && f.dirty);
+    Line exp = L;
+    exp[WOFF] = 0xDEADBEEF;
+    assert(f.line == exp);
+    tick(m);
+
+    // 重放顺序：slot0 读（看不到后面的写），slot1 写
+    auto r0 = m.replayReq();
+    assert(r0.en && r0.slot == 0 && !r0.isWrite && r0.rData == L[WOFF]);
+    m.replay_ready = true;
+    tick(m);
+    m.replay_ready = false;
+
+    auto r1 = m.replayReq();
+    assert(r1.en && r1.slot == 1 && r1.isWrite && r1.respID == 2);
+    m.replay_ready = true;
+    tick(m);
+    m.replay_ready = false;
+
+    assert(!m.match(T, IDX).hit);
+    std::cout << "ok\n";
+}
+
+// -------------------------------------------------------------
+// T7：发送保持寄存器（总线忙时载荷稳定、不可抢占）
+// -------------------------------------------------------------
+static void test_send_hold() {
+    std::cout << "[T7] 发送保持 / 不可抢占 ... ";
+
+    MSHR m;
+    for (int i = 0; i < 2; ++i) {
+        m.alloc_req = MSHR::AllocReq{
+            true, static_cast<Tag>(0x60 + i), 0, 0, false, 0, 0,
+            static_cast<CpuId>(i), -1 };
+        tick(m);
+        m.alloc_req = MSHR::AllocReq{};
+    }
+    assert(m.entry(0).state == MSHR::State::SEND);
+    assert(m.entry(1).state == MSHR::State::SEND);
+
+    // 总线不 ready：entry0 被选中后必须保持
+    m.mem_rd_ready = false;
+    const MSHR::MemRdReq first = m.sendReq();
+    assert(first.en && first.entry == 0);
+    const Addr  addr0 = first.addr;
+    const BusId id0   = first.id;
+
+    for (int k = 0; k < 3; ++k) {
+        const MSHR::MemRdReq s = m.sendReq();
+        assert(s.en && s.entry == 0);
+        assert(s.addr == addr0 && s.id == id0);
+        tick(m);
+    }
+    assert(m.entry(0).state == MSHR::State::SEND);
+    assert(m.entry(1).state == MSHR::State::SEND);
+
+    // 握手成功后才允许下一个
+    m.mem_rd_ready = true;
+    const MSHR::MemRdReq s = m.sendReq();
+    assert(s.en && s.entry == 0);
+    tick(m);
+    m.mem_rd_ready = false;
+
+    assert(m.entry(0).state == MSHR::State::MISS_WAIT);
+    assert(m.entry(1).state == MSHR::State::SEND);
+
+    std::cout << "ok\n";
+}
+
+// -------------------------------------------------------------
 int main() {
     std::cout << "=== MSHR black-box test ===\n";
 
@@ -337,6 +442,8 @@ int main() {
     test_replay_data();
     test_replay_round_robin();
     test_match_and_full();
+    test_merge_same_cycle_as_resp();
+    test_send_hold();
 
     std::cout << "=== all MSHR tests passed ===\n";
     return 0;

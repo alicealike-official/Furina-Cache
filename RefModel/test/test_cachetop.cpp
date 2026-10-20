@@ -239,10 +239,8 @@ static void test_merge() {
 // -------------------------------------------------------------
 // T4：脏行淘汰 -> WBB 写回
 // -------------------------------------------------------------
-static void test_dirty_evict() {
+static void test_dirty_evict(Harness& h) {
     std::cout << "[T4] 脏行淘汰 / WBB 写回 ... ";
-
-    Harness h;
 
     // 先把 set0 的 4 条路填满
     const Addr addrs[4] = { 0x1000, 0x2000, 0x3000, 0x4000 };
@@ -253,7 +251,10 @@ static void test_dirty_evict() {
     }
 
     // 把 0x1000 写脏（FIFO 中它是最老的）
-    h.submit(0x1000 + 4, true, 0xCAFEBABE, 20);
+    const Word W = 0xCAFEBABE;
+    Line expOld = h.mem.readLine(0x1000);
+    expOld[1] = W;
+    h.submit(0x1000 + 4, true, W, 20);
     assert(h.run_until([&] { return h.wrResps.size() >= 1; }));
 
     // 第 5 条 miss -> 淘汰 way0（0x1000，脏）
@@ -264,6 +265,26 @@ static void test_dirty_evict() {
     // 等 WBB 把脏行写回内存
     assert(h.run_until([&] { return !h.mem.writes.empty(); }, 200));
     assert(h.mem.writes[0].first == 0x1000);
+    // 写回整行数据（含写脏的字）
+    for (int o = 0; o < WORDS_PER_BLOCK; ++o)
+        assert(h.mem.writes[0].second[o] == expOld[o]);
+
+    // 新行正确填入，旧行失效
+    const int  set    = decodeIndex(0x5000);
+    const Tag  newTag = decodeTag(0x5000);
+    const Tag  oldTag = decodeTag(0x1000);
+    int newWay = -1, oldWay = -1;
+    for (int w = 0; w < NUM_WAYS; ++w) {
+        if (!h.top.cache().getValid(set, w)) continue;
+        if (h.top.cache().getTag(set, w) == newTag) newWay = w;
+        if (h.top.cache().getTag(set, w) == oldTag) oldWay = w;
+    }
+    assert(newWay >= 0);
+    assert(oldWay == -1);
+    const Line expNew = h.mem.readLine(0x5000);
+    for (int o = 0; o < WORDS_PER_BLOCK; ++o)
+        assert(h.top.cache().getWord(set, newWay, o) == expNew[o]);
+    assert(!h.top.cache().getDirty(set, newWay));   // 纯读 miss
 
     std::cout << "ok\n";
 }
@@ -275,7 +296,12 @@ int main() {
     test_read_miss();
     test_write_hit();
     test_merge();
-    test_dirty_evict();
+
+    Harness finalH;
+    test_dirty_evict(finalH);
+
+    std::cout << "\n=== final CacheMem dump (after all tests) ===\n";
+    finalH.top.cache().dump(std::cout);
 
     std::cout << "=== all CacheTop tests passed ===\n";
     return 0;

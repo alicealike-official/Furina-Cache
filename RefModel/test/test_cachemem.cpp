@@ -86,6 +86,20 @@ int main() {
     assert(mem.r1_resp.valid[WAY] == false);
     assert(mem.r1_resp.dirty[WAY] == true);
 
+    // 为了让最终 dump 有内容：重新填一行
+    mem.w2_req.en    = true;
+    mem.w2_req.index = SET;
+    mem.w2_req.way   = WAY;
+    mem.w2_req.tag   = TAG;
+    mem.w2_req.dirty = true;
+    for (int i = 0; i < WORDS_PER_BLOCK; ++i)
+        mem.w2_req.line[i] = 0xBB000000u | static_cast<unsigned>(i);
+    mem.tick();
+    mem.w2_req = CacheMem::W2Req{};
+
+    std::cout << "\n=== final CacheMem dump ===\n";
+    mem.dump();
+
     std::cout << "[test_cachemem] all assertions passed\n";
     return 0;
 }

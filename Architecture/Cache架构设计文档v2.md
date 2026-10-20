@@ -160,7 +160,7 @@ Cache 采用**写回（write-back）+ 写分配（write-allocate）**策略：�
 | ADDR_WIDTH | 32 位 | 物理地址宽度 |
 | MSHR_ENTRIES | 4 | MSHR 条目数，决定可同时跟踪的未命中行数 |
 | MSHR_MAX_PENDING | 4 | 每个 MSHR 条目可挂起的最大 Slot 数 |
-| ID_WIDTH | 12 | CPU 请求 ID 位宽【待解决，见第 14 章】 |
+| ID_WIDTH | 4 | CPU 请求 ID 位宽【待解决，见第 14 章】 |
 | NUM_BUS_OUTSTANDING | 16 | 总线支持的最大未完成事务数 |
 | WBB_ENTRIES | 4 | 写回缓冲条目数 |
 | RESP_QUEUE_DEPTH | 4 | 响应队列深度 |

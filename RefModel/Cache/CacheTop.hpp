@@ -419,7 +419,14 @@ public:
 
     bool locked(int set, int way) const { return locked_[way][set]; }
 
-    bool s2Valid() const { return s2Valid_; }
+    bool   s2Valid()        const { return s2Valid_; }
+    bool   s2Stuck()        const { return s2Stuck_; }
+    size_t readQueueSize()  const { return readQ_.size(); }
+    size_t writeQueueSize() const { return writeQ_.size(); }
+
+    // 测试专用：切换 CacheMem 的读/写采样顺序（默认写优先）。
+    // 用于验证 §6.6 旁路与 §2.5 的 !wayLocked 旧快照窗口。
+    void setCacheReadFirst(bool v) { cache_.readFirst = v; }
 
     void dump(std::ostream& os = std::cout) const {
         os << "=== CacheTop dump ===\n";

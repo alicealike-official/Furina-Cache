@@ -26,6 +26,17 @@ Layer 1（`CacheMem` / `MSHR` / `WriteBackBuffer`）只做各自的存储与状�
 
 `tick()` 内所有更新都基于"本拍开始时的状态"，等价于硬件"组合求值 → 沿上更新"。
 
+### 关于命中写的生效拍与读写优先级
+
+- 模型里命中的 W1 在 Stage2 那一拍的 `tick()` 生效，即 `T+1 → T+2` 的沿，对 `T+2` 可见；
+  这与文档 §6.5 / §12.2 的"第二到第三拍的时钟沿生效"一致。
+- `CacheMem` 默认按 `W2 → W1 → Clear → R1 → R2` 串行化，即同沿读写被确定性地解析为**写优先**。
+  因此 `CacheTop` 的 `prevW1` 旁路（§6.6）在默认模式下不会改变结果，属于防御性实现。
+- 为验证 §6.6 旁路与 §2.5 的 `!wayLocked` 旧快照窗口，`CacheMem` 提供**测试专用**的
+  `readFirst = true`（R1/R2 先采样，模拟读优先存储体），默认关闭；
+  可通过 `CacheTop::setCacheReadFirst(true)` 切换。
+- 本模型是功能级参考模型，**不承诺与 RTL 逐拍等价**；逐拍比对时需要把上述优先级/流水差异考虑进去。
+
 ---
 
 ## 1. CacheMem —— 存储主体
@@ -206,6 +217,7 @@ make run          # CacheMem 测试（build/cache_test）
 make run-mshr
 make run-wbb
 make run-cachetop
+make run-cachetop-full   # 内部数据 + 状态 + 随机影子模型 + 乱序响应
 ```
 
 `MSHR` 与 `WriteBackBuffer` 带不变量自检（`checkInvariants()`），在调试构建下由 `tick()` 自动断言；`CacheMem` 提供 `get*` / `poke*` 供测试直接检查存储内容。

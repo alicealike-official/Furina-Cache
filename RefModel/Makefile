@@ -57,4 +57,12 @@ $(TOP_TARGET): $(BUILD_DIR)/test/test_cachetop.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 run-cachetop: cachetop
 	./$(TOP_TARGET)
-.PHONY: all clean run wbb run-wbb mshr run-mshr cachetop run-cachetop
+
+# ---- CacheTop 完整测试（内部数据 + 状态）----
+TOP_FULL_TARGET = $(BUILD_DIR)/test_cachetop_full
+cachetop-full: $(TOP_FULL_TARGET)
+$(TOP_FULL_TARGET): $(BUILD_DIR)/test/test_cachetop_full.o
+	$(CXX) $(CXXFLAGS) -o $@ $^
+run-cachetop-full: cachetop-full
+	./$(TOP_FULL_TARGET)
+.PHONY: all clean run wbb run-wbb mshr run-mshr cachetop run-cachetop cachetop-full run-cachetop-full

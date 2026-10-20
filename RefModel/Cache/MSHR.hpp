@@ -288,6 +288,14 @@ public:
 
         const int  allocSel  = freeEntry();   // 拍初空闲条目
 
+        // 合并的可接收性必须按"拍初状态"判定（文档 §7.4）：
+        // Stage2 拍初看到 MISS_WAIT 就允许合并，即使同拍 mem_rd_resp 会把它转入 FILL。
+        // 两个动作在同沿生效，合并应被追加到 Slot 列表，随后参与填充与重放。
+        const State mergeState0 =
+            (merge_req.en && merge_req.entry >= 0 && merge_req.entry < MSHR_ENTRIES)
+                ? entries_[merge_req.entry].state
+                : State::IDLE;
+
         DCACHE_MSHR_ASSERT(!(alloc_req.en && merge_req.en));
 
         // ---- 2) 沿上更新 ----
@@ -340,7 +348,7 @@ public:
             DCACHE_MSHR_ASSERT(0 <= merge_req.entry && merge_req.entry < MSHR_ENTRIES);
             Entry& e = entries_[merge_req.entry];
             DCACHE_MSHR_ASSERT(e.valid);
-            DCACHE_MSHR_ASSERT(e.state == State::SEND || e.state == State::MISS_WAIT);
+            DCACHE_MSHR_ASSERT(mergeState0 == State::SEND || mergeState0 == State::MISS_WAIT);
             DCACHE_MSHR_ASSERT(e.validCnt < MSHR_MAX_PENDING);
             appendSlot(e, merge_req);
         }

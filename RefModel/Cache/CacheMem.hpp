@@ -119,51 +119,19 @@ public:
     }
 
     // ---------- 一拍 ----------
+    // 测试专用：true 时 R1/R2 先采样、再应用写端口（模拟"读优先"存储体）；
+    // 默认 false（写优先），不改变正常功能。
+    // 文档 §6.6 要求旁路使结果与存储体优先级无关，该开关用于验证旁路与
+    // §2.5 的 !wayLocked 旧快照窗口。
+    bool readFirst = false;
+
     void tick() {
-        // ===== 1) 写端口在时钟沿生效 =====
-
-        // W2：填充整行。tag / valid / dirty / 整行 data 一次写入。
-        if (w2_req.en) {
-            const int s = w2_req.index;
-            const int w = w2_req.way;
-            tag_  [w][s] = w2_req.tag;
-            valid_[w][s] = true;
-            dirty_[w][s] = w2_req.dirty;   // 文档 7.10：dirty 由外部按 hasWriteSlot 决定
-            for (int o = 0; o < WORDS_PER_BLOCK; ++o)
-                data_[w][o][s] = w2_req.line[o];
-        }
-
-        // W1：命中单字写。只写目标字 + 置 dirty（文档 5.4）。
-        if (w1_req.en) {
-            data_[w1_req.way][w1_req.wordOff][w1_req.index] = w1_req.data;
-            dirty_[w1_req.way][w1_req.index] = true;
-        }
-
-        // Clear：只清 valid；不清 dirty、不清 data（文档 5.4）。
-        if (clr_req.en) {
-            valid_[clr_req.way][clr_req.index] = false;
-        }
-
-        // ===== 2) 读端口采样并锁存输出（同步读、一拍延迟） =====
-
-        // R1：并行读同组所有路的 tag / valid / dirty 与指定 wordOff 的字。
-        if (r1_req.en) {
-            const int s = r1_req.index;
-            const int o = r1_req.wordOff;
-            for (int w = 0; w < NUM_WAYS; ++w) {
-                r1_resp.tag  [w] = tag_  [w][s];
-                r1_resp.valid[w] = valid_[w][s];
-                r1_resp.dirty[w] = dirty_[w][s];
-                r1_resp.data [w] = data_ [w][o][s];
-            }
-        }
-
-        // R2：整行读指定路。
-        if (r2_req.en) {
-            const int s = r2_req.index;
-            const int w = r2_req.way;
-            for (int o = 0; o < WORDS_PER_BLOCK; ++o)
-                r2_resp.line[o] = data_[w][o][s];
+        if (readFirst) {
+            sampleReads();
+            applyWrites();
+        } else {
+            applyWrites();
+            sampleReads();
         }
     }
 
@@ -199,6 +167,54 @@ public:
     }
 
 private:
+    // ===== 写端口在时钟沿生效 =====
+    void applyWrites() {
+        // W2：填充整行。tag / valid / dirty / 整行 data 一次写入。
+        if (w2_req.en) {
+            const int s = w2_req.index;
+            const int w = w2_req.way;
+            tag_  [w][s] = w2_req.tag;
+            valid_[w][s] = true;
+            dirty_[w][s] = w2_req.dirty;   // 文档 7.10：dirty 由外部按 hasWriteSlot 决定
+            for (int o = 0; o < WORDS_PER_BLOCK; ++o)
+                data_[w][o][s] = w2_req.line[o];
+        }
+
+        // W1：命中单字写。只写目标字 + 置 dirty（文档 5.4）。
+        if (w1_req.en) {
+            data_[w1_req.way][w1_req.wordOff][w1_req.index] = w1_req.data;
+            dirty_[w1_req.way][w1_req.index] = true;
+        }
+
+        // Clear：只清 valid；不清 dirty、不清 data（文档 5.4）。
+        if (clr_req.en) {
+            valid_[clr_req.way][clr_req.index] = false;
+        }
+    }
+
+    // ===== 读端口采样并锁存输出（同步读、一拍延迟） =====
+    void sampleReads() {
+        // R1：并行读同组所有路的 tag / valid / dirty 与指定 wordOff 的字。
+        if (r1_req.en) {
+            const int s = r1_req.index;
+            const int o = r1_req.wordOff;
+            for (int w = 0; w < NUM_WAYS; ++w) {
+                r1_resp.tag  [w] = tag_  [w][s];
+                r1_resp.valid[w] = valid_[w][s];
+                r1_resp.dirty[w] = dirty_[w][s];
+                r1_resp.data [w] = data_ [w][o][s];
+            }
+        }
+
+        // R2：整行读指定路。
+        if (r2_req.en) {
+            const int s = r2_req.index;
+            const int w = r2_req.way;
+            for (int o = 0; o < WORDS_PER_BLOCK; ++o)
+                r2_resp.line[o] = data_[w][o][s];
+        }
+    }
+
     bool     valid_[NUM_WAYS][NUM_SETS];
     bool     dirty_[NUM_WAYS][NUM_SETS];
     Tag      tag_  [NUM_WAYS][NUM_SETS];
