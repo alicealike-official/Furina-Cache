@@ -25,7 +25,7 @@ constexpr int DATA_WIDTH          = 32;   // 字宽（位）
 constexpr int ADDR_WIDTH          = 32;   // 物理地址宽度
 constexpr int MSHR_ENTRIES        = 4;    // MSHR 条目数
 constexpr int MSHR_MAX_PENDING    = 4;    // 每条目最大挂起 Slot 数
-constexpr int ID_WIDTH            = 4;   // 暂定为4
+constexpr int ID_WIDTH            = 5;   // 文档 §3.4 推导：最多 25 条在途请求 -> 5 位
 constexpr int NUM_BUS_OUTSTANDING = 16;   // 总线最大未完成事务数
 constexpr int WBB_ENTRIES         = 4;    // 写回缓冲条目数
 constexpr int RESP_QUEUE_DEPTH    = 4;    // 响应队列深度
@@ -56,6 +56,11 @@ using Addr   = uint32_t;
 using Tag    = uint32_t;
 using CpuId  = uint32_t;   // 外部提供，Cache 只透传（文档 4.5）
 using BusId  = uint32_t;   // 总线 ID，零扩展后的 MSHR / WBB 位次
+
+// CPU 请求 ID 的合法取值范围是 [0, CPU_ID_LIMIT)。
+// 参考模型不刻意把 CpuId 收窄成 ID_WIDTH 位（那是 RTL 的事），
+// 但**激励**必须落在该范围内：超过 ID_WIDTH 的 ID 在 RTL 上会被截断/别名。
+constexpr CpuId CPU_ID_LIMIT = (CpuId(1) << ID_WIDTH);
 
 // 一行数据：整行宽度 = WORDS_PER_BLOCK × DATA_WIDTH
 using Line  = std::array<Word, WORDS_PER_BLOCK>;

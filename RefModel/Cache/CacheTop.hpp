@@ -16,7 +16,7 @@
 namespace dcache {
 
 // =============================================================
-// Layer 2 : CacheTop 顶层组装
+// Layer 2 : CacheTop 顶层组装（替换策略由模板参数注入）
 //
 // 对应文档：§2、§6、§9、§10、§11、§12、§13
 //
@@ -26,7 +26,14 @@ namespace dcache {
 //   - MSHR（未命中 / 合并 / 填充 / 重放）
 //   - WriteBackBuffer（脏行写回）
 //   - 读 / 写响应队列
-//   - Way Lock 表 + FifoPolicy
+//   - Way Lock 表 + 可插拔替换策略 Policy（§10.1）
+//
+// 用法：
+//   CacheTop top;                  // = CacheTopT<FifoPolicy>，默认
+//   CacheTopLru lruTop;            // = CacheTopT<LruPolicy>
+//   CacheTopRR  rrTop;             // = CacheTopT<RoundRobinPolicy>
+//   CacheTopT<MyPolicy> myTop;     // 自定义策略，只需满足 ReplacePolicy.hpp
+//                                  // 里描述的 Policy Concept
 //
 // 时序约定（与三个 Layer 1 模块一致）：
 //   1) 布置输入，调用 eval() 观察组合输出
@@ -40,7 +47,8 @@ namespace dcache {
 //   - tick() 之后这些字段仍保留本拍的值；下一拍前请重新 eval()
 // =============================================================
 
-class CacheTop {
+template <typename Policy = FifoPolicy>
+class CacheTopT {
 public:
     // ---------- 响应队列条目 ----------
     // hit    : 该响应来自 Cache 命中（Stage2 直接命中）
@@ -132,7 +140,7 @@ public:
     Line  memWriteReq_line{};
 
     // ================= 构造 / 复位 =================
-    CacheTop() { reset(); }
+    CacheTopT() { reset(); }
 
     void reset() {
         cache_.reset();
@@ -226,7 +234,10 @@ public:
         // ---------- 3) Stage2：victim 选择 / WBB 预留 ----------
         needEvict_ = s2Valid_ && !hit_ && !hitInMshr2_;
         victimWay_ = needEvict_ ? pickVictim(s2Index_) : -1;
-        victimDirty_ = (victimWay_ >= 0) && cache_.getDirty(s2Index_, victimWay_);
+        // 只有"有效且脏"的行才需要写回；清 valid 时不清 dirty（§5.4），
+        // 因此无效路上的残留 dirty 绝不能触发预留/写回（§8.4）。
+        victimDirty_ = (victimWay_ >= 0) && cache_.getValid(s2Index_, victimWay_) &&
+                       cache_.getDirty(s2Index_, victimWay_);
         victimTag_ = (victimWay_ >= 0) ? cache_.getTag(s2Index_, victimWay_) : 0;
         victimBlockAddr_ = blockAddr(victimTag_, s2Index_);
 
@@ -620,7 +631,7 @@ private:
     CacheMem       cache_;
     MSHR           mshr_;
     WriteBackBuffer wbb_;
-    FifoPolicy     policy_;
+    Policy         policy_;
 
     // ---------- 状态 ----------
     bool locked_[NUM_WAYS][NUM_SETS]{};
@@ -686,5 +697,10 @@ private:
     PerfCounters perf_{};
     StallReason  stallReason_ = StallReason::NONE;
 };
+
+// ---------- 常用实例化（编译期选定策略，§10.1） ----------
+using CacheTop    = CacheTopT<FifoPolicy>;          // 默认：与文档 §10.2 的 FIFO 一致
+using CacheTopLru = CacheTopT<LruPolicy>;
+using CacheTopRR  = CacheTopT<RoundRobinPolicy>;
 
 } // namespace dcache

@@ -74,4 +74,12 @@ $(PERF_TARGET): $(BUILD_DIR)/test/test_cachetop_perf.o
 run-perf: perf
 	./$(PERF_TARGET)
 
-.PHONY: all clean run wbb run-wbb mshr run-mshr cachetop run-cachetop cachetop-full run-cachetop-full perf run-perf
+# ---- 替换策略单元测试（模板注入）----
+POLICY_TARGET = $(BUILD_DIR)/test_policy
+policy: $(POLICY_TARGET)
+$(POLICY_TARGET): $(BUILD_DIR)/test/test_policy.o
+	$(CXX) $(CXXFLAGS) -o $@ $^
+run-policy: policy
+	./$(POLICY_TARGET)
+
+.PHONY: all clean run wbb run-wbb mshr run-mshr cachetop run-cachetop cachetop-full run-cachetop-full perf run-perf policy run-policy

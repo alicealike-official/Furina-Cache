@@ -8,8 +8,8 @@
 | `CacheMem.hpp` | `CacheMem` | tag/valid/dirty/data 存储体，2 读 + 2 写 + 清零 | §5 |
 | `MSHR.hpp` | `MSHR` | 未命中登记、合并、发读、填充、重放 | §7 |
 | `WriteBackBuffer.hpp` | `WriteBackBuffer` | 脏行写回缓冲：预留 / push / 异步写回 / 释放 | §8 |
-| `ReplacePolicy.hpp` | `FifoPolicy` | FIFO 替换策略：victim 选择 / onHit / onFill | §10 |
-| `CacheTop.hpp` | `CacheTop` | 顶层组装：两级流水、命中判断、Way Lock、响应队列、三模块互联 | §2 / §6 / §11 / §12 |
+| `ReplacePolicy.hpp` | `FifoPolicy` / `LruPolicy` / `RoundRobinPolicy` | 可插拔替换策略（Policy Concept）：victim 选择 / onHit / onFill | §10 |
+| `CacheTop.hpp` | `CacheTopT<Policy>`（`CacheTop` = FIFO） | 顶层组装：两级流水、命中判断、Way Lock、响应队列、三模块互联；策略由模板参数注入 | §2 / §6 / §10 / §11 / §12 |
 
 Layer 1（`CacheMem` / `MSHR` / `WriteBackBuffer`）只做各自的存储与状态机；`CacheTop` 负责把它们组装成完整 DCache（含 Stage2 冻结、`cpuReady`、victim 选择、Way Lock、响应队列）。
 
@@ -104,13 +104,13 @@ Layer 1（`CacheMem` / `MSHR` / `WriteBackBuffer`）只做各自的存储与状�
 
 方法：`reset()`、`tick()`；调试用 `get*`、`poke*`、`dump()`。
 
-**关键规则**：占用 = `valid || reserved`；预留当拍写 addr；同地址检查覆盖 `reserved + valid`；只有 victim 脏才预留。
+**关键规则**：占用 = `valid || reserved`；预留当拍写 addr；同地址检查覆盖 `reserved + valid`；只有 victim 满足 `valid && dirty` 才预留（清 valid 不清 dirty，无效路上的残留 dirty 不算脏，§10.4/§11.2）。
 
 ---
 
 ## 4. CacheTop —— 顶层组装
 
-**做什么**：把三个 Layer 1 模块接成完整 DCache：Stage1/Stage2、命中判断、MSHR 合并/分配、淘汰原子组、Stage2 冻结、Way Lock、响应队列、FIFO 替换。
+**做什么**：把三个 Layer 1 模块接成完整 DCache：Stage1/Stage2、命中判断、MSHR 合并/分配、淘汰原子组、Stage2 冻结、Way Lock、响应队列、可插拔替换策略（默认 FIFO）。
 
 **接口**
 
@@ -138,6 +138,37 @@ top.tick();                 // 时钟沿
 ```
 
 `tick()` 内部会再 `eval()` 一次（幂等）；`dump()` 可打印 CacheMem / MSHR / WBB / WayLock。
+
+### 4.1 替换策略的模板注入（§10.1）
+
+`CacheTop` 实际上是 `CacheTopT<Policy>` 的模板，策略在**编译期**注入，无虚函数开销：
+
+```cpp
+CacheTop      top;        // = CacheTopT<FifoPolicy>，默认
+CacheTopLru   lruTop;     // = CacheTopT<LruPolicy>
+CacheTopRR    rrTop;      // = CacheTopT<RoundRobinPolicy>
+CacheTopT<MyPolicy> my;   // 自定义策略
+```
+
+自定义策略只需满足 `ReplacePolicy.hpp` 顶部描述的 Policy Concept：
+
+```cpp
+void reset();
+int  getVictim(int set, const std::array<bool, NUM_WAYS>& valid,
+               const std::array<bool, NUM_WAYS>& locked) const;
+void onHit (int set, int way);   // Stage2 命中提交拍（§10.3）
+void onFill(int set, int way);   // 填充写 Cache 拍（§10.3）
+```
+
+`getVictim` 必须是**纯函数**，并遵守 §10.4：优先"valid=0 且未锁"的路；否则按策略顺序给候选且跳过锁定路；全锁返回 -1。策略本身不感知 valid/locked，这两个数组每拍由 `CacheTop` 传入，因此淘汰被中止时不会污染策略状态。
+
+已提供 `FifoPolicy`（默认）、`LruPolicy`、`RoundRobinPolicy`；随机 / PLRU 待补（§14 第二项）。`test/test_policy.cpp`（`make run-policy`）对三者跑同一套契约测试，并验证 `CacheTopT` 三种实例化。
+
+> `Cache/alloc_policies/*.hpp` 是早期接口（`get_victim(set, cache_set)`，不支持 Way Lock）留下的草稿，`CacheTop` 不使用，保留仅供参考。
+
+### 4.2 CPU 请求 ID 的激励约束（§3.4）
+
+`CpuId` 在参考模型里仍是 32 位整数，**不刻意收窄成 `ID_WIDTH` 位**；但激励必须满足 `id < CPU_ID_LIMIT`（`= 2^ID_WIDTH`，当前 32），否则在 RTL 上会被截断/别名。`test_cachetop*.cpp` 的 `submit()` 都带这个断言；`test_cachetop_perf.cpp` 用一个小 ID 池，在请求被接收时分配、响应返回时归还，并断言池不空（等价于验证"在途请求 ≤ 25 < 32"）。
 
 ---
 
@@ -221,6 +252,7 @@ make run-wbb
 make run-cachetop
 make run-cachetop-full   # 内部数据 + 状态 + 随机影子模型 + 乱序响应
 make run-perf            # 局部性性能测试
+make run-policy          # 替换策略契约测试 + CacheTop 模板实例化
 ```
 
 `MSHR` 与 `WriteBackBuffer` 带不变量自检（`checkInvariants()`），在调试构建下由 `tick()` 自动断言；`CacheMem` 提供 `get*` / `poke*` 供测试直接检查存储内容。

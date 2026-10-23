@@ -109,6 +109,7 @@ struct Harness {
     }
 
     void submit(Addr a, bool wr, Word wd, CpuId id) {
+        assert(id < CPU_ID_LIMIT && "CPU ID 超出 ID_WIDTH 范围");
         reqs.push_back(CpuReq{ a, wr, wd, id });
     }
 

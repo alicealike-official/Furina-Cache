@@ -142,12 +142,11 @@ struct ReqSpec {
     int  locality;   // LocalityClass
 };
 
-// 已分配 ID 的 CPU 请求
+// CPU 请求（ID 在"被 Cache 接收"时从 freeIds_ 池中分配）
 struct CpuReq {
     Addr  addr;
     bool  wr;
     Word  data;
-    CpuId id;
     int   phase;
     int   locality;
 };
@@ -248,7 +247,11 @@ struct Harness {
     std::deque<CpuReq> reqs;
     uint64_t headReadyCycle = 0;
 
-    CpuId nextId = 0;
+    // §3.4：CPU ID 只有 ID_WIDTH 位，激励不得越界。
+    // 这里用一个小池子：请求被接收时分配、响应返回时归还。
+    // 在途请求上界 = 16(MSHR) + 1(Stage2) + 8(响应队列) = 25 < CPU_ID_LIMIT，
+    // 因此池子永远不会空（空了就说明设计或激励违反了 §3.4）。
+    std::deque<CpuId> freeIds_;
 
     std::unordered_map<CpuId, Word>     expectedRead;
     std::unordered_map<CpuId, uint64_t> acceptCycle, readyCycle;
@@ -286,14 +289,13 @@ struct Harness {
         top.memWriteReq_ready  = true;
         top.cpuReadResp_ready  = true;
         top.cpuWriteResp_ready = true;
+        for (CpuId i = 0; i < CPU_ID_LIMIT; ++i) freeIds_.push_back(i);
     }
 
     // ---------- 提交 ----------
     void submitBatch(const std::vector<ReqSpec>& specs) {
-        for (const auto& s : specs) {
-            const CpuId id = nextId++;
-            reqs.push_back(CpuReq{ s.addr, s.wr, s.data, id, s.phase, s.locality });
-        }
+        for (const auto& s : specs)
+            reqs.push_back(CpuReq{ s.addr, s.wr, s.data, s.phase, s.locality });
     }
 
     // ---------- 观测辅助 ----------
@@ -334,13 +336,13 @@ struct Harness {
 
     // ---------- 单拍 ----------
     void step() {
-        // 1) 布置 CPU 请求
+        // 1) 布置 CPU 请求（ID 在接收时分配，这里先呈现池首）
         if (!reqs.empty()) {
             top.cpu_valid = true;
             top.cpu_addr  = reqs.front().addr;
             top.cpu_wrEn  = reqs.front().wr;
             top.cpu_wData = reqs.front().data;
-            top.cpu_id    = reqs.front().id;
+            top.cpu_id    = freeIds_.empty() ? 0 : freeIds_.front();
         } else {
             top.cpu_valid = false;
         }
@@ -406,6 +408,7 @@ struct Harness {
             readyCycle.erase(id);
             phaseOf.erase(id);
             locOf.erase(id);
+            freeIds_.push_back(id);   // 响应已返回，ID 可安全复用
             ++rdCount;
         }
 
@@ -438,13 +441,16 @@ struct Harness {
             readyCycle.erase(id);
             phaseOf.erase(id);
             locOf.erase(id);
+            freeIds_.push_back(id);   // 响应已返回，ID 可安全复用
             ++wrCount;
         }
 
-        // 5) 接收：记录延迟起点、影子值、阶段/局部性
+        // 5) 接收：分配 ID，记录延迟起点、影子值、阶段/局部性
         if (acceptedNow) {
             const CpuReq& r = reqs.front();
-            const CpuId id = r.id;
+            assert(!freeIds_.empty() && "CPU ID 池耗尽：在途请求超过 CPU_ID_LIMIT");
+            const CpuId id = freeIds_.front();
+            freeIds_.pop_front();
 
             acceptCycle[id] = cycles;
             readyCycle[id]  = headReadyCycle;
@@ -502,6 +508,7 @@ struct Harness {
         assert(readyCycle.empty());
         assert(phaseOf.empty());
         assert(locOf.empty());
+        assert(freeIds_.size() == CPU_ID_LIMIT);   // 上一阶段已排空，ID 全部归还
 
         measuring     = true;
         phaseStart    = cycles;

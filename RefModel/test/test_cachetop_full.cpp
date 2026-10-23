@@ -153,6 +153,9 @@ struct Harness {
     }
 
     void submit(Addr a, bool wr, Word wd, CpuId id) {
+        // §3.4：激励必须落在 ID_WIDTH 位能表达的范围内（CpuId 的存储类型
+        // 仍是 32 位，不做刻意收窄；约束施加在激励上）。
+        assert(id < CPU_ID_LIMIT && "CPU ID 超出 ID_WIDTH 范围");
         reqs.push_back(CpuReq{ a, wr, wd, id });
     }
 
@@ -598,9 +601,9 @@ static void test_wbb_same_addr() {
 
     // 同线读：应被 wbSameAddr 挡住，写回完成后读到 W
     const size_t rb2 = h.rdResps.size();
-    h.submit(A[0] + 4, false, 0, 40);
+    h.submit(A[0] + 4, false, 0, 31);
     assert(h.run_until([&] { return h.rdResps.size() > rb2; }, 400));
-    assert(h.rdResps.back().id == 40);
+    assert(h.rdResps.back().id == 31);
     assert(h.rdResps.back().rData == W);
 
     h.run_cycles(6);
@@ -697,7 +700,14 @@ static void test_random_shadow() {
         std::uniform_int_distribution<int> wordDist(0, WORDS_PER_BLOCK - 1);
         std::uniform_int_distribution<int> opDist(0, 1);
 
+        // 激励的 ID 必须落在 ID_WIDTH 范围内（§3.4）。本用例一次只发一条请求，
+        // 收到响应后才发下一条，因此可以安全地循环复用 ID。
         CpuId id = 1;
+        auto nextId = [&]() {
+            const CpuId cur = id;
+            id = (id + 1 == CPU_ID_LIMIT) ? 1 : id + 1;
+            return cur;
+        };
         int nReads = 0, nWrites = 0;
 
         for (int op = 0; op < OPS; ++op) {
@@ -708,14 +718,14 @@ static void test_random_shadow() {
             if (wr) {
                 const Word w = static_cast<Word>(rng());
                 const size_t before = h.wrResps.size();
-                h.submit(a, true, w, id++);
+                h.submit(a, true, w, nextId());
                 ++nWrites;
                 assert(h.run_until([&] { return h.wrResps.size() > before; }, 800));
                 shadow[a] = w;
             } else {
                 const Word exp = shadow.count(a) ? shadow.at(a) : initialWord(a);
                 const size_t before = h.rdResps.size();
-                h.submit(a, false, 0, id++);
+                h.submit(a, false, 0, nextId());
                 ++nReads;
                 assert(h.run_until([&] { return h.rdResps.size() > before; }, 800));
 
@@ -838,13 +848,13 @@ static void test_wbb_full_stage2_freeze() {
     };
     for (int i = 0; i < 4; ++i) {
         const size_t b = h.rdResps.size();
-        h.submit(D[i], false, 0, static_cast<CpuId>(10 + i));
+        h.submit(D[i], false, 0, static_cast<CpuId>(1 + i));
         assert(h.run_until([&] { return h.rdResps.size() > b; }));
     }
     for (int i = 0; i < 4; ++i) {
         const size_t b = h.wrResps.size();
         h.submit(D[i] + 4, true, 0xD000 + static_cast<Word>(i),
-                 static_cast<CpuId>(20 + i));
+                 static_cast<CpuId>(5 + i));
         assert(h.run_until([&] { return h.wrResps.size() > b; }));
     }
     Line expD0 = h.mem.readLine(D[0]);
@@ -857,13 +867,13 @@ static void test_wbb_full_stage2_freeze() {
     };
     for (int i = 0; i < 4; ++i) {
         const size_t b = h.rdResps.size();
-        h.submit(A[i], false, 0, static_cast<CpuId>(30 + i));
+        h.submit(A[i], false, 0, static_cast<CpuId>(9 + i));
         assert(h.run_until([&] { return h.rdResps.size() > b; }));
     }
     for (int i = 0; i < 4; ++i) {
         const size_t b = h.wrResps.size();
         h.submit(A[i] + 4, true, 0xA000 + static_cast<Word>(i),
-                 static_cast<CpuId>(40 + i));
+                 static_cast<CpuId>(13 + i));
         assert(h.run_until([&] { return h.wrResps.size() > b; }));
     }
 
@@ -873,9 +883,9 @@ static void test_wbb_full_stage2_freeze() {
         lineAddr(0x32, 1), lineAddr(0x33, 1)
     };
     for (int i = 0; i < 4; ++i)
-        h.submit(B[i], false, 0, static_cast<CpuId>(100 + i));
+        h.submit(B[i], false, 0, static_cast<CpuId>(17 + i));
     const Addr C = lineAddr(0x40, 0);
-    h.submit(C, false, 0, 200);
+    h.submit(C, false, 0, 21);
 
     bool sawFull = false, sawStuck = false;
     for (int i = 0; i < 200; ++i) {
@@ -893,13 +903,13 @@ static void test_wbb_full_stage2_freeze() {
 
     // C 最终完成
     assert(h.run_until([&] {
-        for (const auto& r : h.rdResps) if (r.id == 200) return true;
+        for (const auto& r : h.rdResps) if (r.id == 21) return true;
         return false;
     }, 400));
 
     // C 的数据正确
     for (const auto& r : h.rdResps)
-        if (r.id == 200)
+        if (r.id == 21)
             assert(r.rData == h.mem.readLine(C)[decodeWordOff(C)]);
 
     // D0 的脏行写回数据正确
@@ -947,7 +957,7 @@ static void test_readq_full_stage2_freeze() {
 
     // 背靠背 5 条命中读
     for (int i = 0; i < 5; ++i)
-        h.submit(A, false, 0, static_cast<CpuId>(100 + i));
+        h.submit(A, false, 0, static_cast<CpuId>(2 + i));
 
     bool sawFull = false, sawStuck = false;
     for (int i = 0; i < 100; ++i) {
@@ -993,7 +1003,7 @@ static void test_writeq_full_stage2_freeze() {
     // 背靠背 5 条命中写
     for (int i = 0; i < 5; ++i)
         h.submit(A + 4, true, 0x1000 + static_cast<Word>(i),
-                 static_cast<CpuId>(100 + i));
+                 static_cast<CpuId>(2 + i));
 
     bool sawFull = false, sawStuck = false;
     for (int i = 0; i < 100; ++i) {

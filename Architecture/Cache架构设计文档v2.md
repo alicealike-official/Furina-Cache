@@ -160,7 +160,7 @@ Cache 采用**写回（write-back）+ 写分配（write-allocate）**策略：�
 | ADDR_WIDTH | 32 位 | 物理地址宽度 |
 | MSHR_ENTRIES | 4 | MSHR 条目数，决定可同时跟踪的未命中行数 |
 | MSHR_MAX_PENDING | 4 | 每个 MSHR 条目可挂起的最大 Slot 数 |
-| ID_WIDTH | 4 | CPU 请求 ID 位宽【待解决，见第 14 章】 |
+| ID_WIDTH | 5 | CPU 请求 ID 位宽（推导见 3.4；暂定值，可由外部覆盖） |
 | NUM_BUS_OUTSTANDING | 16 | 总线支持的最大未完成事务数 |
 | WBB_ENTRIES | 4 | 写回缓冲条目数 |
 | RESP_QUEUE_DEPTH | 4 | 响应队列深度 |
@@ -182,9 +182,15 @@ Cache 采用**写回（write-back）+ 写分配（write-allocate）**策略：�
 
 为保证地址分解、组相联与位域切分成立，参数必须满足：块大小是字大小的整数倍；组数是 2 的幂；块大小是 2 的幂；字大小（字节数）是 2 的幂；MSHR 条目数是 2 的幂；WBB 条目数也是 2 的幂，且不超过总线最大未完成数。
 
+此外，CPU 请求 ID 的位宽必须能容纳"同时在途"的全部请求，即 `2^ID_WIDTH ≥ MSHR_ENTRIES × MSHR_MAX_PENDING + 1 + 2 × RESP_QUEUE_DEPTH`（当前为 16 + 1 + 8 = 25，故 `ID_WIDTH = 5`）。该约束的前提是 CPU 在收到响应之前不复用同一个请求 ID；推导见 3.4。
+
 ### 3.4 当前配置说明
 
-当前采用 32 组、4 路、64 字节块，故整个 Cache 容量为 32 × 4 × 64 = 8192 字节，共 8KB。每行 16 个字；tag 21 位，index 5 位，offset 6 位（其中 wordOff 4 位、字节偏移 2 位）。MSHR 可同时跟踪 4 个未命中行，每行最多合并 4 个待处理请求，理论上最多挂起 16 个 CPU 请求，这也正是 CPU 请求 ID 位宽至少需要 4 位的原因。
+当前采用 32 组、4 路、64 字节块，故整个 Cache 容量为 32 × 4 × 64 = 8192 字节，共 8KB。每行 16 个字；tag 21 位，index 5 位，offset 6 位（其中 wordOff 4 位、字节偏移 2 位）。
+
+CPU 请求 ID 位宽不能只按 MSHR 容量推导。MSHR 可同时跟踪 4 个未命中行，每行最多合并 4 个待处理请求，故 MSHR 中最多有 4 × 4 = 16 个请求在等待重放；但一个请求从被接收（Stage1 握手）到其响应被 CPU 取走之前，还可能停留在别处：Stage2 流水寄存器最多 1 条，读/写响应队列各最多 `RESP_QUEUE_DEPTH` = 4 条。因此在途请求数的上界为 16 + 1 + 4 + 4 = 25，向上取 2 的幂得 32，故 **ID_WIDTH = 5**（32 ≥ 25）。该推导的前提是 CPU 在收到响应之前不复用同一个请求 ID。
+
+需要说明的是，这一位宽只影响"ID 空间是否够用"，Cache 内部对 CPU ID 只做透传（见 4.5）：内部条目位次（mshrIdWidth = 2）、总线 ID（busIdWidth = 4）、WBB 位次（wbbIdWidth = 2）都是独立的空间，与 CPU ID 位宽无关。
 
 ---
 
@@ -313,7 +319,7 @@ Stage1 中，地址立即被分解为 tag、index、wordOff、blockAddr 等字�
 | 可用 way 检查 | 判断未命中时是否有可替换的路 | 无可用 way → 反压 |
 | WBB 满检查 | 能否容纳可能产生的脏行写回 | 满 → 反压（保守） |
 | WBB 同地址检查 | 防止写回与填充的先后顺序被破坏 | 同地址 → 反压 |
-| 响应队列满检查 | 防止响应无处安放而丢失 | 满 → 反压 |
+| 响应队列满检查 | 防止响应无处安放而丢失 | 读/写任一队列满 → 反压 |
 
 这些检查之所以能并行，是因为它们各自只依赖当拍输入与当前状态，彼此无先后依赖。需要特别指出：**MSHR 匹配的"估计"在 Stage1 完成，但"是否接收、如何提交"是 Stage1 与 Stage2 的综合结果**——因为 MSHR 状态可能在这两拍之间改变（例如某条目恰好在本拍收到内存响应而进入填充），而新分配的条目要到下一拍才可见。因此 Stage1 的 MSHR 匹配只是估计，Stage2 会重新判定并提交，具体见 6.8 与第 7 章。
 
@@ -601,7 +607,7 @@ CPU 响应有两个来源：命中路径（Stage2 产生）与 MSHR 重放路径
 
 ### 10.2 候选策略
 
-可配置的候选包括：随机、先进先出（FIFO）、最近最少使用（LRU）、伪最近最少使用（PLRU）。具体微架构留待后续补充。
+可配置的候选包括：随机、先进先出（FIFO）、最近最少使用（LRU）、伪最近最少使用（PLRU）。当前两个实现都已提供 **FIFO / LRU / 轮询（RR）** 三种可插拔策略，在编译期选定；随机与 PLRU 的具体微架构留待后续补充。
 
 ### 10.3 onHit / onFill 契约
 
@@ -628,7 +634,7 @@ CPU 响应有两个来源：命中路径（Stage2 产生）与 MSHR 重放路径
 
 ### 10.5 复位值
 
-替换策略的状态在复位时应有确定初值（例如 FIFO/LRU 的顺序队列初始化为 0、1、…、NUM_WAYS−1）；LRU 的具体复位值【待解决】。
+替换策略的状态在复位时应有确定初值：顺序队列（FIFO/LRU）初始化为 0、1、…、NUM_WAYS−1，轮询指针初始化为 0（两个实现一致）。随机/PLRU 的复位值在实现时另行规定。
 
 ---
 
@@ -636,11 +642,12 @@ CPU 响应有两个来源：命中路径（Stage2 产生）与 MSHR 重放路径
 
 ### 11.1 cpuReady 的精确条件
 
-`cpuReady` 为高（可接收）当且仅当下面条件成立：
+`cpuReady` 为高（可接收）当且仅当下面的表达式成立。式中各信号除特别说明外都是 Stage1 当拍的组合量，`s2Stuck` 即 11.2 的 Stage2 冻结条件。
 
 ```text
 cpuReady =
-    !respFifoFull
+    !s2Stuck
+    && !respAnyFull
     && (
          canMerge
          || ( !hitInMshr
@@ -658,8 +665,12 @@ cpuReady =
 - `hasFree`：存在空闲 MSHR 条目；
 - `wbFull`：WBB 所有槽位均被占用（valid 或 reserved）；
 - `wbSameAddr`：WBB 中存在与当前请求同地址的写回/预留条目；
-- `hasAvailableWay`：该请求的 set 下存在至少一个"valid=0 或 `!wayLocked`"的路；
-- `respFifoFull`：对应类型的响应队列已满。
+- `hasAvailableWay`：该请求的 set 下存在至少一个**未被 Way Lock 锁定**的路（选择顺序仍是"优先 valid=0 且未锁定，否则才用替换策略的候选并跳过锁定路"，见 10.4）；
+- `respAnyFull`：读响应队列**或**写响应队列任一为满（§9.3）。
+
+关于 `respAnyFull`：按 9.3 的规则取"两条队列任一满"，而不是只看当前请求类型对应的那条队列。因此即使本请求会命中、只会用到其中一条队列，只要另一条已满也会被挡下一拍，这属于保守反压的一部分。
+
+关于 `wbFull`：Stage1 还没有做命中判断，无法知道这条请求将来是否会真的产生脏行，故一律按最坏情况保守反压。Stage2 已经知道 victim 的 valid/dirty，改用精确的 `wbReserveOk`（见 11.2 与 8.4），因此干净或无效的 victim 即使 WBB 全满也能正常提交。这正是"Stage1 保守、Stage2 精确"的体现。
 
 需要再次强调，Cache 是否命中**不在**该条件之列；`cpuReady` 采用保守策略，宁可多挡一拍。Stage1 的并行检查只是"估计"，权威提交在 Stage2。
 
@@ -669,12 +680,21 @@ cpuReady =
 
 ```text
 s2Stuck = s1Valid && (
-      respFifoFull                       // 命中响应无处安放
-   || ( !hit && hitInMshr && !canMerge ) // 命中条目但已进入 FILL，暂不可合并
-   || ( !hit && !hitInMshr && ( !hasFree || !hasAvailableWay ) )  // 无法分配
-   || ( !hit && wbSameAddr )             // 需要淘汰但 WBB 同地址冲突（含 reserved）
+      respAnyFull                                   // 命中响应无处安放（读/写任一队列满，§9.3）
+   || ( !hit && hitInMshr && !canMerge )            // 命中条目但处于 FILL（或 Slot 满），暂不可合并
+   || ( !hit && !hitInMshr && ( !hasFree || !hasAvailableWay ) )  // 无法分配：无空条目或无可用 way
+   || ( !hit && wbSameAddr )                        // 需要淘汰但 WBB 同地址冲突（含 reserved）
+   || ( !hit && !hitInMshr && victimDirty && !wbReserveOk )       // 脏 victim 但 WBB 预留失败（§8.4）
 )
 ```
+
+其中：
+
+- `hit`：Stage2 的 Cache 命中，已叠加 `!wayLocked`（§6.3）；
+- `victimDirty`：所选 victim 满足 `valid && dirty`。**无效路上的残留 dirty 不算脏**（§5.4 规定清 valid 时不清 dirty），不得为它预留写回槽位；
+- `wbReserveOk`：本拍 WBB 预留是否成功。当 victim 不脏（含无效 victim）时，本条件整体不参与判定，等价于预留成功。
+
+最后一条是 8.4 的直接推论：只有当"确实需要写回脏行、而 WBB 又腾不出槽位"时才冻结。它与 11.1 的 `wbFull` 不是同一粒度——11.1 在 Stage1 无法区分 victim 是否脏，只能保守地按 `wbFull` 整体反压；11.2 在 Stage2 已能精确判定，故只在 `victimDirty && !wbReserveOk` 时冻结。
 
 冻结期间保持 Stage2 流水寄存器与输出不变、门控一切对外写、`cpuReady=False`、并保持读使能 `fire || s2Stall` 以刷新读数据。待条件消失后继续提交。
 
@@ -784,9 +804,9 @@ MSHR 相关反压保证"请求要么能合并、要么能分配新条目"；WBB 
 
 ## 14. 待解决项与后续工作
 
-第一，**CPU 请求 ID 位宽**尚未最终确定。当前暂定 12 位；建议由外部决定，或按"MSHR 条目数 × 每条目最大挂起数"推导最小位宽，并明确内部条目位次、总线 ID、WBB 位次三者之间的零扩展与截取、匹配规则。
+第一，**CPU 请求 ID 位宽的最终确认**。按 3.4 的推导暂定为 **5 位**（MSHR 槽位 16 + Stage2 1 + 读/写响应队列 8 = 25 ≤ 32），文档、参考模型与 RTL 已统一取 5。仍需 CPU 侧确认两件事：其一，其 ID 分配器满足"响应返回前不复用同一 ID"的约束；其二，若外部因与自身 ROB/发射队列编号对齐而要求更宽，则按外部值覆盖 `ID_WIDTH`，Cache 只做透传、不受影响。内部条目位次（mshrIdWidth）、总线 ID（busIdWidth）、WBB 位次（wbbIdWidth）三者的零扩展与截取规则见 4.5，与 CPU ID 位宽无关。
 
-第二，**替换策略的具体微架构实现**（随机/FIFO/LRU/PLRU）与 LRU 复位值待补充；onHit/onFill 的触发契约已在 10.3 确定。
+第二，**替换策略的微架构**：FIFO / LRU / 轮询（RR）已实现且契约一致；随机与 PLRU 待补充。LRU 复位值已确定为 0、1、…、NUM_WAYS−1（见 10.5），onHit/onFill 的触发契约见 10.3。
 
 第三，**异常处理**（内存响应错误、超时、非法 ID）暂不考虑，后续可扩展。
 
