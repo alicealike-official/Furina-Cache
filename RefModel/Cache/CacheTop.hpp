@@ -30,8 +30,8 @@ namespace dcache {
 //
 // 用法：
 //   CacheTop top;                  // = CacheTopT<FifoPolicy>，默认
-//   CacheTopLru lruTop;            // = CacheTopT<LruPolicy>
-//   CacheTopRR  rrTop;             // = CacheTopT<RoundRobinPolicy>
+//   CacheTopLru lruTop;             // = CacheTopT<LruPolicy>
+//   CacheTopPlru plruTop;           // = CacheTopT<PlruPolicy>
 //   CacheTopT<MyPolicy> myTop;     // 自定义策略，只需满足 ReplacePolicy.hpp
 //                                  // 里描述的 Policy Concept
 //
@@ -699,8 +699,8 @@ private:
 };
 
 // ---------- 常用实例化（编译期选定策略，§10.1） ----------
-using CacheTop    = CacheTopT<FifoPolicy>;          // 默认：与文档 §10.2 的 FIFO 一致
-using CacheTopLru = CacheTopT<LruPolicy>;
-using CacheTopRR  = CacheTopT<RoundRobinPolicy>;
+using CacheTop     = CacheTopT<FifoPolicy>;          // 默认：与文档 §10.2 的 FIFO 一致
+using CacheTopLru  = CacheTopT<LruPolicy>;
+using CacheTopPlru = CacheTopT<PlruPolicy>;
 
 } // namespace dcache

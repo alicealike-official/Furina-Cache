@@ -16,14 +16,15 @@ Design/DCacheMSHR/
 │   ├── Bundles.scala                # CPU/内存/MSHR 接口 Bundle
 │   ├── Ram2R2W.scala                # 严格 2R2W bank（四副本等价实现）
 │   ├── CacheMem.scala               # R1/R2 读、W1/W2 写、清 valid、状态查询
-│   ├── ReplacePolicy.scala          # FIFO / LRU / RR，可插拔
+│   ├── ReplacePolicy.scala          # FIFO / LRU / tree-PLRU，可插拔
 │   ├── Mshr.scala                   # MSHR：合并、发送、填充、重放、Way Lock
 │   ├── WriteBackBuffer.scala        # WBB：预留 / push / 轮询写回 / 释放
 │   ├── DCache.scala                 # 顶层：两级流水、冻结、响应队列、互联
 │   ├── DCacheVerilog.scala          # Verilog 生成入口
 │   └── sim/
 │       ├── SimHarness.scala         # 驱动 + 独立 scoreboard + 内存模型
-│       └── AllTests.scala           # 定向 + 随机测试
+│       ├── AllTests.scala           # 定向 + 随机测试（FIFO/LRU/PLRU）
+│       └── PolicyTests.scala        # 替换策略定向测试（锁定顺延 / PLRU 树位）
 └── rtl/                             # sbt run 生成的 Verilog（不入库）
 ```
 
@@ -187,16 +188,18 @@ locked(set, way) = OR(entry.valid && entry.index == set && entry.allocWay == way
 接口保持文档 §10.1 的形式：
 
 ```scala
-def allocWay(setIndex: UInt): UInt
+def allocWay(setIndex: UInt, lockMask: Vec[Bool]): UInt
 def onHit(setIndex: UInt, way: UInt, enable: Bool): Unit
 def onFill(setIndex: UInt, way: UInt, enable: Bool): Unit
 ```
 
 * `FifoPolicy`：每 set 一个顺序队列，填充时把该路移到队尾。
 * `LruPolicy`：命中和填充都移到队尾。
-* `RoundRobinPolicy`：每 set 一个指针。
-* "优先 valid=0 且未锁；否则从策略候选开始循环扫描、跳过锁定路；全锁不可用"
-  由顶层按 §10.4 完成，策略本身不感知 valid/locked。
+* `PlruPolicy`：每 set 一棵完全二叉树（NUM_WAYS−1 个树位），访问时把路径位
+  指向"远离该路"的一侧；复位全 0，初始偏好序 0..NUM_WAYS−1。
+* "优先 valid=0 且未锁"由顶层完成；无空路时**由策略自己在偏好序中剔除锁定路**，
+  再取最靠前的候选（`allocWay` 因此需要 `lockMask` 入参，§10.4）。
+  不能退化成"从候选开始按 way 编号扫描"——那会丢掉年龄/树偏好语义。
 * `onHit` 在 Stage2 命中拍触发，`onFill` 在填充写 Cache 拍触发。
 
 ---
@@ -232,7 +235,8 @@ CPU 响应 `ready` 的随机反压概率。
 | `bp` | 内存请求 ready 与 CPU 响应 ready 随机反压，持续随机流量 |
 | `random` | 128 行地址空间、2000 条随机读写，逐条 scoreboard 比对 |
 
-`AllTests` 对 **FIFO 与 LRU** 两种策略各跑一遍全部用例。
+`AllTests` 对 **FIFO / LRU / PLRU** 三种策略各跑一遍全部用例；
+`PolicyTests` 额外验证"锁定队首后在策略序中顺延"与 tree-PLRU 的树位/回退语义。
 
 ### 5.4 当前结果
 
@@ -242,15 +246,22 @@ CPU 响应 `ready` 的随机反压概率。
 [PASS] miss merge & replay bypass  cycle=22
 [PASS] dirty eviction / writeback  cycle=70
 [PASS] hit-under-miss  (hit@26 < miss@43)
-[PASS] backpressure  read=976 write=959 cycle=4003
-[PASS] random  read=962 write=1040 cycle=4031
+[PASS] backpressure  read=987 write=947 cycle=4004
+[PASS] random  read=1002 write=1000 cycle=4026
 ================ policy = LRU ================
 [PASS] basic hit/miss/write  cycle=26
 [PASS] miss merge & replay bypass  cycle=22
 [PASS] dirty eviction / writeback  cycle=70
 [PASS] hit-under-miss  (hit@26 < miss@43)
-[PASS] backpressure  read=976 write=959 cycle=4003
-[PASS] random  read=962 write=1040 cycle=4031
+[PASS] backpressure  read=987 write=947 cycle=4004
+[PASS] random  read=1002 write=1000 cycle=4026
+================ policy = PLRU ================
+[PASS] basic hit/miss/write  cycle=26
+[PASS] miss merge & replay bypass  cycle=22
+[PASS] dirty eviction / writeback  cycle=70
+[PASS] hit-under-miss  (hit@26 < miss@43)
+[PASS] backpressure  read=987 write=947 cycle=4004
+[PASS] random  read=1002 write=1000 cycle=4026
 ALL TESTS PASSED
 ```
 
@@ -264,11 +275,14 @@ cd Design/DCacheMSHR
 # 生成 Verilog 到 rtl/DCache.v
 sbt run
 
-# 全部仿真（FIFO + LRU，每个 6 个用例）
+# 全部仿真（FIFO + LRU + PLRU，每个 6 个用例）
 sbt "runMain furina.dcache.sim.AllTests"
 
 # 只跑某个用例：basic / merge / evict / hum / bp / random
 sbt "runMain furina.dcache.sim.AllTests evict"
+
+# 策略定向测试（锁定队首顺延 / PLRU 树位与回退）
+sbt "runMain furina.dcache.sim.PolicyTests"
 ```
 
 VCS 需要可用的 `VCS_HOME` 与 license 环境（本机已配置）。
@@ -286,8 +300,8 @@ VCS 需要可用的 `VCS_HOME` 与 license 环境（本机已配置）。
    对于未被锁定的路，tag 不可能在 Stage1→Stage2 之间被填充改变，因此安全。
 4. **一次性访存**：不支持字节使能/部分字写、非对齐访问、异常/总线错误/超时、
    ECC、多核一致性、原子操作，与文档 §1.4 一致。
-5. **LRU 命中与填充同拍同 set**：两个更新会争用同一顺序队列，硬件上后写的
-   `onFill` 优先；属于策略状态的近似，不影响数据正确性。FIFO 的 `onHit` 为空，
-   不受影响。
-6. **未实现**：重放饥饿计数（§14 第四项）、PLRU/随机策略、AXI 接口封装。
+5. **策略在"命中与填充同拍同 set"时的近似**：LRU 的两个更新会争用同一顺序队列，
+   PLRU 的两个更新会争用同一组树位；硬件上后写的 `onFill` 优先。属于策略状态的
+   近似，不影响数据正确性。FIFO 的 `onHit` 为空，不受影响。
+6. **未实现**：重放饥饿计数（§14 第四项）、随机策略、AXI 接口封装。
    这些都不影响当前功能与验证结论。

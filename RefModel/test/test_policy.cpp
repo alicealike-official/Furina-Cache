@@ -102,24 +102,34 @@ static void testLruOrder() {
 }
 
 // -------------------------------------------------------------
-// RoundRobin：从指针处向后扫描，填充后指针前移
+// Tree-PLRU：树位决定偏好序；访问把路径位指向"远离该路"
 // -------------------------------------------------------------
-static void testRoundRobinOrder() {
-    RoundRobinPolicy p;
+static void testPlruOrder() {
+    PlruPolicy p;
     ValidVec  valid{ true, true, true, true };
     LockedVec locked{};
 
-    assert(p.getVictim(0, valid, locked) == 0);      // 指针初始 0
-    p.onFill(0, 2);                                  // 指针 -> 3
-    assert(p.getVictim(0, valid, locked) == 3);
-    locked[3] = true;                                // 3 被锁则环绕到 0
+    // 复位：所有树位为 0 -> 偏好序 0,1,2,3
     assert(p.getVictim(0, valid, locked) == 0);
 
-    p.reset();
-    assert(p.getVictim(0, valid, locked) == 0);      // reset 后指针归 0，但 3 仍锁
-    assert(p.getVictim(1, valid, locked) == 0);      // set 间独立
+    // 访问 way2：node3 的位指向"远离 2"（左），root 指向"远离 2 的半区"（左）
+    p.onFill(0, 2);
+    assert(p.getVictim(0, valid, locked) == 0);      // root 仍优先左半区
 
-    std::cout << "  [RR] pointer rotation ok\n";
+    // 访问 way0：node2 位指向右，root 指向右半区 -> 首选 way3
+    p.onHit(0, 0);
+    assert(p.getVictim(0, valid, locked) == 3);
+
+    // 锁住首选 way3：应回退到同父的 way2
+    locked[3] = true;
+    assert(p.getVictim(0, valid, locked) == 2);
+
+    // reset 后回到 way0
+    p.reset();
+    locked = LockedVec{};
+    assert(p.getVictim(0, valid, locked) == 0);
+
+    std::cout << "  [PLRU] tree preference ok\n";
 }
 
 // -------------------------------------------------------------
@@ -139,25 +149,49 @@ static void checkPurity(const char* name) {
 }
 
 // -------------------------------------------------------------
+// §10.4 的关键语义：队首被锁时，必须在"剔除锁定项后的策略顺序"里取，
+// 而不是按 way 编号向后扫描。
+// 顺序 [2,0,3,1]、锁 way2 -> 候选是 way0（次老），不是编号相邻的 way3。
+// -------------------------------------------------------------
+template <typename Policy>
+static void checkLockedHeadSkipsWithinOrder(const char* name) {
+    Policy p;
+    ValidVec  valid{ true, true, true, true };
+    LockedVec locked{};
+
+    // 从 [0,1,2,3] 依次 touch 2,0,3,1 -> 顺序 [2,0,3,1]
+    p.onFill(0, 2);
+    p.onFill(0, 0);
+    p.onFill(0, 3);
+    p.onFill(0, 1);
+    assert(p.getVictim(0, valid, locked) == 2);
+
+    locked[2] = true;
+    assert(p.getVictim(0, valid, locked) == 0);   // 次老；按下标扫描会错选 3
+
+    std::cout << "  [" << name << "] locked-head -> next in order ok\n";
+}
+
+// -------------------------------------------------------------
 // CacheTop 模板注入：三种策略的实例化与一拍运行
 // -------------------------------------------------------------
 static void checkCacheTopTemplates() {
     static_assert(!std::is_same<CacheTop, CacheTopLru>::value, "alias 不应等价");
-    static_assert(!std::is_same<CacheTopLru, CacheTopRR>::value, "alias 不应等价");
+    static_assert(!std::is_same<CacheTopLru, CacheTopPlru>::value, "alias 不应等价");
 
-    CacheTop    fifoTop;   // = CacheTopT<FifoPolicy>，默认
-    CacheTopLru lruTop;
-    CacheTopRR  rrTop;
+    CacheTop     fifoTop;   // = CacheTopT<FifoPolicy>，默认
+    CacheTopLru  lruTop;
+    CacheTopPlru plruTop;
 
     // 空输入跑两拍：只走组合求值 + 时钟沿，不产生任何响应
     for (int i = 0; i < 2; ++i) {
         fifoTop.eval();  fifoTop.tick();
         lruTop.eval();   lruTop.tick();
-        rrTop.eval();    rrTop.tick();
+        plruTop.eval();  plruTop.tick();
     }
     assert(!fifoTop.memReadReq_valid && !fifoTop.memWriteReq_valid);
     assert(!lruTop.memReadReq_valid && !lruTop.memWriteReq_valid);
-    assert(!rrTop.memReadReq_valid && !rrTop.memWriteReq_valid);
+    assert(!plruTop.memReadReq_valid && !plruTop.memWriteReq_valid);
 
     std::cout << "  [CacheTopT] 3 policy instantiations ok\n";
 }
@@ -168,7 +202,7 @@ static void checkCacheTopTemplates() {
 //
 //   FIFO : 命中不改变顺序        -> 淘汰 way0（tag0）
 //   LRU  : 命中把 way0 移到队尾  -> 淘汰 way1（tag1）
-//   RR   : 命中不改变指针        -> 淘汰 way0（tag0）
+//   PLRU : 命中与填充都更新树位  -> 淘汰 way2（tag2）
 // -------------------------------------------------------------
 template <typename Top>
 struct MiniHarness {
@@ -261,7 +295,7 @@ static void testVictimChoiceE2E(const char* name, Tag expectEvicted) {
     // 同 set 依次填 way0..way3（都 miss，选空路）
     for (Tag t = 0; t < 4; ++t) h.read(addrOfTag(t));
 
-    // 命中 tag0：LRU 会把它移到队尾，FIFO/RR 不受影响
+    // 命中 tag0：LRU/PLRU 都会更新状态，FIFO 不受影响
     h.read(addrOfTag(0));
 
     // 再访问 tag4：必须淘汰一路
@@ -283,20 +317,24 @@ int main() {
 
     checkCommonContract<FifoPolicy>("FIFO");
     checkCommonContract<LruPolicy>("LRU");
-    checkCommonContract<RoundRobinPolicy>("RR");
+    checkCommonContract<PlruPolicy>("PLRU");
 
     testFifoOrder();
     testLruOrder();
-    testRoundRobinOrder();
+    testPlruOrder();
 
     checkPurity<FifoPolicy>("FIFO");
     checkPurity<LruPolicy>("LRU");
-    checkPurity<RoundRobinPolicy>("RR");
+    checkPurity<PlruPolicy>("PLRU");
 
-    // FIFO/RR 淘汰 way0（tag0）；LRU 淘汰 way1（tag1）
+    // §10.4：队首被锁时在策略序里顺延（顺序型策略）
+    checkLockedHeadSkipsWithinOrder<FifoPolicy>("FIFO");
+    checkLockedHeadSkipsWithinOrder<LruPolicy>("LRU");
+
+    // FIFO 淘汰 way0（tag0）；LRU 淘汰 way1（tag1）；PLRU 淘汰 way2（tag2）
     testVictimChoiceE2E<CacheTop>("FIFO", 0);
     testVictimChoiceE2E<CacheTopLru>("LRU", 1);
-    testVictimChoiceE2E<CacheTopRR>("RR", 0);
+    testVictimChoiceE2E<CacheTopPlru>("PLRU", 2);
 
     checkCacheTopTemplates();
 

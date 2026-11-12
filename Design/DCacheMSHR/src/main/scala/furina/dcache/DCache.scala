@@ -112,7 +112,7 @@ class DCache(
     val hitWay = priorityLowest(hitVec, wayWidth)
 
     // ---------------- victim 选择（§10.4） ----------------
-    // 优先 "valid=0 且未锁"；否则从策略候选开始循环扫描，跳过锁定路。
+    // 优先 "valid=0 且未锁"；否则由策略在其自身偏好序中剔除锁定路后给出候选。
     val curValid = Vec((0 until NUM_WAYS).map(w => cache.io.inspect.valid(w)))
     val curDirty = Vec((0 until NUM_WAYS).map(w => cache.io.inspect.dirty(w)))
 
@@ -120,18 +120,12 @@ class DCache(
     val hasEmpty = emptyVec.orR
     val emptyWay = priorityLowest(emptyVec, wayWidth)
 
-    val policyWay = policy.allocWay(s1Index)
-    val rotAvail = Vec(Bool(), NUM_WAYS)
-    for (k <- 0 until NUM_WAYS) {
-        val idx = (policyWay + U(k, wayWidth bits)).resize(wayWidth)
-        rotAvail(k) := !lock1(idx)
-    }
-    val hasRot = rotAvail.orR
-    val rotK = priorityLowest(rotAvail, wayWidth)
-    val rotWay = (policyWay + rotK).resize(wayWidth)
+    // 策略内部先剔除被锁定的路，再按自己的顺序取最靠前者（§10.4）
+    val policyWay = policy.allocWay(s1Index, lock1)
+    val hasRot = !lock1.andR
 
     val hasVictim = hasEmpty || hasRot
-    val victimWay = Mux(hasEmpty, emptyWay, rotWay)
+    val victimWay = Mux(hasEmpty, emptyWay, policyWay)
     val victimTag = cache.io.r1.tag(victimWay)
     val victimBlockAddr = blockAddrFromTagIndex(victimTag, s1Index)
     // 只有"有效且脏"的行才需要写回；无效行的 dirty 可能是历史残留

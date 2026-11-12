@@ -19,7 +19,8 @@ object AllTests extends App {
 
     private val policies: Seq[(String, CacheConfig => ReplacePolicy)] = Seq(
         ("FIFO", FifoPolicyFactory),
-        ("LRU", LruPolicyFactory)
+        ("LRU", LruPolicyFactory),
+        ("PLRU", PlruPolicyFactory)
     )
 
     def withHarness(dut: DCache, seed: Int)(body: SimHarness => Unit): Unit = {

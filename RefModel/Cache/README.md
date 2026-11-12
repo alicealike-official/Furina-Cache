@@ -8,7 +8,7 @@
 | `CacheMem.hpp` | `CacheMem` | tag/valid/dirty/data 存储体，2 读 + 2 写 + 清零 | §5 |
 | `MSHR.hpp` | `MSHR` | 未命中登记、合并、发读、填充、重放 | §7 |
 | `WriteBackBuffer.hpp` | `WriteBackBuffer` | 脏行写回缓冲：预留 / push / 异步写回 / 释放 | §8 |
-| `ReplacePolicy.hpp` | `FifoPolicy` / `LruPolicy` / `RoundRobinPolicy` | 可插拔替换策略（Policy Concept）：victim 选择 / onHit / onFill | §10 |
+| `ReplacePolicy.hpp` | `FifoPolicy` / `LruPolicy` / `PlruPolicy` | 可插拔替换策略（Policy Concept）：victim 选择 / onHit / onFill | §10 |
 | `CacheTop.hpp` | `CacheTopT<Policy>`（`CacheTop` = FIFO） | 顶层组装：两级流水、命中判断、Way Lock、响应队列、三模块互联；策略由模板参数注入 | §2 / §6 / §10 / §11 / §12 |
 
 Layer 1（`CacheMem` / `MSHR` / `WriteBackBuffer`）只做各自的存储与状态机；`CacheTop` 负责把它们组装成完整 DCache（含 Stage2 冻结、`cpuReady`、victim 选择、Way Lock、响应队列）。
@@ -146,7 +146,7 @@ top.tick();                 // 时钟沿
 ```cpp
 CacheTop      top;        // = CacheTopT<FifoPolicy>，默认
 CacheTopLru   lruTop;     // = CacheTopT<LruPolicy>
-CacheTopRR    rrTop;      // = CacheTopT<RoundRobinPolicy>
+CacheTopPlru  plruTop;    // = CacheTopT<PlruPolicy>
 CacheTopT<MyPolicy> my;   // 自定义策略
 ```
 
@@ -162,7 +162,7 @@ void onFill(int set, int way);   // 填充写 Cache 拍（§10.3）
 
 `getVictim` 必须是**纯函数**，并遵守 §10.4：优先"valid=0 且未锁"的路；否则按策略顺序给候选且跳过锁定路；全锁返回 -1。策略本身不感知 valid/locked，这两个数组每拍由 `CacheTop` 传入，因此淘汰被中止时不会污染策略状态。
 
-已提供 `FifoPolicy`（默认）、`LruPolicy`、`RoundRobinPolicy`；随机 / PLRU 待补（§14 第二项）。`test/test_policy.cpp`（`make run-policy`）对三者跑同一套契约测试，并验证 `CacheTopT` 三种实例化。
+已提供 `FifoPolicy`（默认）、`LruPolicy`、`PlruPolicy`（4 路 tree-PLRU，复位后偏好序 0..N−1）；随机策略待补（§14 第二项）。`test/test_policy.cpp`（`make run-policy`）对三者跑同一套契约测试、锁定队首的顺延语义、以及端到端 victim 选择（FIFO→way0 / LRU→way1 / PLRU→way2）。
 
 > `Cache/alloc_policies/*.hpp` 是早期接口（`get_victim(set, cache_set)`，不支持 Way Lock）留下的草稿，`CacheTop` 不使用，保留仅供参考。
 
