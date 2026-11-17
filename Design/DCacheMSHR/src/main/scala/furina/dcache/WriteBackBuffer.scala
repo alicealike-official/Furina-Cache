@@ -51,6 +51,7 @@ class WriteBackBuffer(cfg: CacheConfig) extends Component {
         val q1Addr = in UInt(ADDR_WIDTH bits)
         val q1Same = out Bool()
     }
+    noIoPrefix()
 
     private val valid = Vec(Reg(Bool()) init False, N)
     private val reserved = Vec(Reg(Bool()) init False, N)
@@ -128,4 +129,13 @@ class WriteBackBuffer(cfg: CacheConfig) extends Component {
         valid(rid) := False
         issued(rid) := False
     }
+}
+
+object WriteBackBufferVerilog extends App {
+    val cfg = CacheConfig()
+    val config = SpinalConfig(
+        targetDirectory = "rtl",
+        withTimescale = false
+    )
+    config.generateVerilog(new WriteBackBuffer(cfg))
 }

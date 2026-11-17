@@ -1,0 +1,14 @@
++incdir+../src/common/pkg
++incdir+../src/common/config
++incdir+../src/common/component
++incdir+../src/wbb
++incdir+../test/wbb
+../generated/wbb_params_pkg.sv
+../src/common/interface/clk_rst_interface.sv
+../src/wbb/interface/wbb_interface.sv
+../src/common/pkg/clk_rst_pkg.sv
+../src/wbb/pkg/wbb_pkg.sv
+../test/wbb/wbb_test_pkg.sv
+../src/wbb/bind/wbb_io_assertions.sv
+../src/wbb/bind/bind_wbb.sv
+../tb/tb_top.sv

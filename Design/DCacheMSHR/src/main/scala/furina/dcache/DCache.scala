@@ -19,6 +19,7 @@ class DCache(
     cfg: CacheConfig,
     makePolicy: CacheConfig => ReplacePolicy
 ) extends Component {
+    setDefinitionName("DCache")
     import cfg._
 
     val io = new Bundle {
@@ -35,12 +36,17 @@ class DCache(
 
     // ---------------- 子模块 ----------------
     val cache = new CacheMem(cfg)
+    cache.setName("UnitCache")
     val mshr = new Mshr(cfg)
+    mshr.setName("UnitMshr")
     val wbb = new WriteBackBuffer(cfg)
+    wbb.setName("UnitWbb")
     val policy = makePolicy(cfg)
 
     val rdFifo = StreamFifo(CpuReadResp(cfg), RESP_QUEUE_DEPTH)
+    rdFifo.setName("UnitRdFifo")
     val wrFifo = StreamFifo(CpuWriteResp(cfg), RESP_QUEUE_DEPTH)
+    wrFifo.setName("UnitWrFifo")
 
     io.cpuReadResp << rdFifo.io.pop
     io.cpuWriteResp << wrFifo.io.pop
@@ -89,7 +95,8 @@ class DCache(
     mshr.io.q0.index := cpuIndex
     wbb.io.q0Addr := cpuBlockAddr
 
-    val lock0 = Vec((0 until NUM_WAYS).map(w => mshr.io.lockMask(cpuIndex)(w)))
+    // val lock0 = Vec((0 until NUM_WAYS).map(w => mshr.io.lockMask(cpuIndex)(w)))
+    val lock0 = Vec((0 until NUM_WAYS).map(w => mshr.io.lockMask(cpuIndex * NUM_WAYS + w)))
     val hasWay0 = !lock0.andR
 
     val canMerge0 = mshr.io.m0.mergeable && mshr.io.m0.slotFree
@@ -104,7 +111,8 @@ class DCache(
     wbb.io.q1Addr := s1BlockAddr
     cache.io.inspect.index := s1Index
 
-    val lock1 = Vec((0 until NUM_WAYS).map(w => mshr.io.lockMask(s1Index)(w)))
+    // val lock1 = Vec((0 until NUM_WAYS).map(w => mshr.io.lockMask(s1Index)(w)))
+    val lock1 = Vec((0 until NUM_WAYS).map(w => mshr.io.lockMask(s1Index * NUM_WAYS + w)))
     val hitVec = Vec((0 until NUM_WAYS).map { w =>
         cache.io.r1.valid(w) && (cache.io.r1.tag(w) === s1Tag) && !lock1(w)
     })

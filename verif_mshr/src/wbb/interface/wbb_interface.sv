@@ -1,0 +1,48 @@
+interface wbb_interface(input logic clk, input logic rst_n);
+    import wbb_params_pkg::*;
+    logic reserve_en;
+    logic [ADDR_WIDTH-1:0] reserve_addr;
+    logic push_en;
+    logic [SLOT_WIDTH-1:0] push_slot;
+    logic [LINE_WIDTH-1:0] push_line;
+    logic send_ready;
+    logic memWriteResp_valid;
+    logic [BUS_ID_WIDTH-1:0] memWriteResp_payload_id;
+    logic [ADDR_WIDTH-1:0] q0Addr;
+    logic [ADDR_WIDTH-1:0] q1Addr;
+    logic reserveOk;
+    logic [SLOT_WIDTH-1:0] reserveSlot;
+    logic send_valid;
+    logic [ADDR_WIDTH-1:0] send_payload_addr;
+    logic [LINE_WIDTH-1:0] send_payload_wData;
+    logic [BUS_ID_WIDTH-1:0] send_payload_id;
+    logic memWriteResp_ready;
+    logic full;
+    logic q0Same;
+    logic q1Same;
+
+    clocking mon_cb @(posedge clk);
+        default input #1step;
+        input rst_n;
+        input reserve_en;
+        input reserve_addr;
+        input push_en;
+        input push_slot;
+        input push_line;
+        input send_ready;
+        input memWriteResp_valid;
+        input memWriteResp_payload_id;
+        input q0Addr;
+        input q1Addr;
+        input reserveOk;
+        input reserveSlot;
+        input send_valid;
+        input send_payload_addr;
+        input send_payload_wData;
+        input send_payload_id;
+        input memWriteResp_ready;
+        input full;
+        input q0Same;
+        input q1Same;
+    endclocking
+endinterface

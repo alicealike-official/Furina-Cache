@@ -86,8 +86,11 @@ class Mshr(cfg: CacheConfig) extends Component {
         val replay = master Stream (MshrReplay(cfg))
 
         // Way Lock：与条目同生同死
-        val lockMask = out Vec (Vec(Bool(), NUM_WAYS), NUM_SETS)
+        // val lockMask = out Vec (Vec(Bool(), NUM_WAYS), NUM_SETS) //展开所有信号
+        // val lockMask = out Vec(Bits(NUM_WAYS bits), NUM_SETS) //32个retry展开，各路不变
+        val lockMask = out Bits(NUM_SETS * NUM_WAYS bits) //合并所有信号
     }
+    noIoPrefix()
 
     // ---------------- 条目存储 ----------------
     private val entryValid = Vec(Reg(Bool()) init False, N)
@@ -345,7 +348,18 @@ class Mshr(cfg: CacheConfig) extends Component {
                     entryIndex(e) === U(s, indexWidth bits) &&
                     entryWay(e) === U(w, wayWidth bits)
             })
-            io.lockMask(s)(w) := locked.orR
+            // io.lockMask(s)(w) := locked.orR
+            io.lockMask(s * NUM_WAYS + w) := locked.orR
         }
     }
+}
+
+
+object MshrVerilog extends App {
+    val cfg = CacheConfig()
+    val config = SpinalConfig(
+        targetDirectory = "rtl",
+        withTimescale = false
+    )
+    config.generateVerilog(new Mshr(cfg))
 }

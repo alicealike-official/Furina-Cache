@@ -1,13 +1,8 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -g
 
-INCLUDES = -I$(SYSTEMC_HOME)/include \
-			-ICache \
-			-IMEM \
-			-Iutils \
-			-Itest
-
-LIBS = -L$(SYSTEMC_HOME)/lib-linux64 
+INCLUDES = -ICache -IMEM -Itest
+LIBS =
 
 SRCS = Cache/CacheMem.hpp \
 		test/test_cachemem.cpp 
@@ -83,3 +78,17 @@ run-policy: policy
 	./$(POLICY_TARGET)
 
 .PHONY: all clean run wbb run-wbb mshr run-mshr cachetop run-cachetop cachetop-full run-cachetop-full perf run-perf policy run-policy
+# Pure C++ sparse memory and DPI adapter checks (no simulator/SystemC required).
+$(BUILD_DIR)/test_sparse_memory: test/test_sparse_memory.cpp MEM/SparseMemory.hpp Cache/params.hpp
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $< -o $@
+run-memory: $(BUILD_DIR)/test_sparse_memory
+	./$(BUILD_DIR)/test_sparse_memory
+
+$(BUILD_DIR)/test_wbb_dpi: test/test_wbb_dpi.cpp ../verif_mshr/dpi/wbb_dpi.cpp ../verif_mshr/dpi/wbb_dpi.h MEM/SparseMemory.hpp Cache/WriteBackBuffer.hpp Cache/params.hpp
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) test/test_wbb_dpi.cpp ../verif_mshr/dpi/wbb_dpi.cpp -o $@
+run-dpi: $(BUILD_DIR)/test_wbb_dpi
+	./$(BUILD_DIR)/test_wbb_dpi
+
+.PHONY: run-memory run-dpi

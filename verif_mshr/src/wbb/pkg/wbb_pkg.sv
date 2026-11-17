@@ -1,0 +1,24 @@
+package wbb_pkg;
+    timeunit 1ns;
+    timeprecision 1ps;
+    import uvm_pkg::*;
+    import wbb_params_pkg::*;
+    import clk_rst_pkg::*;
+    `include "uvm_macros.svh"
+    `include "vutils_macros.svh"
+    `include "pkg/wbb_dpi.svh"
+    `include "sequence/transaction/wbb_transaction.sv"
+    `include "sequence/transaction/wbb_sample.sv"
+    `include "sequence/transaction/wbb_compare_item.sv"
+    `include "config/wbb_config.sv"
+    `include "model/wbb_memory_store.sv"
+    `include "model/wbb_predictor.sv"
+    `include "component/driver/wbb_memory_driver.sv"
+    `include "component/agent/wbb_memory_agent.sv"
+    `include "component/driver/wbb_driver.sv"
+    `include "component/monitor/wbb_monitor.sv"
+    `include "component/scoreboard/wbb_scoreboard.sv"
+    `include "component/agent/wbb_agent.sv"
+    `include "component/wbb_environment.sv"
+    `include "sequence/wbb_base_sequence.sv"
+endpackage

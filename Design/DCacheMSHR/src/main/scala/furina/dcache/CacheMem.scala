@@ -32,6 +32,11 @@ class CacheMem(cfg: CacheConfig) extends Component {
             val valid = out Vec(Bool(), NUM_WAYS)
             val dirty = out Vec(Bool(), NUM_WAYS)
             val data = out Vec(Bits(DATA_WIDTH bits), NUM_WAYS)
+            // val tag = out Bits(tagWidth * NUM_WAYS bits)
+            // val valid = out Bits(NUM_WAYS bits)
+            // val dirty = out Bits(NUM_WAYS bits)
+            // val data = out Bits(DATA_WIDTH * NUM_WAYS bits)
+
         }
 
         // -------- R2：victim 整行读 --------
@@ -71,10 +76,13 @@ class CacheMem(cfg: CacheConfig) extends Component {
         // -------- INS：当前状态组合查询（victim 选择用） --------
         val inspect = new Bundle {
             val index = in UInt(indexWidth bits)
-            val valid = out Vec(Bool(), NUM_WAYS)
-            val dirty = out Vec(Bool(), NUM_WAYS)
+            // val valid = out Vec(Bool(), NUM_WAYS)
+            // val dirty = out Vec(Bool(), NUM_WAYS)
+            val valid = out Bits(NUM_WAYS bits)
+            val dirty = out Bits(NUM_WAYS bits)
         }
     }
+    noIoPrefix()
 
     // ---------------- 存储体 ----------------
     // valid / dirty：按 set × way 平铺的寄存器
@@ -168,4 +176,14 @@ class CacheMem(cfg: CacheConfig) extends Component {
         io.inspect.valid(w) := validBits(io.inspect.index)(w)
         io.inspect.dirty(w) := dirtyBits(io.inspect.index)(w)
     }
+}
+
+
+object CacheMemVerilog extends App {
+    val cfg = CacheConfig()
+    val config = SpinalConfig(
+        targetDirectory = "rtl",
+        withTimescale = false
+    )
+    config.generateVerilog(new CacheMem(cfg))
 }

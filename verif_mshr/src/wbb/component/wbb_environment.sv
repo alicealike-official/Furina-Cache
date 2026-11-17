@@ -1,0 +1,66 @@
+class wbb_environment extends uvm_env;
+    clk_rst_agent clk_agent;
+    clk_rst_config clk_cfg;
+    wbb_config cfg;
+    wbb_agent agent;
+    wbb_scoreboard scoreboard;
+    wbb_predictor predictor;
+    wbb_memory_agent memory_agent;
+    wbb_memory_store memory;
+
+    `uvm_component_utils(wbb_environment)
+
+    function new(string name = "wbb_environment",
+        uvm_component parent = null);
+        super.new(name, parent);
+        if (parent == null) begin
+            `fatal("This component's parent can not be null!!")
+        end
+    endfunction
+
+    extern virtual function void build_phase(uvm_phase phase);
+    extern virtual function void connect_phase(uvm_phase phase);
+    extern virtual function void final_phase(uvm_phase phase);
+    extern function bit is_idle();
+endclass
+
+function void wbb_environment::build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db #(wbb_config)::get(this, "", "wbb_config", cfg)) begin
+        cfg = wbb_config::type_id::create("cfg");
+    end
+    if (!uvm_config_db #(clk_rst_config)::get(this, "", "clk_rst_config", clk_cfg)) begin
+        clk_cfg = clk_rst_config::type_id::create("clk_cfg");
+    end
+    if (cfg.mem_page_size == 0 || (cfg.mem_page_size & (cfg.mem_page_size - 1)) != 0 ||
+        cfg.mem_write_latency_ns < 0 || cfg.mem_max_pending == 0 || cfg.timeout_cycles == 0) begin
+        `fatal("Invalid memory page size, latency, capacity or watchdog")
+    end
+    memory = wbb_memory_store::type_id::create("memory");
+    memory.initialize(cfg.mem_page_size);
+    uvm_config_db #(wbb_memory_store)::set(this, "*", "memory", memory);
+    uvm_config_db #(wbb_config)::set(this, "*", "wbb_config", cfg);
+    uvm_config_db #(clk_rst_config)::set(this, "clk_agent*", "clk_rst_config", clk_cfg);
+    clk_agent = clk_rst_agent::type_id::create("clk_agent", this);
+    agent = wbb_agent::type_id::create("agent", this);
+    scoreboard = wbb_scoreboard::type_id::create("scoreboard", this);
+    predictor = wbb_predictor::type_id::create("predictor", this);
+    memory_agent = wbb_memory_agent::type_id::create("memory_agent", this);
+endfunction
+
+function void wbb_environment::connect_phase(uvm_phase phase);
+    super.connect_phase(phase);
+    // Both consumers use the same pre-edge sample; they own distinct state.
+    agent.monitor.monitor_port.connect(memory_agent.driver.monitor_export);
+    agent.monitor.monitor_port.connect(predictor.monitor_export);
+    predictor.compare_port.connect(scoreboard.compare_export);
+endfunction
+
+function bit wbb_environment::is_idle();
+    return predictor.is_empty() && memory_agent.driver.is_idle();
+endfunction
+
+function void wbb_environment::final_phase(uvm_phase phase);
+    super.final_phase(phase);
+    memory.close();
+endfunction
