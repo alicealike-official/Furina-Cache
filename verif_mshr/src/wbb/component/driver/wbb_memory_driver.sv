@@ -52,6 +52,9 @@ function void wbb_memory_driver::build_phase(uvm_phase phase);
     end
 endfunction
 
+// 消费 monitor 在上升沿取得的采样：先处理已握手的写响应，再接收本拍新的写请求。
+// 响应握手时检查队首 ID、到期条件及响应晚于请求接收拍，然后出队并释放在途 ID。
+// 写请求握手时更新实际内存，记录 ID、到期时间和接收周期，供 run_phase 后续驱动响应。
 function void wbb_memory_driver::write(wbb_sample tr);
     wbb_pending_response response;
     int unsigned id;
@@ -116,6 +119,7 @@ task wbb_memory_driver::run_phase(uvm_phase phase);
     end
 endtask
 
+// 查询待响应队列和在途 ID 表是否均已清空，供环境判断内存侧是否完成排空。
 function bit wbb_memory_driver::is_idle();
     return pending.size() == 0 && outstanding.num() == 0;
 endfunction

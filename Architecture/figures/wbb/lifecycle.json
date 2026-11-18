@@ -1,0 +1,68 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "0H.l.H.l.H.l.H.l.H.l"
+    },
+    {
+      "name": "reserve_en",
+      "wave": "1...0..............."
+    },
+    {
+      "name": "reserve_addr",
+      "wave": "=...x...............",
+      "data": [
+        "A"
+      ]
+    },
+    {
+      "name": "reserveOk",
+      "wave": "1..................."
+    },
+    {
+      "name": "push_en",
+      "wave": "0...1...0..........."
+    },
+    {
+      "name": "push_slot / push_line",
+      "wave": "x...=...x...........",
+      "data": [
+        "k,D"
+      ]
+    },
+    {
+      "name": "send_valid",
+      "wave": "0.....1...0........."
+    },
+    {
+      "name": "send_ready",
+      "wave": "1..................."
+    },
+    {
+      "name": "memWriteResp_valid",
+      "wave": "0...........1...0..."
+    },
+    {
+      "name": "memWriteResp_ready",
+      "wave": "1..................."
+    },
+    {
+      "name": "slot k",
+      "wave": "=.=...=...=...=.....",
+      "data": [
+        "FREE",
+        "RESERVED",
+        "PENDING",
+        "ISSUED",
+        "FREE"
+      ]
+    },
+    {
+      "name": "q0Same (q0Addr=A)",
+      "wave": "0.1...........0....."
+    }
+  ],
+  "head": {
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · · · E4 · · · "
+  }
+}

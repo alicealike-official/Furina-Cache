@@ -1,0 +1,52 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "0H.l.H.l.H.l.H.l"
+    },
+    {
+      "name": "reserve_en",
+      "wave": "1...0..........."
+    },
+    {
+      "name": "push_en",
+      "wave": "0...1...0......."
+    },
+    {
+      "name": "push_slot",
+      "wave": "x...=...x.......",
+      "data": [
+        "j"
+      ]
+    },
+    {
+      "name": "slot j",
+      "wave": "=.=...=.......=.",
+      "data": [
+        "FREE",
+        "RESERVED",
+        "PENDING",
+        "ISSUED"
+      ]
+    },
+    {
+      "name": "send_valid",
+      "wave": "1.............0."
+    },
+    {
+      "name": "send_ready",
+      "wave": "0.......1......."
+    },
+    {
+      "name": "send ID / addr / data",
+      "wave": "=.........=...x.",
+      "data": [
+        "k,A,DA",
+        "j,B,DB"
+      ]
+    }
+  ],
+  "head": {
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · · · "
+  }
+}

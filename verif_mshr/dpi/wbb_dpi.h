@@ -1,8 +1,9 @@
 #pragma once
 #include <cstdint>
 
-// Packed SV bit vectors use 32-bit words, least significant word first.
-// No exceptions may cross this C ABI: 1 = success, 0 = failure; inspect last_error.
+// SV 导入声明位于 src/wbb/pkg/wbb_dpi.svh，各函数用途在 wbb_dpi.cpp 的实现前说明。
+// packed 行按低位 32-bit 字在前传递。int 返回 1 表示成功，0 表示失败。
+// 失败后立即读取 wbb_dpi_last_error()，只在成功时使用输出参数；异常由适配层转换为失败状态。
 extern "C" {
 const char* wbb_dpi_last_error();
 int wbb_ref_create(int aw, int dw, int block, int entries, int slotw, int busw, void** handle);

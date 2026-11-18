@@ -1,5 +1,5 @@
 class wbb_sample extends uvm_sequence_item;
-    // logic rst_n;
+    logic rst_n;
     logic reserve_en;
     logic [ADDR_WIDTH-1:0] reserve_addr;
     logic reserveOk;

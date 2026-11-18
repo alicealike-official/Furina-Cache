@@ -2,7 +2,7 @@
 
 直接例化 `WriteBackBuffer`，复用 `RefModel/Cache/WriteBackBuffer.hpp` 作为 WBB 参考模型。
 后端存储使用 `RefModel/MEM/SparseMemory.hpp` 的纯 C++ 稀疏内存。
-本次只完成框架与模型接入，保留无请求的基础启动入口，没有新增 WBB 详细功能 case。
+基础 `wbb_base_test` 已接入两笔完整写回激励，逐笔经过 reserve、push、内存发送和响应释放。
 
 ## 结构与信号归属
 
@@ -94,7 +94,7 @@ make -C RefModel run-memory run-dpi run-wbb
 
 cd verif_mshr/sim
 make vcs_compile
-make vcs_simulate       # TEST_NAME为空，运行基础空闲环境
+make vcs_simulate       # TEST_NAME为空，运行基础两笔写回
 make run_verdi
 make check_dpi          # 独立SV/C++数据往返自检，不运行DUT case
 ```
@@ -106,7 +106,7 @@ Makefile沿用原结构，仅补充DPI源码、C++17编译和check_dpi入口。
 更改WBB槽数前，也必须同步C++配置；适配层会拒绝不一致配置。
 
 运行日志：`work/log/vcs_sim.log`；波形：`work/wave/wave.fsdb`；DPI自检：`work/log/dpi_check.log`。
-基础启动成功标记为 `WBB_FRAMEWORK_READY`，不表示WBB功能覆盖通过。
+基础用例成功标记为 `WBB_TEST_PASS`，检查两笔事务四类事件计数、C++预测结果、最终内存内容及IO协议。
 旧 work/ 中历史smoke/capacity日志不代表当前框架的验证结论。
 
 ## 本次验证（2026-11-17）
@@ -145,3 +145,15 @@ make -C verif_mshr/sim check_sva
 自测使用人工IO轨迹，不实例化WBB DUT。严格/延迟模式各27个场景及UVM bind检查通过；
 负例故意触发指定断言，不能把这些预期error当成DUT回归结果。
 本结果只验证checker；当前完整环境的rst_n字段接口不一致仍需另外处理。
+
+
+## 基础激励运行结果（2026-11-18）
+
+`wbb_base_test::run_sequence()` 使用已有 `wbb_base_sequence` 辅助接口，发送块地址
+`BLOCK_SIZE` 和 `2*BLOCK_SIZE` 的两笔写回；两行分别使用 `0x10000000 + word_index`
+和 `0x20000000 + word_index` 的数据。q0查询当前地址，q1查询另一块地址。
+发送结束后等待环境排空，核对reserve/push/send/response增量均为2。
+
+当前 `wbb_sample.rst_n` 已恢复声明，完整环境编译和仿真通过。
+本次仿真200 ns结束，四类事务计数均为2，UVM_WARNING/ERROR/FATAL均为0，
+`c_reserve_push` 命中2次，FSDB已更新。满槽、并发重叠和随机反压不属于该基础激励的覆盖范围。

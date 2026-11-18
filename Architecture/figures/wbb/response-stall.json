@@ -1,0 +1,45 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "0H.l.H.l.H.l.H.l"
+    },
+    {
+      "name": "memWriteResp_valid",
+      "wave": "1...........0..."
+    },
+    {
+      "name": "memWriteResp_ready",
+      "wave": "0.......1......."
+    },
+    {
+      "name": "memWriteResp_payload_id",
+      "wave": "=...........x...",
+      "data": [
+        "k"
+      ]
+    },
+    {
+      "name": "slot k",
+      "wave": "=.........=.....",
+      "data": [
+        "ISSUED",
+        "FREE"
+      ]
+    },
+    {
+      "name": "q1Addr",
+      "wave": "=...............",
+      "data": [
+        "A"
+      ]
+    },
+    {
+      "name": "q1Same",
+      "wave": "1.........0....."
+    }
+  ],
+  "head": {
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · · · "
+  }
+}

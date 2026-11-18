@@ -21,7 +21,6 @@ class wbb_driver extends uvm_driver #(wbb_transaction);
     extern task drive_push(wbb_transaction tr, logic [SLOT_WIDTH-1:0] slot);
 endclass
 
-// 获取上游接口和配置，并确认等待预留的超时设置有效。
 function void wbb_driver::build_phase(uvm_phase phase);
     super.build_phase(phase);
     if (!uvm_config_db #(virtual wbb_interface)::get(this, "", "wbb_vif", vif)) begin

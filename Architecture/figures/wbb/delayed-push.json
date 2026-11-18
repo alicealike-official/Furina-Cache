@@ -1,0 +1,47 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "0H.l.H.l.H.l.H.l.H.l"
+    },
+    {
+      "name": "reserve_en",
+      "wave": "1...0..............."
+    },
+    {
+      "name": "push_en",
+      "wave": "0...........1...0..."
+    },
+    {
+      "name": "push_slot / push_line",
+      "wave": "x...........=...x...",
+      "data": [
+        "k,D"
+      ]
+    },
+    {
+      "name": "slot k",
+      "wave": "=.=...........=.....",
+      "data": [
+        "FREE",
+        "RESERVED",
+        "PENDING"
+      ]
+    },
+    {
+      "name": "q0Same (q0Addr=A)",
+      "wave": "0.1................."
+    },
+    {
+      "name": "send_valid",
+      "wave": "0.............1....."
+    },
+    {
+      "name": "send_ready",
+      "wave": "0..................."
+    }
+  ],
+  "head": {
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · · · E4 · · · "
+  }
+}

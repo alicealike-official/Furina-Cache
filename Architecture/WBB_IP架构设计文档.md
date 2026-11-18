@@ -146,6 +146,12 @@ A[n] = memWriteResp_valid[n] && memWriteResp_ready[n]  写响应接受事件
 
 复位期间上游保持reserve_en=0、push_en=0，内存侧保持memWriteResp_valid=0；不承认任何传输。复位释放前，各输入控制和查询地址必须建立为已知值。常规TB在下降沿释放；实际芯片异步复位释放的recovery/removal及同步释放电路属于实现时序检查范围。
 
+![时钟停止时异步复位清除占用](figures/wbb/async-reset.svg)
+
+[WaveDrom 源文件](figures/wbb/async-reset.json)
+
+图中 clk 始终为低，复位前槽 k 正挂起地址 A 的写请求。rst_n 拉低后，send_valid 和 q0Same 在没有时钟沿的情况下清零。图上的传播间隔仅用于标明先后关系。
+
 WBB的本地复位可以丢弃在途记录，但内存已经接收的写可能仍然完成。接口没有epoch标签，旧ID响应可能被误认为新事务。因此运行中复位必须由系统同时清空/隔离旧响应，并确定丢弃未完成写的语义。当前UVM仅支持启动复位；SVA复位时清除历史和未完成时序义务，不声称单模块能够解决系统热复位。
 
 ## 6. 槽位生命周期
@@ -291,59 +297,55 @@ full与reserveOk不得因本拍reserve_en、push_en或响应valid临时改变逻
 
 ## 11. 时序图与边沿示例
 
+E0、E1 等标在 clk 上升沿的正上方，箭头所在的竖线为采样点。时钟高、低电平各占半个周期。沿右侧的状态跳变表示该沿生效后的可见结果，横向间隔仅用于区分采样与更新。图中的槽阶段用于解释所有权，阴影表示该时段忽略相应载荷。
+
 ### 11.1 最短完整生命周期
 
-假设槽k原先空闲，查询始终指向地址A，下游始终可接收：
+![11.1 最短完整生命周期](figures/wbb/lifecycle.svg)
 
-| 采样沿 | 沿前阶段 | 本沿事件 | qSame沿前 | 沿后阶段 |
-| --- | --- | --- | --- | --- |
-| E0 | FREE | reserve(A)成功，返回k | 0 | RESERVED |
-| E1 | RESERVED | push(k,D) | 1 | PENDING |
-| E2或之后 | PENDING | send(A,D,id=k)握手 | 1 | ISSUED |
-| 至少send之后一沿 | ISSUED | response(id=k)握手 | 1 | FREE |
-| 下一沿 | FREE | 可重新分配 | 0 | 取决于新事件 |
+[WaveDrom 源文件](figures/wbb/lifecycle.json)
 
-E2只是最早可能发送的沿，不是无条件保证的固定延迟。
+设 WBB 有多个空槽，E0 预留地址 A 并返回槽 k。E1 采样 push(k,D)，E2 接受整行写请求，E3 接受 ID=k 的写响应。在 E3 上升沿仍能查到 A，沿后查询解除。图中 E2 是最早可发送的沿，仲裁和反压都可延后实际握手。
 
-### 11.2 连续预留与push重叠
+### 11.2 连续预留与 push 重叠
 
-```text
-采样沿       E0                 E1                         E2
-reserve      A成功，slot=a       B成功，slot=b               可再预留C
-push         无                 A的数据，slot=a            B的数据，slot=b
-地址可见性   A沿后加入          A已可查询，B沿后加入       A/B均可查询
-```
+![11.2 连续预留与 push 重叠](figures/wbb/overlap.svg)
 
-这要求上游保留每次成功reserve返回的槽号。E1的reserveSlot可能已经变为b，不能拿它去push A。
+[WaveDrom 源文件](figures/wbb/overlap.json)
 
-### 11.3 full与响应释放
+E1 同时发生两件事。B 预留到 b，A 的数据装入 a。此时 push_slot 使用 E0 保存的 a。图中假设还有空槽 c，因此 B 预留成功后 reserveSlot 可以再次变化。两个查询口始终分别查询 A、B。
 
-```text
-采样沿       E0（所有槽占用）       E1
-response     旧槽k响应握手           —
-reserve_en   1                      1
-reserveOk    0                      1（若无其他占用变化）
-分配结果     本拍不分配              本拍可选择已释放的k
-```
+### 11.3 full 与响应释放
+
+![11.3 full 与响应释放](figures/wbb/full-release.svg)
+
+[WaveDrom 源文件](figures/wbb/full-release.json)
+
+E0 到来前所有槽都被占用。虽然该沿接受了槽 k 的写响应，reserveOk 的采样值仍为 0。上游继续请求 B，在 E1 才获得 k，按默认协议于 E2 装入 DB。
 
 ### 11.4 请求反压与新候选
 
-```text
-采样沿       E0                 E1                     E2
-send_valid   1                  1                      1
-send_ready   0                  0                      1
-send_id      k                  必须k                  必须k
-其他事件     —                  新槽j push             —
-结果         k尚未发送          不得切换为j            k握手，之后才可换请求
-```
+![11.4 请求反压与新候选](figures/wbb/send-stall.svg)
+
+[WaveDrom 源文件](figures/wbb/send-stall.json)
+
+槽 k 的请求先挂上写通道。E0 为 B 预留 j，E1 将 DB 装入 j，此时 j 成为待发候选。E2 接收的仍是 k 的原地址 A 和原数据 DA。图中 E2 握手后切换到 j，E3 接收第二笔请求。
 
 ### 11.5 响应反压
 
-内存呈现ID=k但ready=0时，k必须保持ISSUED并继续参与地址查询。只有ready=1的握手沿才能释放。其他槽可以继续发送或接收响应，但单一响应端口在本响应挂起时不能被新响应替换。
+![11.5 响应反压](figures/wbb/response-stall.svg)
 
-### 11.6 延迟push模式
+[WaveDrom 源文件](figures/wbb/response-stall.json)
 
-在E0预留后，E1..Em-1没有push，地址持续命中且占用不减少；Em才push。该轨迹在默认严格模式下于E1报输入违约，在显式延迟模式下合法。Em必须大于E0，且期间不能复位取消或将同槽用于其他事务。
+内存从 E0 开始呈现槽 k 的响应，直到 E2 才握手。其间 memWriteResp_valid 和 ID 必须保持，查询 A 始终命中。E2 沿后 k 释放，E3 采样到 q1Same=0。
+
+### 11.6 延迟 push 模式
+
+![11.6 延迟 push 模式](figures/wbb/delayed-push.svg)
+
+[WaveDrom 源文件](figures/wbb/delayed-push.json)
+
+此图采用 STRICT_NEXT_PUSH=0。E0 成功预留后，E1、E2 均未 push，查询 A 仍命中。E3 才装载 D，随后该槽可以呈现有效写请求。把同一轨迹用于默认严格模式时，E1 就会触发 a_env_push_next。
 
 ## 12. 进展、公平性与异常边界
 

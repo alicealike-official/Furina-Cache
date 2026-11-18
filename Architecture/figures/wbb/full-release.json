@@ -1,0 +1,73 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "0H.l.H.l.H.l"
+    },
+    {
+      "name": "memWriteResp_valid",
+      "wave": "1...0......."
+    },
+    {
+      "name": "memWriteResp_ready",
+      "wave": "1..........."
+    },
+    {
+      "name": "memWriteResp_payload_id",
+      "wave": "=...x.......",
+      "data": [
+        "k"
+      ]
+    },
+    {
+      "name": "reserve_en",
+      "wave": "1.......0..."
+    },
+    {
+      "name": "reserve_addr",
+      "wave": "=.......x...",
+      "data": [
+        "B"
+      ]
+    },
+    {
+      "name": "full",
+      "wave": "1.0...1....."
+    },
+    {
+      "name": "reserveOk",
+      "wave": "0.1...0....."
+    },
+    {
+      "name": "reserveSlot",
+      "wave": "x.=...x.....",
+      "data": [
+        "k"
+      ]
+    },
+    {
+      "name": "push_en",
+      "wave": "0.......1..."
+    },
+    {
+      "name": "push_slot / push_line",
+      "wave": "x.......=...",
+      "data": [
+        "k,DB"
+      ]
+    },
+    {
+      "name": "slot k",
+      "wave": "=.=...=...=.",
+      "data": [
+        "ISSUED",
+        "FREE",
+        "RESERVED",
+        "PENDING"
+      ]
+    }
+  ],
+  "head": {
+    "tick": "· E0 · · · E1 · · · E2 · · · "
+  }
+}
