@@ -1,0 +1,105 @@
+// 分别安排响应释放与另一槽的 reserve、push、send 同拍，不制造 reserve/push 流水。
+class wbb_event_collision_sequence extends wbb_scenario_sequence;
+    localparam int WRITEBACK_COUNT = 6;
+
+    `uvm_object_utils(wbb_event_collision_sequence)
+
+    function new(string name = "wbb_event_collision_sequence");
+        super.new(name);
+    endfunction
+
+    extern virtual task body();
+    extern task prepare_old_write(int index, output int id);
+    extern function void select_response(int id);
+    extern task drain_stage();
+    extern task collide_with_reserve();
+    extern task collide_with_push();
+    extern task collide_with_send();
+endclass
+
+task wbb_event_collision_sequence::body();
+    if (WBB_ENTRIES < 2) begin
+        `fatal("Different-slot collisions require at least two slots", "WBB_CASE_CONFIG")
+    end
+    collide_with_reserve();
+    collide_with_push();
+    collide_with_send();
+    cfg.mem_response_order = WBB_MEM_FIFO;
+    cfg.mem_response_enable = 1;
+endtask
+
+// 先提交旧写回并等其发送，再留出到期时间；返回时位于采样沿，可安排下一拍的交叉事件。
+task wbb_event_collision_sequence::prepare_old_write(int index, output int id);
+    int send_start;
+
+    send_start = obs.send_count;
+    send_line(index);
+    obs.wait_for_sends(send_start + 1);
+    obs.wait_cycles(2);
+    id = obs.send_ids[send_start];
+endtask
+
+// 选择一个已经发送的ID，允许memory driver在下一下降沿准备其响应；调用方保证处于采样沿。
+function void wbb_event_collision_sequence::select_response(int id);
+    cfg.mem_response_order = WBB_MEM_SELECTED;
+    cfg.mem_selected_response_id = id;
+    cfg.mem_response_enable = 1;
+endfunction
+
+// 完成当前两笔写回的剩余响应，再暂停新响应选择，供下一个独立子场景使用。
+task wbb_event_collision_sequence::drain_stage();
+    obs.wait_cycles(1);
+    cfg.mem_send_enable = 1;
+    cfg.mem_response_order = WBB_MEM_FIFO;
+    cfg.mem_response_enable = 1;
+    obs.wait_until_empty();
+    cfg.mem_response_enable = 0;
+endtask
+
+// 同一采样沿启动新写回并允许旧响应，下一下降沿两个driver分别准备reserve和response。
+task wbb_event_collision_sequence::collide_with_reserve();
+    int old_id;
+
+    prepare_old_write(0, old_id);
+    select_response(old_id);
+    send_line(1);
+    drain_stage();
+endtask
+
+// 等新写回实际reserve成功后再允许旧响应，使下一拍的push与旧响应握手同时发生。
+task wbb_event_collision_sequence::collide_with_push();
+    int old_id;
+    int reserve_target;
+    int response_target;
+
+    prepare_old_write(2, old_id);
+    reserve_target = obs.reserve_count + 1;
+    response_target = obs.response_count + 1;
+    fork
+        send_line(3);
+        begin
+            obs.wait_for_reserves(reserve_target);
+            select_response(old_id);
+            obs.wait_for_responses(response_target);
+            cfg.mem_response_enable = 0;
+        end
+    join
+    drain_stage();
+endtask
+
+// 先让新行处于待发状态，再同拍打开send接收和旧响应，得到不同槽的send/response交叉。
+task wbb_event_collision_sequence::collide_with_send();
+    int old_id;
+    int response_target;
+
+    prepare_old_write(4, old_id);
+    cfg.mem_send_enable = 0;
+    send_line(5);
+    obs.wait_cycles(2);
+    response_target = obs.response_count + 1;
+    select_response(old_id);
+    cfg.mem_send_enable = 1;
+    obs.wait_for_responses(response_target);
+    cfg.mem_response_enable = 0;
+    drain_stage();
+endtask

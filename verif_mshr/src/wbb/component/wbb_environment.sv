@@ -4,6 +4,7 @@ class wbb_environment extends uvm_env;
     wbb_config cfg;
     wbb_agent agent;
     wbb_scoreboard scoreboard;
+    wbb_activity_monitor activity;
     // C++ WBB 参考模型的 SV 适配组件，通过 DPI 调用 RefModel/Cache/WriteBackBuffer.hpp。
     wbb_predictor predictor;
     wbb_memory_agent memory_agent;
@@ -32,11 +33,11 @@ function void wbb_environment::build_phase(uvm_phase phase);
     if (!uvm_config_db #(wbb_config)::get(this, "", "wbb_config", cfg)) begin
         cfg = wbb_config::type_id::create("cfg");
     end
-    if (!uvm_config_db #(clk_rst_config)::get(this, "", "clk_rst_config", clk_cfg)) begin
-        clk_cfg = clk_rst_config::type_id::create("clk_cfg");
+    if (!uvm_config_db #(clk_rst_config)::get(this, "", "clk_rst_config", clk_cfg) || clk_cfg == null) begin
+        `fatal("Parent test must provide a non-null clk_rst_config", "CLK_CONFIG")
     end
     if (cfg.mem_page_size == 0 || (cfg.mem_page_size & (cfg.mem_page_size - 1)) != 0 ||
-        cfg.mem_write_latency_ns < 0 || cfg.mem_max_pending == 0 || cfg.timeout_cycles == 0) begin
+        cfg.mem_write_latency_cycles == 0 || cfg.mem_max_pending == 0 || cfg.timeout_cycles == 0) begin
         `fatal("Invalid memory page size, latency, capacity or watchdog")
     end
     memory = wbb_memory_store::type_id::create("memory");
@@ -45,7 +46,9 @@ function void wbb_environment::build_phase(uvm_phase phase);
     memory.initialize(cfg.mem_page_size);
     uvm_config_db #(wbb_memory_store)::set(this, "*", "memory", memory);
     uvm_config_db #(wbb_config)::set(this, "*", "wbb_config", cfg);
-    uvm_config_db #(clk_rst_config)::set(this, "clk_agent*", "clk_rst_config", clk_cfg);
+    uvm_config_db #(clk_rst_config)::set(this, "clk_agent", "clk_rst_config", clk_cfg);
+    activity = wbb_activity_monitor::type_id::create("activity", this);
+    uvm_config_db #(wbb_activity_monitor)::set(this, "agent.sequencer", "observations", activity);
     clk_agent = clk_rst_agent::type_id::create("clk_agent", this);
     agent = wbb_agent::type_id::create("agent", this);
     scoreboard = wbb_scoreboard::type_id::create("scoreboard", this);
@@ -59,6 +62,7 @@ function void wbb_environment::connect_phase(uvm_phase phase);
     agent.monitor.monitor_port.connect(memory_agent.driver.monitor_export);
     agent.monitor.monitor_port.connect(predictor.monitor_export);
     predictor.compare_port.connect(scoreboard.compare_export);
+    agent.monitor.monitor_port.connect(activity.analysis_export);
 endfunction
 
 function bit wbb_environment::is_idle();

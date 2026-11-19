@@ -2,10 +2,22 @@
 module tb_top;
     timeunit 1ns;
     timeprecision 1ps;
+    real clock_period_ns = 10.0;
     logic clk = 0;
     logic rst_n = 1;
     wbb_interface wbb_vif(clk, rst_n);
-    always #5ns clk = ~clk;
+    initial begin
+        // 在本自测顶层读取时钟周期，再开始生成时钟，避免第一个半周期仍使用默认值。
+        void'($value$plusargs("CLOCK_PERIOD_NS=%f", clock_period_ns));
+        if (clock_period_ns <= 0) begin
+            $fatal(1, "CLOCK_PERIOD_NS must be positive");
+        end
+        $display("BIND_CLOCK_CONFIG period_ns=%0.3f", clock_period_ns);
+        forever begin
+            #(clock_period_ns / 2);
+            clk = ~clk;
+        end
+    end
 
     initial begin
         wbb_vif.reserve_en = 0;

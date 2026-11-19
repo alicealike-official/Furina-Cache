@@ -24,9 +24,7 @@ class wbb_data_pattern_test extends wbb_base_test;
 
     extern virtual function void build_phase(uvm_phase phase);
     extern virtual task run_sequence();
-    extern task wait_for_drain();
     extern function void check_preload();
-    extern function void check_writeback_counts();
     extern function void check_pattern_data();
     extern function void check_pattern_counts();
 
@@ -47,9 +45,7 @@ endfunction
 task wbb_data_pattern_test::run_sequence();
     wbb_data_pattern_sequence preload_seq;
 
-    if (env.agent.sequencer == null) begin
-        `fatal("Data patterns require an active WBB agent", "WBB_NO_SEQUENCER")
-    end
+    require_active_agent();
 
     preload_seq = wbb_data_pattern_sequence::type_id::create("preload_seq");
     preload_seq.preload_only = 1;
@@ -60,65 +56,28 @@ task wbb_data_pattern_test::run_sequence();
     seq = wbb_data_pattern_sequence::type_id::create("seq");
     seq.start(env.agent.sequencer);
     wait_for_drain();
-    check_writeback_counts();
+    check_count("generated patterns", seq.get_record_count(), EXPECTED_PATTERNS);
+    check_writeback_counts(EXPECTED_WRITEBACKS);
     check_pattern_data();
     check_pattern_counts();
-endtask
-
-// sequence 返回时，driver 只保证 reserve 和 push 已完成，内存写请求和响应可能还没结束。
-// 先等待4个时钟下降沿，再等到 WBB 参考模型没有占用槽、内存 driver 没有待完成的请求。
-// env.is_idle() 通过 DPI 查询 C++ WBB 模型，并检查 SV 响应队列；run_phase 的总超时防止一直等待。
-task wbb_data_pattern_test::wait_for_drain();
-    repeat (4) @(negedge vif.clk);
-    while (!env.is_idle()) begin
-        @(negedge vif.clk);
-    end
 endtask
 
 // 检查后续要写全0的地址，此时确实已经存入全1。
 // 稀疏内存对从未写过的地址也返回0；先写全1，可以避免“根本没写入全0”却检查通过。
 function void wbb_data_pattern_test::check_preload();
-    bit [LINE_WIDTH-1:0] actual_data;
-
-    // read_actual() 定义在 model/wbb_memory_store.sv，通过 DPI 读取 C++ SparseMemory。
-    // TB 内存模型在 DUT 的 send 接口完成握手时写入数据；这里读取该模型保存的内容。
-    env.memory.read_actual(BLOCK_SIZE, actual_data);
-    if (actual_data !== {LINE_WIDTH{1'b1}}) begin
-        `fatal("Failed to initialize the zero-pattern address with all ones", "WBB_PATTERN_PRELOAD")
-    end
-endfunction
-
-// 检查 sequence 生成的数据笔数，以及 reserve 成功、push、send 握手、响应握手的次数。
-// 默认512位行应生成1062笔测试数据，另加最开始的1笔全1写回，四项事务计数都应为1063。
-// 这样即使某笔数据恰好是全0，也不能因为少发送了一笔事务而直接通过检查。
-function void wbb_data_pattern_test::check_writeback_counts();
-    if (seq.get_record_count() != EXPECTED_PATTERNS ||
-        env.scoreboard.reserve_count !== EXPECTED_WRITEBACKS ||
-        env.scoreboard.push_count !== EXPECTED_WRITEBACKS ||
-        env.scoreboard.send_count !== EXPECTED_WRITEBACKS ||
-        env.scoreboard.response_count !== EXPECTED_WRITEBACKS) begin
-        `error($sformatf("Expected %0d patterns and %0d writebacks including preload; patterns=%0d reserve=%0d push=%0d send=%0d response=%0d",
-            EXPECTED_PATTERNS, EXPECTED_WRITEBACKS, seq.get_record_count(), env.scoreboard.reserve_count,
-            env.scoreboard.push_count, env.scoreboard.send_count, env.scoreboard.response_count),
-            "WBB_PATTERN_COUNT")
-    end
+    // 继承自 wbb_base_test 的检查方法经 DPI 读取 C++ 稀疏内存；准备写入失败时立即 fatal。
+    void'(check_memory_line(ADDR_WIDTH'(BLOCK_SIZE), '1, "zero-pattern preload", 1));
 endfunction
 
 // 逐笔取出 sequence 原先准备发送的地址和整行数据，再读取该地址的内存内容进行比较。
 // 只有整行数据完全相同，才把对应数据模式的“已检查笔数”加1；不相同就报错。
 function void wbb_data_pattern_test::check_pattern_data();
-    bit [LINE_WIDTH-1:0] actual_data;
     pattern_record_t record;
 
     for (int index = 0; index < seq.get_record_count(); index++) begin
         record = seq.get_record(index);
-        // read_actual() 是 model/wbb_memory_store.sv 中的 SV 方法，内部调用 sparse_mem_read_line DPI。
-        // C++ 存储实现在 RefModel/MEM/SparseMemory.hpp；这里读取 DUT 经 send 握手写入 TB 内存的数据。
-        env.memory.read_actual(record.addr, actual_data);
-        if (actual_data !== record.line_data) begin
-            `error($sformatf("Pattern %s mismatch at 0x%h: expected=%h actual=%h",
-                record.kind.name(), record.addr, record.line_data, actual_data), "WBB_PATTERN_DATA")
-        end else begin
+        // base test 统一执行 C++ 稀疏内存回读和比较，子类只记录通过了哪一种数据模式。
+        if (check_memory_line(record.addr, record.line_data, $sformatf("pattern %s", record.kind.name()))) begin
             checked_patterns[int'(record.kind)]++;
         end
     end
@@ -138,10 +97,7 @@ function void wbb_data_pattern_test::check_pattern_counts();
             wbb_data_pattern_sequence::RANDOM_LINE: expected_count = RANDOM_LINE_COUNT;
             default: expected_count = 1;
         endcase
-        if (checked_patterns[pattern_index] !== expected_count) begin
-            `error($sformatf("Pattern %s checked=%0d expected=%0d",
-                kind.name(), checked_patterns[pattern_index], expected_count), "WBB_PATTERN_COVERAGE")
-        end
+        check_count($sformatf("pattern %s", kind.name()), checked_patterns[pattern_index], expected_count);
         `info($sformatf("Pattern %s checked=%0d expected=%0d",
             kind.name(), checked_patterns[pattern_index], expected_count), "WBB_PATTERN_COVERAGE")
     end

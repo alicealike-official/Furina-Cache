@@ -1,7 +1,7 @@
 class wbb_agent extends uvm_agent;
     wbb_driver driver;
     wbb_monitor monitor;
-    uvm_sequencer #(wbb_transaction) sequencer;
+    wbb_sequencer sequencer;
     wbb_config cfg;
 
     `uvm_component_utils(wbb_agent)
@@ -27,7 +27,7 @@ function void wbb_agent::build_phase(uvm_phase phase);
     monitor = wbb_monitor::type_id::create("monitor", this);
     if (is_active == UVM_ACTIVE) begin
         driver = wbb_driver::type_id::create("driver", this);
-        sequencer = uvm_sequencer #(wbb_transaction)::type_id::create("sequencer", this);
+        sequencer = wbb_sequencer::type_id::create("sequencer", this);
     end
 endfunction
 

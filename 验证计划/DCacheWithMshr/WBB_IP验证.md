@@ -113,7 +113,7 @@ WBR-009流水重叠当前暂缓实施，仍保留为待覆盖项。
 | 编号 | 验证点 | 原验证层级 | 优先级 | 原检查内容与通过条件 | 检查方式 | 状态 | 本文件检查范围 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | WBS-001 | 有效发送候选 | 模块 IP | P0 | 仅 valid&&!issued 可发送，地址/整行数据/总线ID对应所选槽 | 模型 + 事务检查 | 未闭合 | WBB 独立IP端口、合法输入前提及对应模型/断言检查。 |
-| WBS-002 | 写请求反压保持 | 模块 IP | P0 | send.valid&&!ready 时保持所选槽及全部payload；反压期间插入新候选，专项 Q-01 | SVA + 插入候选 | 未闭合 | WBB 独立IP端口、合法输入前提及对应模型/断言检查。 |
+| WBS-002 | 写请求反压保持 | 模块 IP | P0 | send.valid&&!ready 时保持所选槽及全部payload；反压期间插入新候选，专项 Q-01 | SVA + 插入候选 | 修复后本配置回归通过 | 用户修复DUT及C++模型后，背压、延迟push及random seed1/2/3在10 ns/4 ns下全部通过，目标仍命中；详见[case记录](WBB_case规划_note.md)。 |
 | WBS-003 | 发送后不重发 | 模块 IP | P0 | 只有握手才置 issued，已发送槽在响应前不重复发送 | 发送ID集合 | 未闭合 | WBB 独立IP端口、合法输入前提及对应模型/断言检查。 |
 | WBS-004 | 响应按 ID 释放 | 模块 IP | P0 | 乱序写响应释放对应 issued 槽，其他槽不变；读侧同值ID不干扰 | 乱序 + 独立模型 | 未闭合 | 仅按写ID乱序释放；读侧同值ID不干扰由DCache顶层检查。 |
 | WBS-005 | 发送握手不等于释放 | 模块 IP | P0 | 发送后直到写响应握手仍占槽，不允许提前复用 | 状态断言 | 未闭合 | WBB 独立IP端口、合法输入前提及对应模型/断言检查。 |
@@ -181,7 +181,7 @@ WBR-009流水重叠当前暂缓实施，仍保留为待覆盖项。
 
 | 编号 | 原问题 | 原关联验证点 | 原处理与判定 | 本文件处理范围 |
 | --- | --- | --- | --- | --- |
-| Q-01 | WBB send 和 MSHR replay 当前由候选集合及 rrPtr 组合选取，未见独立的挂起选择锁存；反压期间新增更靠前候选可能改变输出 | IF-002/003、WBS-002、MSC-013 | 增加“反压 + 新候选”模块定向和稳定性断言。MSHR memReadReq 已有 sendHold，不能由此推定另两条流也安全 | 仅WBB send反压期间新增候选；MSHR replay见MSHR IP文件。 |
+| Q-01 | WBB send 和 MSHR replay 当前由候选集合及 rrPtr 组合选取，未见独立的挂起选择锁存；反压期间新增更靠前候选可能改变输出 | IF-002/003、WBS-002、MSC-013 | 增加“反压 + 新候选”模块定向和稳定性断言。MSHR memReadReq 已有 sendHold，不能由此推定另两条流也安全 | WBB历史问题已复现并由用户补充保持逻辑；当前26组回归通过。MSHR部分仍需其IP验证，不能从WBB结果推定。 |
 | Q-04 | 运行中复位后的迟到读写响应、CPU ID复用以及已接收写的取消语义未统一 | RST-010、IF-010 | 系统须约定清空后端pending、隔离epoch或等效措施。仅清DUT状态不足以安全接收旧ID响应；未定义前不声称热复位通过 | WBB取消与旧写响应隔离。 |
 | Q-08 | NUM_BUS_OUTSTANDING用于ID位宽/约束，但未见读写总量共享额度控制；若设为小于Entry+WBB，不能仅凭参数名断言总量受限 | CFG-012 | 明确该值为每通道ID空间还是共享容量。共享上限由接收方ready或DUT额度管理保证后，再设置对应断言 | 仅写ID空间与写在途容量，读写共享额度见顶层。 |
 | Q-09 | DATA_WIDTH/8使用整数除法，缺少显式DATA_WIDTH%8==0可能允许无效字宽通过部分require | CFG-008 | 补参数负例确认；将整字节宽和支持字宽列为约束完整性检查，文档不替代实现修复 | WBB行/字宽及DPI模型配置一致性。 |
@@ -196,5 +196,9 @@ WBR-009流水重叠当前暂缓实施，仍保留为待覆盖项。
 | --- | --- | --- | --- | --- | --- |
 | 待填 | 待填 | 待填 | 待填 | 待填 | 未闭合 |
 | WBR-007、WBS-001、CFG-005（数据通路子场景） | 4槽 / 64 B行 / 32位字 / 严格下一拍push / WBB IP | `wbb_data_pattern_test` / `wbb_data_pattern_sequence` | C++ WBB逐拍比较、`a_dut_send_content`、实际内存对原始激励回读、九类图样数量、四事件计数 | generated RTL SHA-256前缀 `ac3e5cd84054c7cb`；seed=20261119；[日志](../../verif_mshr/sim/work/log/wbb_data_pattern_sequence_seed20261119.log) | 当前配置1062个图样+1笔预置通过，完整写回1063笔，UVM_ERROR/FATAL=0；全槽、候选状态及配置组合继续补齐，详见[case note](WBB_case规划_note.md) |
+| WBR-001、002、004、005、006；WBS-005、009（容量边界场景） | 4槽 / 64 B行 / 10 ns及4 ns时钟 / 32拍响应延迟 / 严格下一拍push / WBB IP | `wbb_capacity_test` / `wbb_capacity_sequence` | C++ WBB比较、容量/槽归属SVA、`c_full_release`、case命中计数、C++内存回读 | generated RTL SHA-256前缀 `ac3e5cd84054c7cb`；定向无随机激励；[10 ns日志](../../verif_mshr/sim/work/log/wbb_capacity_cycles_10ns.log) / [4 ns日志](../../verif_mshr/sim/work/log/wbb_capacity_cycles_4ns.log) | 两种时钟下均5笔写回通过；实际响应间隔均32拍；4槽全覆盖，第5笔满槽等待23拍，首个响应后次拍成功；full_cycles=27、c_full_release=2，UVM_ERROR/FATAL=0；其他状态组合继续补齐 |
+| WBR-003、010、011、012；WBR-015；WBS-004、006、007、008、010、011、012；WBR-013、014（本轮已执行子场景） | 默认4槽 / 10 ns及4 ns / WBB IP | query、reuse、arbitration、response_order、event_collision | IO场景计数、C++逐拍比较、查询/归属/公平SVA、最终内存回读 | [本轮汇总](../../verif_mshr/sim/work/regression/reports/run_20261119_080300_487790/summary.md) | 两种时钟下对应case均通过；具体命中数量见[case记录](WBB_case规划_note.md)，不据此关闭其他参数或集成子项 |
+| WBS-002；WBR-004、006、008延迟子场景；RND-001、008、010（修复前历史） | 默认4槽 / 10 ns及4 ns / strict及delayed | send_backpressure、delayed_push、random(seed2) | `WBB_STABILITY`、`WBB_DUT_SEND_STABLE`；完整事务及目标场景均命中 | [修复前汇总](../../verif_mshr/sim/work/regression/reports/run_20261119_080300_487790/summary.md) | 历史6组失败均为WBB-DUT-001，保留旧证据；用户修复后已通过下面的复核 |
+| WBS-002与全部既有非流水case（用户修复后复核） | 默认4槽 / 10 ns及4 ns / strict及delayed / random seed1/2/3 | 11个非流水test原样重跑 | 原C++比较、scoreboard、SVA及case命中计数均保留 | DUT SHA-256前缀 `7e55ed10a7f44bdc`；[最新汇总](../../verif_mshr/sim/work/regression/reports/run_20261119_092126_919356/summary.md) | 26/26 PASS，全部warning/error/fatal为0；之前6组失败均转为通过且场景仍命中；pipeline未运行 |
 
 每项闭合需要激励、检查和命中证据。环境负例单独登记预期错误，正常功能回归检查UVM_ERROR/FATAL与成功标记。代码覆盖率用于查漏，共享编号的其他层仍保持各自状态。输入前提在模块环境中受约束，在真实顶层连接处作为断言检查。

@@ -1,7 +1,16 @@
 class wbb_base_test extends uvm_test;
+    typedef struct packed {
+        int reserve_count;
+        int push_count;
+        int send_count;
+        int response_count;
+    } writeback_counts_t;
+
     wbb_environment env;
     virtual wbb_interface vif;
     wbb_config cfg;
+    // TB 顶层传入的时钟配置；派生 test 读取它计算等待时间，不另建时钟配置。
+    protected clk_rst_config clk_cfg;
 
     `uvm_component_utils(wbb_base_test)
 
@@ -17,6 +26,15 @@ class wbb_base_test extends uvm_test;
     extern virtual task run_phase(uvm_phase phase);
     extern virtual task run_sequence();
     extern virtual function void report_phase(uvm_phase phase);
+    extern function void require_active_agent();
+    extern task wait_for_drain();
+    extern function writeback_counts_t get_writeback_counts();
+    extern function void check_writeback_counts(int expected_count, writeback_counts_t before_counts = '0);
+    extern function void check_count(string name, int actual_count, int expected_count, bit at_least = 0);
+    extern function bit check_memory_line(bit [ADDR_WIDTH-1:0] addr, bit [LINE_WIDTH-1:0] expected_data,
+        string label = "writeback", bit fatal_on_mismatch = 0);
+    extern task run_scenario(wbb_scenario_sequence seq, int expected_count);
+    extern function void check_scenario_data(wbb_scenario_sequence seq);
 
 endclass
 
@@ -25,10 +43,14 @@ function void wbb_base_test::build_phase(uvm_phase phase);
     if (!uvm_config_db #(virtual wbb_interface)::get(this, "", "wbb_vif", vif)) begin
         `fatal("wbb_interface not found")
     end
+    if (!uvm_config_db #(clk_rst_config)::get(this, "", "clk_rst_config", clk_cfg) || clk_cfg == null) begin
+        `fatal("TB top must provide a non-null clk_rst_config to the test", "CLK_CONFIG")
+    end
     if (!uvm_config_db #(wbb_config)::get(this, "", "wbb_config", cfg)) begin
         cfg = wbb_config::type_id::create("cfg");
     end
     uvm_config_db #(wbb_config)::set(this, "env", "wbb_config", cfg);
+    uvm_config_db #(clk_rst_config)::set(this, "env", "clk_rst_config", clk_cfg);
     env = wbb_environment::type_id::create("env", this);
 endfunction
 
@@ -39,10 +61,7 @@ task wbb_base_test::run_phase(uvm_phase phase);
             wait (vif.rst_n === 1'b1);
             repeat (2) @(negedge vif.clk);
             run_sequence();
-            repeat (4) @(negedge vif.clk);
-            while (!env.is_idle()) begin
-                @(negedge vif.clk);
-            end
+            wait_for_drain();
         end
         begin
             repeat (cfg.timeout_cycles) @(negedge vif.clk);
@@ -53,57 +72,126 @@ task wbb_base_test::run_phase(uvm_phase phase);
     phase.drop_objection(this);
 endtask
 
-// 使用已有 sequence 辅助接口发送两笔不同块地址的完整写回事务，各字采用可区分的数据。
-// q0 查询当前写回地址，q1 查询另一个块；等待模型和内存响应队列排空后核对四类事件计数。
-// 等待过程由 run_phase 的总 watchdog 保护，派生 test 可以覆盖本 task 扩展激励。
+// 启动基础sequence的两笔写回，再用公共工具等待响应和检查计数；地址/数据由sequence生成。
+// 等待过程由 run_phase 的总 watchdog 保护，派生 test 可以覆盖本 task 组织其他场景。
 task wbb_base_test::run_sequence();
-    wbb_base_sequence seq;
-    bit [ADDR_WIDTH-1:0] addr;
-    bit [ADDR_WIDTH-1:0] query_addr;
-    bit [LINE_WIDTH-1:0] line_data;
-    int reserve_before;
-    int push_before;
-    int send_before;
-    int response_before;
+    wbb_smoke_sequence seq;
+    writeback_counts_t before_counts;
 
+    require_active_agent();
+    before_counts = get_writeback_counts();
+
+    seq = wbb_smoke_sequence::type_id::create("seq");
+    seq.start(env.agent.sequencer);
+
+    wait_for_drain();
+    check_writeback_counts(2, before_counts);
+endtask
+
+// 在启动激励前确认上游 agent 有 sequencer，配置成 passive 时给出明确错误。
+function void wbb_base_test::require_active_agent();
     if (env.agent.sequencer == null) begin
-        `fatal("Base stimulus requires an active WBB agent", "WBB_NO_SEQUENCER")
+        `fatal("Writeback stimulus requires an active WBB agent", "WBB_NO_SEQUENCER")
     end
+endfunction
 
-    reserve_before = env.scoreboard.reserve_count;
-    push_before = env.scoreboard.push_count;
-    send_before = env.scoreboard.send_count;
-    response_before = env.scoreboard.response_count;
-
-    seq = wbb_base_sequence::type_id::create("seq");
-    seq.set_sequencer(env.agent.sequencer);
-    for (int transaction_index = 0; transaction_index < 2; transaction_index++) begin
-        addr = ADDR_WIDTH'((transaction_index + 1) * BLOCK_SIZE);
-        query_addr = ADDR_WIDTH'((2 - transaction_index) * BLOCK_SIZE);
-        for (int word_index = 0; word_index < WORDS_PER_BLOCK; word_index++) begin
-            line_data[word_index * DATA_WIDTH +: DATA_WIDTH] =
-                DATA_WIDTH'((transaction_index + 1) * 'h10000000 + word_index);
-        end
-        seq.writeback_line(addr, line_data, addr, query_addr);
-    end
-
-    // 给最后一笔已提交数据留出观测时间，并等待真实写响应完成。
+// sequence 返回只表示 reserve/push 完成；先等待4个下降沿，再等待剩余发送和响应结束。
+// env.is_idle() 内部通过 DPI 查询 C++ WBB 模型，并检查 SV 内存 driver 的待响应记录。
+// 调用方应先停止提交新事务；整个等待仍由 run_phase 的总超时保护。
+task wbb_base_test::wait_for_drain();
     repeat (4) @(negedge vif.clk);
     while (!env.is_idle()) begin
         @(negedge vif.clk);
     end
-
-    if (env.scoreboard.reserve_count - reserve_before != 2 ||
-        env.scoreboard.push_count - push_before != 2 ||
-        env.scoreboard.send_count - send_before != 2 ||
-        env.scoreboard.response_count - response_before != 2) begin
-        `error($sformatf("Expected two complete writebacks; reserve=%0d push=%0d send=%0d response=%0d",
-            env.scoreboard.reserve_count - reserve_before,
-            env.scoreboard.push_count - push_before,
-            env.scoreboard.send_count - send_before,
-            env.scoreboard.response_count - response_before), "WBB_BASE_COUNT")
-    end
 endtask
+
+// 保存当前四类事件计数；多阶段 case 可在某阶段开始前记录它，之后只检查该阶段新增的事务。
+function wbb_base_test::writeback_counts_t wbb_base_test::get_writeback_counts();
+    writeback_counts_t counts;
+
+    counts.reserve_count = env.scoreboard.reserve_count;
+    counts.push_count = env.scoreboard.push_count;
+    counts.send_count = env.scoreboard.send_count;
+    counts.response_count = env.scoreboard.response_count;
+    return counts;
+endfunction
+
+// 检查 reserve 成功、push、send 握手和响应握手是否都完成规定笔数。
+// 不传 before_counts 时检查总数；传入开始前的计数时，检查此后增加的笔数。
+function void wbb_base_test::check_writeback_counts(int expected_count, writeback_counts_t before_counts);
+    writeback_counts_t counts;
+
+    counts = get_writeback_counts();
+    check_count("reserve", counts.reserve_count - before_counts.reserve_count, expected_count);
+    check_count("push", counts.push_count - before_counts.push_count, expected_count);
+    check_count("send", counts.send_count - before_counts.send_count, expected_count);
+    check_count("response", counts.response_count - before_counts.response_count, expected_count);
+endfunction
+
+// 通用计数检查：默认要求实际值恰好等于期望值；at_least=1 时要求至少达到期望值。
+// 不满足时打印具体计数名称、实际值和要求；未知值或负的期望值也明确报错。
+function void wbb_base_test::check_count(string name, int actual_count, int expected_count, bit at_least);
+    if ($isunknown({actual_count, expected_count}) || expected_count < 0 ||
+        (at_least ? actual_count < expected_count : actual_count !== expected_count)) begin
+        `error($sformatf("%s: actual=%0d required%s%0d", name, actual_count,
+            at_least ? ">=" : "=", expected_count), "WBB_TEST_COUNT")
+    end
+endfunction
+
+// 读取指定地址的一整行内存，与调用方提供的原始数据比较，返回1表示相同。
+// label 说明正在检查哪笔数据；准备阶段必须成功时，可将 fatal_on_mismatch 设为1。
+function bit wbb_base_test::check_memory_line(bit [ADDR_WIDTH-1:0] addr, bit [LINE_WIDTH-1:0] expected_data,
+    string label, bit fatal_on_mismatch);
+    bit [LINE_WIDTH-1:0] actual_data;
+    string message;
+
+    // read_actual() 定义在 src/wbb/model/wbb_memory_store.sv，内部经 sparse_mem_read_line DPI
+    // 读取 RefModel/MEM/SparseMemory.hpp 的 C++ 内存对象，内容来自 DUT 已握手的 send 数据。
+    env.memory.read_actual(addr, actual_data);
+    if (actual_data === expected_data) begin
+        return 1;
+    end
+    message = $sformatf("%s mismatch at 0x%h: expected=%h actual=%h", label, addr, expected_data, actual_data);
+    if (fatal_on_mismatch) begin
+        `fatal(message, "WBB_TEST_MEMORY")
+    end else begin
+        `error(message, "WBB_TEST_MEMORY")
+    end
+    return 0;
+endfunction
+
+// 多阶段case共用的启动和收尾：检查N笔完整写回、等待响应、核对最终内存数据。
+// 具体场景必须自行放行暂停的内存请求/响应；这里不会替case修改控制策略。
+task wbb_base_test::run_scenario(wbb_scenario_sequence seq, int expected_count);
+    writeback_counts_t before_counts;
+
+    require_active_agent();
+    if (seq == null) begin
+        `fatal("Scenario sequence cannot be null", "WBB_SEQUENCE_CONFIG")
+    end
+    before_counts = get_writeback_counts();
+    seq.start(env.agent.sequencer);
+    wait_for_drain();
+    check_count("scenario generated writebacks", seq.get_record_count(), expected_count);
+    check_writeback_counts(expected_count, before_counts);
+    check_scenario_data(seq);
+endtask
+
+// 同一地址可在响应完成后再次写入；最终内存比较使用该地址最后一次准备的数据。
+// 更早版本在每次send时仍由C++ WBB模型和IO断言检查，不能用最后一版替代逐次比较。
+function void wbb_base_test::check_scenario_data(wbb_scenario_sequence seq);
+    wbb_scenario_sequence::writeback_record_t record;
+    bit [LINE_WIDTH-1:0] latest[bit [ADDR_WIDTH-1:0]];
+
+    for (int index = 0; index < seq.get_record_count(); index++) begin
+        record = seq.get_record(index);
+        latest[record.addr] = record.line_data;
+    end
+    foreach (latest[addr]) begin
+        // check_memory_line内部经DPI读取C++ SparseMemory；场景sequence本身不访问模型。
+        void'(check_memory_line(addr, latest[addr], "scenario final data"));
+    end
+endfunction
 
 function void wbb_base_test::report_phase(uvm_phase phase);
     uvm_report_server server;

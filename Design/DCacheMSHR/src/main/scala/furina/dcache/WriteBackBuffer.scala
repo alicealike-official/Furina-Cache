@@ -100,7 +100,7 @@ class WriteBackBuffer(cfg: CacheConfig) extends Component {
         reserved(s) := False
     }
 
-    // ---------------- 发送仲裁（轮询） ----------------
+    // ---------------- 发送仲裁（轮询 + 背压保持） ----------------
     private val rrPtr = Reg(UInt(wbbIdWidth bits)) init 0
     private val sendCand = Vec((0 until N).map(i => valid(i) && !issued(i)))
 
@@ -109,16 +109,29 @@ class WriteBackBuffer(cfg: CacheConfig) extends Component {
         val idx = (rrPtr + U(k, wbbIdWidth bits)).resize(wbbIdWidth)
         rotCand(k) := sendCand(idx)
     }
-    private val sendValid = rotCand.orR
+    private val sendCandValid = rotCand.orR
     private val rotK = priorityLowest(rotCand, wbbIdWidth)
-    private val sendIdx = (rrPtr + rotK).resize(wbbIdWidth)
+    private val sendCandIdx = (rrPtr + rotK).resize(wbbIdWidth)
+
+    // rrPtr 只规定扫描起点；新增候选仍会改变仲裁结果。
+    // 已呈现但未握手的请求必须锁住，直到 ready 恢复并接受原请求。
+    // 合法协议下待发槽不能重写或释放，因此保持槽号即可保持全部载荷。
+    private val sendHold = Reg(Bool()) init False
+    private val sendHoldIdx = Reg(UInt(wbbIdWidth bits)) init 0
+    private val sendIdx = Mux(sendHold, sendHoldIdx, sendCandIdx)
+    private val sendValid = sendHold || sendCandValid
 
     io.send.valid := sendValid
     io.send.payload.addr := addr(sendIdx)
     io.send.payload.wData := data(sendIdx)
     io.send.payload.id := sendIdx.resize(busIdWidth)
 
-    when(io.send.valid && io.send.ready) {
+    when(io.send.valid && !io.send.ready) {
+        sendHold := True
+        sendHoldIdx := sendIdx
+    }
+    when(io.send.fire) {
+        sendHold := False
         issued(sendIdx) := True
         rrPtr := (sendIdx + 1).resize(wbbIdWidth)
     }

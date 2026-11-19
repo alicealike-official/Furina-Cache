@@ -102,6 +102,8 @@ public:
             data_  [i].fill(0);
         }
         rrPtr_ = 0;
+        sendHold_ = false;
+        sendHoldIdx_ = 0;
         rsv_req      = RsvReq{};
         push_req     = PushReq{};
         mem_wr_ready = false;
@@ -134,9 +136,17 @@ public:
         return RsvResp{ s >= 0, s };
     }
 
-    // 发送仲裁：轮询选出 valid && !issued 的条目（文档 8.6）
+    // 发送仲裁：轮询选择，反压后保持已呈现请求直到握手（文档 4.6 / 8.6）。
+    // 合法接口禁止覆盖/释放待发槽，因此保持槽号即可保持地址和整行数据。
     MemWrReq sendReq() const {
         MemWrReq r;
+        if (sendHold_) {
+            r.en   = true;
+            r.id   = static_cast<BusId>(sendHoldIdx_);
+            r.addr = addr_[sendHoldIdx_];
+            r.data = data_[sendHoldIdx_];
+            return r;
+        }
         for (int k = 0; k < WBB_ENTRIES; ++k) {
             const int i = (rrPtr_ + k) % WBB_ENTRIES;
             if (valid_[i] && !issued_[i]) {
@@ -187,8 +197,13 @@ public:
 
         // (b) 发出：与内存握手成功 -> 置 issued，轮询指针前移（文档 8.6）
         if (sFire) {
+            sendHold_ = false;
             issued_[sReq.id] = true;
             rrPtr_ = (static_cast<int>(sReq.id) + 1) % WBB_ENTRIES;
+        } else if (sReq.en) {
+            // 必须记录沿前已经呈现的请求，不能被本沿 push 的新候选替换。
+            sendHold_ = true;
+            sendHoldIdx_ = static_cast<int>(sReq.id);
         }
 
         // (c) 装载：push 整行数据 -> 置 valid、清 reserved（文档 8.3）
@@ -272,6 +287,8 @@ private:
     Addr addr_  [WBB_ENTRIES];   // 写回地址（块对齐）
     Line data_  [WBB_ENTRIES];   // 整行数据
     int  rrPtr_ = 0;             // 发送轮询指针（文档 8.6）
+    bool sendHold_ = false;      // 已呈现而尚未握手
+    int  sendHoldIdx_ = 0;       // 锁定到实际握手的槽号
 };
 
 } // namespace dcache

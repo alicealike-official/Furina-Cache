@@ -22,7 +22,8 @@
 最低字节地址对应 `Line[0][7:0]`，也对应 SV packed line 的 `[7:0]`。
 
 本模型是数据存储，不提供 `tick()`。在 UVM 中，写请求握手时写入，
-响应时刻由 memory agent 调度；其他C++使用者同样自行管理时间。
+响应拍次由 UVM memory driver 根据采样上升沿计数调度；本模型不接收延迟配置。
+其他C++使用者同样自行管理请求和响应的时序。
 
 ```sh
 make -C RefModel run-memory

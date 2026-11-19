@@ -1,6 +1,7 @@
 `timescale 1ns/1ps
 module tb_top;
     import uvm_pkg::*;
+    import clk_rst_pkg::*;
     import wbb_test_pkg::*;
     wire clk;
     wire rst_n;
@@ -34,6 +35,19 @@ module tb_top;
     );
 
     initial begin
+        clk_rst_config clock_cfg;
+        real requested_clock_period;
+
+        // 时钟配置只在 TB 顶层创建，使用配置类中的默认周期和启动复位拍数。
+        // 先传给 test，再由 test、env 和 clock agent 逐级传给 clock driver。
+        clock_cfg = clk_rst_config::type_id::create("clock_cfg");
+        // 时钟本身需要实际时间单位；协议等待均按拍数计，不再用这个周期换算响应延迟。
+        if ($value$plusargs("CLOCK_PERIOD_NS=%f", requested_clock_period)) begin
+            clock_cfg.clock_period = requested_clock_period;
+        end
+        $display("TB_CLOCK_CONFIG period_ns=%0.3f initial_reset_cycles=%0d",
+            clock_cfg.clock_period, clock_cfg.initial_reset_cycles);
+        uvm_config_db #(clk_rst_config)::set(null, "uvm_test_top", "clk_rst_config", clock_cfg);
         uvm_config_db #(virtual clk_rst_interface)::set(null, "*", "clk_rst_vif", clk_rst_vif);
         uvm_config_db #(virtual wbb_interface)::set(null, "*", "wbb_vif", wbb_vif);
         if ($value$plusargs("UVM_TESTNAME=%s", test_name) && test_name != "") begin

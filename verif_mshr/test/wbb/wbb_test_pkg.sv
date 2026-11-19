@@ -3,9 +3,19 @@ package wbb_test_pkg;
     timeprecision 1ps;
     import uvm_pkg::*;
     import wbb_params_pkg::*;
+    import clk_rst_pkg::*;
     import wbb_pkg::*;
     `include "uvm_macros.svh"
     `include "vutils_macros.svh"
     `include "wbb_base_test.sv"
     `include "wbb_data_pattern_test.sv"
+    `include "wbb_capacity_test.sv"
+    `include "wbb_query_test.sv"
+    `include "wbb_reuse_test.sv"
+    `include "wbb_send_backpressure_test.sv"
+    `include "wbb_arbitration_test.sv"
+    `include "wbb_response_order_test.sv"
+    `include "wbb_event_collision_test.sv"
+    `include "wbb_delayed_push_test.sv"
+    `include "wbb_random_test.sv"
 endpackage

@@ -20,8 +20,8 @@ function void clk_rst_driver::build_phase(uvm_phase phase);
     if (!uvm_config_db #(virtual clk_rst_interface)::get(this, "", "clk_rst_vif", vif)) begin
         `fatal("clk_rst_interface not found")
     end
-    if (!uvm_config_db #(clk_rst_config)::get(this, "", "clk_rst_config", cfg)) begin
-        `fatal("clk_rst_config not found")
+    if (!uvm_config_db #(clk_rst_config)::get(this, "", "clk_rst_config", cfg) || cfg == null) begin
+        `fatal("Parent clock agent must provide a non-null clk_rst_config", "CLK_CONFIG")
     end
     if (cfg.clock_period <= 0 || cfg.initial_reset_cycles == 0) begin
         `fatal("Clock period and reset cycles must be positive")

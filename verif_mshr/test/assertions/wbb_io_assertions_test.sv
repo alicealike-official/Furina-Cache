@@ -11,6 +11,8 @@ module wbb_io_assertions_test;
     localparam logic [31:0] B = 32'h2000;
     localparam logic [127:0] D = 128'h00112233445566778899aabbccddeeff;
     localparam logic [127:0] E = ~D;
+    real clock_period_ns = 10.0;
+    logic reference_clk = 0;
     logic clk = 0;
     logic rst_n = 1;
     bit clock_enable = 1;
@@ -40,9 +42,20 @@ module wbb_io_assertions_test;
     logic [31:0] q1Addr;
     logic q1Same;
 
-    always #5ns begin
-        if (clock_enable) begin
-            clk = ~clk;
+    initial begin
+        // 本自测的时钟由模块顶层配置；先读取参数，再开始生成第一个半周期。
+        void'($value$plusargs("CLOCK_PERIOD_NS=%f", clock_period_ns));
+        if (clock_period_ns <= 0) begin
+            $fatal(1, "CLOCK_PERIOD_NS must be positive");
+        end
+        $display("CHECKER_CLOCK_CONFIG period_ns=%0.3f", clock_period_ns);
+        forever begin
+            #(clock_period_ns / 2);
+            // reference_clk 一直运行，供停钟复位场景和总超时计数使用。
+            reference_clk = ~reference_clk;
+            if (clock_enable) begin
+                clk = reference_clk;
+            end
         end
     end
 
@@ -100,10 +113,9 @@ module wbb_io_assertions_test;
         memWriteResp_ready = 1;
     endtask
 
-    // Sample one rising edge and return on the following falling edge for the next drive.
+    // 等待一个上升沿完成检查，再在紧接着的下降沿返回，供下一拍修改接口输入。
     task tick();
         @(posedge clk);
-        #1ns;
         @(negedge clk);
     endtask
 
@@ -121,8 +133,9 @@ module wbb_io_assertions_test;
         rules_before = checks.rule_error_count;
     endtask
 
-    // Verify both responsibility classification and the absence of unexpected errors.
+    // 检查本场景应报告哪一方的错误，并确认没有额外报错；指定规则时还要确认该规则被触发。
     task expect_result(string name, bit expect_env, bit expect_dut, string expected_rule = "");
+        // 等待断言的报错计数更新完成。这里的2 ps是仿真调度等待，不表示协议延迟。
         #2ps;
         if ((checks.env_error_count > env_before) != expect_env ||
             (checks.dut_error_count > dut_before) != expect_dut) begin
@@ -493,13 +506,14 @@ module wbb_io_assertions_test;
         clock_enable = 0;
         rst_n = 0;
         idle_values();
-        #2ns;
+        // 被检查的 clk 已停止，用持续运行的参考时钟安排两次异步复位及结果检查。
+        @(posedge reference_clk);
         expect_result("asynchronous reset with stopped clock", 0, 0);
         rst_n = 1;
-        #2ns;
+        @(posedge reference_clk);
         rst_n = 0;
         send_valid = 1;
-        #2ns;
+        @(posedge reference_clk);
         expect_result("reset output violation with stopped clock", 0, 1, "WBB_DUT_RESET");
 
         $display("WBB_SVA_SELFTEST_PASS strict=%0d scenarios=%0d (intentional negative errors expected)", STRICT, scenarios);
@@ -507,7 +521,8 @@ module wbb_io_assertions_test;
     end
 
     initial begin
-        #100us;
+        // 按参考时钟的上升沿计数，即使被检查的 clk 停止，超时检查也仍然有效。
+        repeat (10000) @(posedge reference_clk);
         $fatal(1, "Checker selftest timeout");
     end
 endmodule
