@@ -1,5 +1,7 @@
 class wbb_scoreboard extends uvm_scoreboard;
     uvm_analysis_imp #(wbb_compare_item, wbb_scoreboard) compare_export;
+    // C++ 稀疏内存的 SV 封装句柄，通过 DPI 访问独立的实际/期望内存实例。
+    // 存储实现见 RefModel/MEM/SparseMemory.hpp，SV 封装见 model/wbb_memory_store.sv。
     wbb_memory_store memory;
     wbb_sample previous;
     int checked_cycles;
@@ -91,6 +93,8 @@ endfunction
 
 function void wbb_scoreboard::check_phase(uvm_phase phase);
     super.check_phase(phase);
+    // 调用 model/wbb_memory_store.sv 的 SV 封装，经 sparse_mem_read_line DPI
+    // 回读两份 C++ SparseMemory 的受测地址，并比较实际值与期望值。
     memory.compare_contents();
     if (reserve_count != push_count || push_count != send_count || send_count != response_count) begin
         `error("WBB transaction counts do not balance at end of run", "WBB_DRAIN")

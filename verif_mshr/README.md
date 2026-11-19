@@ -28,7 +28,7 @@
 - `src/wbb/component/scoreboard/`：比较模型输出、检查协议、计数守恒和最终存储内容。
 - `wbb_compare_item`：同拍比较数据，`actual_sample` 引用 monitor 的实际采样，`expected_*` 保存模型期望值；经 `compare_port` / `compare_export` 传给 scoreboard。
 - `dpi/`：C ABI 适配，处理参数、整行转换、对象生命周期和错误返回。
-- `test/wbb/`：仅 base test；`test/adapter/`：独立 DPI ABI 自检，不实例化 WBB DUT。
+- `test/wbb/`：基础两笔写回与 `wbb_data_pattern_test` 数据图样case；`test/adapter/`：独立 DPI ABI 自检，不实例化 WBB DUT。
 
 上游 `wbb_transaction` 表示一笔完整写回事务，包含随机化字段 `addr`、`line_data`、`q0Addr`、`q1Addr`，三个地址均约束为块对齐。
 `writeback_line(addr, line_data, q0Addr, q1Addr)` 或 `step(tr)` 提交完整事务，driver 自动预留并保存槽号，
@@ -95,6 +95,7 @@ make -C RefModel run-memory run-dpi run-wbb
 cd verif_mshr/sim
 make vcs_compile
 make vcs_simulate       # TEST_NAME为空，运行基础两笔写回
+make vcs_simulate TEST_NAME=wbb_data_pattern_test
 make run_verdi
 make check_dpi          # 独立SV/C++数据往返自检，不运行DUT case
 ```
@@ -108,6 +109,33 @@ Makefile沿用原结构，仅补充DPI源码、C++17编译和check_dpi入口。
 运行日志：`work/log/vcs_sim.log`；波形：`work/wave/wave.fsdb`；DPI自检：`work/log/dpi_check.log`。
 基础用例成功标记为 `WBB_TEST_PASS`，检查两笔事务四类事件计数、C++预测结果、最终内存内容及IO协议。
 旧 work/ 中历史smoke/capacity日志不代表当前框架的验证结论。
+
+## 数据图样 case（2026-11-19）
+
+`wbb_data_pattern_test` 继承基础test，复用现有driver、C++模型、scoreboard及SVA。
+专用 `wbb_data_pattern_sequence` 在 `body()` 中生成图样、随机化数据、分配地址并提交事务；
+test只配置、调用 `start()`、等待排空及检查结果。预置和正式图样由两个sequence实例分别执行，
+test在两者之间等待预置响应并回读确认。sequence按值保存原始激励，通过只读getter供test检查，
+不直接访问environment、vif或C++模型。
+覆盖全0、全1、逐字递增、逐字节递增、AA/55交替位、整行逐位walking-1/0，以及32笔随机整行。
+默认512位行共1062个图样，另有1笔全一预置写回用于检查全零覆盖已有数据。
+排空后，经C++稀疏内存的只读封装 `memory.read_actual()` 与原始激励逐地址比较，
+并检查各图样数量和reserve/push/send/response精确计数。
+
+固定seed=20261119运行32070 ns，四类事件均1063，UVM_WARNING/ERROR/FATAL均为0。
+sequence拆分后的日志为 `sim/work/log/wbb_data_pattern_sequence_seed20261119.log`，对应波形为
+`sim/work/wave/wbb_data_pattern_sequence_seed20261119.fsdb`。原两笔基础case回归也通过；
+纯C++稀疏内存检查在本case首次实现时已通过。
+验证点映射和覆盖范围见[case规划note](../验证计划/DCacheWithMshr/WBB_case规划_note.md)。
+
+固定种子复现可在编译后直接运行，不需要修改Makefile：
+
+```sh
+cd verif_mshr/sim
+work/run/simv +UVM_TESTNAME=wbb_data_pattern_test +ntb_random_seed=20261119 \
+    -cm line+cond+fsm+branch+tgl+assert -cm_dir work/simv.vdb \
+    -cm_name wbb_data_pattern_sequence_seed20261119 -l work/log/wbb_data_pattern_sequence_seed20261119.log
+```
 
 ## 本次验证（2026-11-17）
 

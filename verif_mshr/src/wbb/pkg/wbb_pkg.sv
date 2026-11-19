@@ -6,6 +6,8 @@ package wbb_pkg;
     import clk_rst_pkg::*;
     `include "uvm_macros.svh"
     `include "vutils_macros.svh"
+    // 将 C++ DPI 函数声明纳入当前 package，后续类可直接调用 wbb_ref_* / sparse_mem_*。
+    // 函数体实现在 verif_mshr/dpi/wbb_dpi.cpp，由仿真 Makefile 编译链接。
     `include "pkg/wbb_dpi.svh"
     `include "sequence/transaction/wbb_transaction.sv"
     `include "sequence/transaction/wbb_sample.sv"
@@ -21,4 +23,5 @@ package wbb_pkg;
     `include "component/agent/wbb_agent.sv"
     `include "component/wbb_environment.sv"
     `include "sequence/wbb_base_sequence.sv"
+    `include "sequence/wbb_data_pattern_sequence.sv"
 endpackage

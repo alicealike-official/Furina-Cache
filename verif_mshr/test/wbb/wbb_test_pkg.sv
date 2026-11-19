@@ -7,4 +7,5 @@ package wbb_test_pkg;
     `include "uvm_macros.svh"
     `include "vutils_macros.svh"
     `include "wbb_base_test.sv"
+    `include "wbb_data_pattern_test.sv"
 endpackage

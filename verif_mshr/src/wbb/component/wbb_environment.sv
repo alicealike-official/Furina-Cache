@@ -4,8 +4,11 @@ class wbb_environment extends uvm_env;
     wbb_config cfg;
     wbb_agent agent;
     wbb_scoreboard scoreboard;
+    // C++ WBB 参考模型的 SV 适配组件，通过 DPI 调用 RefModel/Cache/WriteBackBuffer.hpp。
     wbb_predictor predictor;
     wbb_memory_agent memory_agent;
+    // C++ 稀疏内存的 SV 封装句柄，通过 DPI 访问独立的实际/期望内存实例。
+    // 存储实现见 RefModel/MEM/SparseMemory.hpp，SV 封装见 model/wbb_memory_store.sv。
     wbb_memory_store memory;
 
     `uvm_component_utils(wbb_environment)
@@ -37,6 +40,8 @@ function void wbb_environment::build_phase(uvm_phase phase);
         `fatal("Invalid memory page size, latency, capacity or watchdog")
     end
     memory = wbb_memory_store::type_id::create("memory");
+    // initialize() 定义于 model/wbb_memory_store.sv，通过 sparse_mem_create DPI
+    // 创建实际/期望两份 C++ SparseMemory；下面传递的是持有这两个句柄的 SV 对象。
     memory.initialize(cfg.mem_page_size);
     uvm_config_db #(wbb_memory_store)::set(this, "*", "memory", memory);
     uvm_config_db #(wbb_config)::set(this, "*", "wbb_config", cfg);
@@ -57,10 +62,13 @@ function void wbb_environment::connect_phase(uvm_phase phase);
 endfunction
 
 function bit wbb_environment::is_idle();
+    // predictor.is_empty() 内部通过 wbb_ref_empty DPI 查询 C++ WBB 模型的槽位占用。
+    // memory_agent.driver.is_idle() 检查 SV 侧待响应队列与在途 ID。
     return predictor.is_empty() && memory_agent.driver.is_idle();
 endfunction
 
 function void wbb_environment::final_phase(uvm_phase phase);
     super.final_phase(phase);
+    // close() 为 SV 封装，内部调用 sparse_mem_destroy DPI 销毁两份 C++ 稀疏内存。
     memory.close();
 endfunction

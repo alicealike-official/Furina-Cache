@@ -66,6 +66,7 @@ extern "C" int wbb_ref_create(int aw, int dw, int block, int entries, int slotw,
         checkMemoryConfig(aw, dw, block);
         require(entries == dcache::WBB_ENTRIES && slotw == dcache::WBB_ID_WIDTH &&
             busw == dcache::BUS_ID_WIDTH, "SV and C++ WBB parameters differ");
+        // 创建 RefModel/Cache/WriteBackBuffer.hpp 定义的原有参考模型。
         auto model = std::make_unique<dcache::WriteBackBuffer>();
         *h = model.get();
         refs.emplace(*h, std::move(model));
@@ -75,6 +76,7 @@ extern "C" int wbb_ref_create(int aw, int dw, int block, int entries, int slotw,
 // 调用指定 WBB 实例的 reset()，清除槽状态和输入端口，保留句柄供后续周期使用。
 // 此操作只复位 WBB 模型，关联的内存数据和 SV 响应队列由各自所有者管理。
 extern "C" int wbb_ref_reset(void* h) {
+    // lookup(refs, h) 返回原有 WriteBackBuffer 实例，reset() 定义在其 C++ 头文件中。
     return protect([&] { lookup(refs, h).reset(); });
 }
 
@@ -88,6 +90,7 @@ extern "C" int wbb_ref_destroy(void* h) {
 extern "C" int wbb_ref_empty(void* h, int* empty) {
     return protect([&] {
         require(empty != nullptr, "Null empty output");
+        // model 引用 RefModel/Cache/WriteBackBuffer.hpp 中的 dcache::WriteBackBuffer。
         auto& model = lookup(refs, h);
         *empty = 1;
         for (int i = 0; i < dcache::WBB_ENTRIES; ++i)
@@ -111,6 +114,7 @@ extern "C" int wbb_ref_step(void* h,
     return protect([&] {
         require(push_line && reserve_ok && reserve_slot && full && q0_same && q1_same &&
             send_valid && send_addr && send_data && send_id, "Null step argument");
+        // model 引用 RefModel/Cache/WriteBackBuffer.hpp 中的 dcache::WriteBackBuffer。
         auto& model = lookup(refs, h);
         if (push_en) {
             require(push_slot < dcache::WBB_ENTRIES, "Push slot out of range");
@@ -131,7 +135,8 @@ extern "C" int wbb_ref_step(void* h,
         std::copy_n(push_line, dcache::WORDS_PER_BLOCK, model.push_req.line.begin());
         model.mem_wr_ready = send_ready != 0;
         model.mem_wr_resp = {resp_valid != 0, resp_id};
-        // All predictions belong to the pre-edge state.
+        // 以下 reserve()/sendReq()/full()/hasSameAddr() 都是已有 C++ WBB 模型的查询方法。
+        // 它们返回当前沿前状态的输出，DPI 只将这些结果复制到 SV 的 output 参数。
         auto reserve = model.reserve();
         auto send = model.sendReq();
         *reserve_ok = reserve.ok;
@@ -143,6 +148,7 @@ extern "C" int wbb_ref_step(void* h,
         *send_addr = send.addr;
         *send_id = send.id;
         std::copy(send.data.begin(), send.data.end(), send_data);
+        // 调用同一 C++ WBB 实例的 tick()，在预测输出读取完毕后推进一次状态。
         model.tick();
     });
 }
@@ -156,6 +162,7 @@ extern "C" int sparse_mem_create(int page, int aw, int dw, int block, void** h) 
         *h = nullptr;
         checkMemoryConfig(aw, dw, block);
         require(page > 0, "Page size must be positive");
+        // 创建 RefModel/MEM/SparseMemory.hpp 定义的纯 C++ 稀疏内存实例。
         auto model = std::make_unique<dcache::SparseMemory>(static_cast<std::size_t>(page));
         *h = model.get();
         memories.emplace(*h, std::move(model));
@@ -164,6 +171,7 @@ extern "C" int sparse_mem_create(int page, int aw, int dw, int block, void** h) 
 
 // 清空指定稀疏内存实例，释放已分配页面，使其重新表现为全零内存；实例句柄仍有效。
 extern "C" int sparse_mem_reset(void* h) {
+    // 调用 SparseMemory.hpp 中的 reset()，清空该实例的稀疏页面。
     return protect([&] { lookup(memories, h).reset(); });
 }
 
@@ -180,6 +188,7 @@ extern "C" int sparse_mem_write_line(void* h, uint32_t addr, const uint32_t* dat
         require(data != nullptr, "Null line input");
         dcache::Line line{};
         std::copy_n(data, dcache::WORDS_PER_BLOCK, line.begin());
+        // writeLine() 定义于 RefModel/MEM/SparseMemory.hpp，按块地址写入已选中的 C++ 内存实例。
         lookup(memories, h).writeLine(addr, line);
     });
 }
@@ -189,6 +198,7 @@ extern "C" int sparse_mem_write_line(void* h, uint32_t addr, const uint32_t* dat
 extern "C" int sparse_mem_read_line(void* h, uint32_t addr, uint32_t* data) {
     return protect([&] {
         require(data != nullptr, "Null line output");
+        // readLine() 定义于 RefModel/MEM/SparseMemory.hpp，从已选中的 C++ 内存实例读取整行。
         const auto line = lookup(memories, h).readLine(addr);
         std::copy(line.begin(), line.end(), data);
     });
