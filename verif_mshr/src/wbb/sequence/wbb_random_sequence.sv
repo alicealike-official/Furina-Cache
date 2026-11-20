@@ -55,11 +55,14 @@ task wbb_random_sequence::send_random_batch();
     int unsigned q1_index;
     bit [LINE_WIDTH-1:0] line_data;
 
+    // 打乱本批地址顺序，保证每个块在排空前只被提交一次。
     for (int index = 0; index < WBB_ENTRIES; index++) begin
         order.push_back(index);
     end
     order.shuffle();
     batch_gap = 0;
+
+    // 为每笔生成数据、查询地址和空闲拍数；随机调用顺序保持一致。
     foreach (order[index]) begin
         if (!std::randomize(line_data, gap, q0_index, q1_index) with {
             gap inside {[0:3]};
@@ -68,15 +71,17 @@ task wbb_random_sequence::send_random_batch();
         }) begin
             `fatal("Failed to randomize WBB batch data and timing", "WBB_RANDOMIZE")
         end
-        if (cfg.input_mode == WBB_INPUT_PIPELINE) begin
-            wbb_transaction tr;
 
-            tr = wbb_transaction::type_id::create($sformatf("random_item_%0d", index));
-            tr.addr = block_addr(order[index]);
-            tr.line_data = line_data;
-            tr.q0Addr = block_addr(q0_index);
-            tr.q1Addr = block_addr(q1_index);
-            items.push_back(tr);
+        // 流水模式先收集整批，串行模式在各笔之前插入对应空闲。
+        if (cfg.input_mode == WBB_INPUT_PIPELINE) begin
+            wbb_transaction item;
+
+            item = wbb_transaction::type_id::create($sformatf("random_item_%0d", index));
+            item.addr = block_addr(order[index]);
+            item.line_data = line_data;
+            item.q0Addr = block_addr(q0_index);
+            item.q1Addr = block_addr(q1_index);
+            items.push_back(item);
             if (index == 0) begin
                 batch_gap = gap;
             end
@@ -86,6 +91,8 @@ task wbb_random_sequence::send_random_batch();
         end
         randomized_lines++;
     end
+
+    // 整批构造完成后，再统一提交流水请求，避免重复登记原始数据。
     if (cfg.input_mode == WBB_INPUT_PIPELINE) begin
         idle_cycles(batch_gap);
         // send_group统一保存原始数据并提交流水批次，不能再逐笔调用send_data重复登记。
@@ -98,16 +105,21 @@ endtask
 task wbb_random_sequence::prime_stall_and_reordering();
     int send_start;
 
+    // 先保持发送背压，随后放行并等待本批所有请求被接收。
     send_start = obs.send_count;
     send_random_batch();
     obs.wait_cycles(3);
     cfg.mem_send_enable = 1;
     obs.wait_for_sends(send_start + WBB_ENTRIES);
+
+    // 按真实发送ID逆序响应，保证预热阶段确实发生乱序。
     for (int index = WBB_ENTRIES - 1; index >= 0; index--) begin
         release_response(obs.send_ids[send_start + index]);
     end
     obs.wait_until_empty();
     completed_batches++;
+
+    // 预热完成后，把响应选择交给随机策略。
     cfg.mem_response_order = WBB_MEM_RANDOM;
     cfg.mem_response_enable = 1;
 endtask

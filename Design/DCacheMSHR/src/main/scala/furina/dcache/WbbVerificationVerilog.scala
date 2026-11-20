@@ -6,7 +6,7 @@ import java.nio.file.{Files, Paths}
 
 /** Generate the WBB DUT and verification constants from one config instance. */
 object WbbVerificationVerilog extends App {
-    val output = if (args.nonEmpty) args(0) else "../../verif_mshr/generated"
+    val output = if (args.nonEmpty) args(0) else "../../verif_mshr/generated/wbb"
     val parametersPath = if (args.length > 2) Paths.get(args(2)) else Paths.get(output, "wbb_params_pkg.sv")
     val entries = if (args.length > 1) args(1).toInt else 4
     val cfg = CacheConfig(WBB_ENTRIES = entries)

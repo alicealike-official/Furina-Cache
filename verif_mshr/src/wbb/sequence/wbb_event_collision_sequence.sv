@@ -38,8 +38,8 @@ task wbb_event_collision_sequence::body();
     cfg.mem_response_enable = 1;
 endtask
 
-// 先准备一笔已发送但未响应的A，再提交两笔流水写回C/D；在C预留后放行A响应。
-// include_send=1时另留一笔待发送的B，同拍放开ready，得到response(A)+send(B)+push(C)+reserve(D)。
+// 先准备旧在途写回，再提交两笔流水写回；首笔预留后放行旧响应。
+// include_send=1时另留一笔待发送候选，同拍放开ready，形成旧响应、候选发送、首笔push和后笔reserve四事件重叠。
 // 四个事件分别使用沿前处于issued、pending、reserved、free的槽，不借用本拍刚释放的槽。
 task wbb_event_collision_sequence::collide_pipeline(bit include_send, int first_index);
     int old_id;
@@ -47,6 +47,7 @@ task wbb_event_collision_sequence::collide_pipeline(bit include_send, int first_
     int reserve_target;
     int response_target;
 
+    // 先准备旧在途写回；四事件场景再额外保留一个待发送候选。
     prepare_old_write(first_index, old_id);
     pipeline_first = first_index + 1;
     if (include_send) begin
@@ -55,6 +56,8 @@ task wbb_event_collision_sequence::collide_pipeline(bit include_send, int first_
         pipeline_first++;
         obs.wait_cycles(1);
     end
+
+    // 记录事件目标，两个分支分别提交流水事务与对齐旧响应/发送。
     reserve_target = obs.reserve_count + 1;
     response_target = obs.response_count + 1;
     fork
@@ -67,6 +70,8 @@ task wbb_event_collision_sequence::collide_pipeline(bit include_send, int first_
             cfg.mem_response_enable = 0;
         end
     join
+
+    // 目标交叉发生后再放行剩余事务，避免影响下一子场景。
     drain_stage();
 endtask
 

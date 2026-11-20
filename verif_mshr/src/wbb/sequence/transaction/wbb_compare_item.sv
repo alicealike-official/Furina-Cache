@@ -17,5 +17,4 @@ class wbb_compare_item extends uvm_sequence_item;
         super.new(name);
     endfunction
 
-
 endclass

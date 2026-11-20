@@ -65,6 +65,7 @@ function void wbb_environment::connect_phase(uvm_phase phase);
     agent.monitor.monitor_port.connect(activity.analysis_export);
 endfunction
 
+// 停止新激励后，确认C++ WBB和SV内存响应队列均已排空。
 function bit wbb_environment::is_idle();
     // predictor.is_empty() 内部通过 wbb_ref_empty DPI 查询 C++ WBB 模型的槽位占用。
     // memory_agent.driver.is_idle() 检查 SV 侧待响应队列与在途 ID。

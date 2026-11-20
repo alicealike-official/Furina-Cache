@@ -1,0 +1,13 @@
++incdir+../src/common/pkg
++incdir+../src/common/config
++incdir+../src/common/component
++incdir+../src/mshr
++incdir+../test/mshr
+../generated/mshr/mshr_params_pkg.sv
+../src/common/interface/clk_rst_interface.sv
+../src/mshr/interface/mshr_interface.sv
+../src/common/pkg/clk_rst_pkg.sv
+../src/mshr/pkg/mshr_pkg.sv
+../test/mshr/mshr_test_pkg.sv
+../src/mshr/bind/mshr_io_assertions.sv
+../tb/mshr_tb_top.sv

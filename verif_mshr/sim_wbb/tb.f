@@ -3,7 +3,7 @@
 +incdir+../src/common/component
 +incdir+../src/wbb
 +incdir+../test/wbb
-../generated/wbb_params_pkg.sv
+../generated/wbb/wbb_params_pkg.sv
 ../src/common/interface/clk_rst_interface.sv
 ../src/wbb/interface/wbb_interface.sv
 ../src/common/pkg/clk_rst_pkg.sv

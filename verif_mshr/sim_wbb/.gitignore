@@ -1,0 +1,11 @@
+work/
+novas*
+ucli.key
+verdiLog/
+inter.*
+tr_db.log
+cm.log
+.fsm.sch.verilog.xml
+.__solver_cache__/
+urgReport/
+script/__pycache__/

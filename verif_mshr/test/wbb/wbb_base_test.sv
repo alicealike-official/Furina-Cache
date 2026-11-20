@@ -92,6 +92,8 @@ function void wbb_base_test::configure_input_mode();
     if (cfg == null) begin
         `fatal("wbb_config cannot be null", "WBB_INPUT_MODE")
     end
+
+    // 先取test支持的默认模式，再处理命令行覆盖。
     mode = supports_input_modes ? cfg.input_mode : fixed_input_mode;
     if ($value$plusargs("WBB_INPUT_MODE=%s", requested)) begin
         requested = requested.tolower();
@@ -103,6 +105,8 @@ function void wbb_base_test::configure_input_mode();
             end
         endcase
     end
+
+    // 拒绝不支持的模式；流水还需要足够槽位及严格下一拍编译配置。
     if ($isunknown(mode) || !(mode inside {WBB_INPUT_SERIAL, WBB_INPUT_PIPELINE}) ||
         (!supports_input_modes && mode != fixed_input_mode)) begin
         `fatal("Requested input mode is not supported by this test", "WBB_INPUT_MODE")
@@ -116,6 +120,8 @@ function void wbb_base_test::configure_input_mode();
         `fatal("Pipelined input requires the strict next-cycle-push build", "WBB_INPUT_MODE")
 `endif
     end
+
+    // 记录最终模式，供回归核对实际运行是否符合请求。
     `info($sformatf("input_mode=%s", input_mode_name()), "WBB_INPUT_MODE")
 endfunction
 
@@ -253,11 +259,14 @@ function void wbb_base_test::check_scenario_inputs(wbb_scenario_sequence seq, wr
     int reserve_index;
     int push_index;
 
+    // 先确认采样数量完整，再逐笔访问reserve/push历史。
     if (env.activity.reserve_samples.size() < before_counts.reserve_count + seq.get_record_count() ||
         env.activity.push_samples.size() < before_counts.push_count + seq.get_record_count()) begin
         `error("Original writebacks do not have complete reserve/push input records", "WBB_STIMULUS_RECORDS")
         return;
     end
+
+    // 按原始激励顺序核对地址、槽号与数据；流水额外检查间隔严格为1拍。
     for (int index = 0; index < seq.get_record_count(); index++) begin
         reserve_index = before_counts.reserve_count + index;
         push_index = before_counts.push_count + index;

@@ -21,6 +21,8 @@ task wbb_send_backpressure_sequence::body();
     if (WBB_ENTRIES < 2) begin
         `fatal("Backpressure insertion requires at least two slots", "WBB_CASE_CONFIG")
     end
+
+    // 先让发送顺序经过全部槽，选出随后要挂起和插入竞争的槽位。
     send_start = obs.send_count;
     for (int index = 0; index < WBB_ENTRIES; index++) begin
         send_line(index);
@@ -45,6 +47,7 @@ task wbb_send_backpressure_sequence::body();
     stalled_after_insert = obs.last_sample.send_valid === 1'b1 &&
         obs.last_sample.send_ready === 1'b0;
 
+    // 恢复内存接收和响应，让两笔新写回及之前保留的事务全部完成。
     cfg.mem_send_enable = 1;
     cfg.mem_response_order = WBB_MEM_FIFO;
     cfg.mem_response_enable = 1;

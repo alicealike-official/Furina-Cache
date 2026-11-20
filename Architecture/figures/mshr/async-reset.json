@@ -1,0 +1,66 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "0..............."
+    },
+    {
+      "name": "resetn",
+      "wave": "1...0..........."
+    },
+    {
+      "name": "alloc.en / merge.en",
+      "wave": "0..............."
+    },
+    {
+      "name": "memReadResp.valid",
+      "wave": "0..............."
+    },
+    {
+      "name": "hasFree",
+      "wave": "0.....1........."
+    },
+    {
+      "name": "m0.hit / m1.hit",
+      "wave": "1.....0........."
+    },
+    {
+      "name": "memReadReq.valid",
+      "wave": "1.....0........."
+    },
+    {
+      "name": "memReadReq.ready",
+      "wave": "0..............."
+    },
+    {
+      "name": "fill.en",
+      "wave": "1.....0........."
+    },
+    {
+      "name": "fillReady",
+      "wave": "0..............."
+    },
+    {
+      "name": "replay.valid",
+      "wave": "1.....0........."
+    },
+    {
+      "name": "replay.ready",
+      "wave": "0..............."
+    },
+    {
+      "name": "lockMask",
+      "wave": "=.....=.........",
+      "data": [
+        "occupied bits",
+        "0"
+      ]
+    }
+  ],
+  "head": {
+    "text": "Clock stopped: local control state clears asynchronously"
+  },
+  "config": {
+    "hscale": 1
+  }
+}

@@ -1,11 +1,1 @@
-sim/work/
-sim/novas*
-sim/ucli.key
-sim/verdiLog/
-sim/inter.*
-sim/tr_db.log
-sim/cm.log
-sim/.fsm.sch.verilog.xml
-sim/.__solver_cache__/
-sim/urgReport/
-generated/*.v
+# 各模块的仿真产物与生成RTL由sim_wbb/sim_mshr和generated子目录分别忽略。

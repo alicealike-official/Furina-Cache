@@ -4,6 +4,12 @@
 
 验证点编号对应 [WBB IP验证](WBB_IP验证.md)，接口时序依据 [WBB IP架构设计文档](../../Architecture/WBB_IP架构设计文档.md)。各 case 可以覆盖多个验证点，同一验证点也可能需要多个 case 才能完整闭合。
 
+2026-11-20已依据42组回归及已有环境自检，逐项同步主表75个验证点的状态、证据与剩余项，见[当前状态口径](WBB_IP验证.md#status)和[证据登记](WBB_IP验证.md#r42)。本note保留各次实现及运行历史；当前是否闭合以主表为准，早期运行的“待补场景”不代表最新状态。此次仅更新文档，没有重跑仿真。
+
+WBB目录现为`sim_wbb`和`generated/wbb`，环境使用说明见[WBB_README](../../verif_mshr/WBB_README.md)。下方命令和证据链接已按现位置更新；历史回归的`summary.relocated.md`仅重定位链接，原始JSON、日志、命令和哈希保持不变。
+
+早期数据模式和容量case的部分独立日志、波形当前未保留在工作目录中，下文仍保留历史文件名供追溯。当前验证结论使用已保留的归档回归证据，不依赖这些缺失的独立产物。
+
 ## Case 清单
 
 | Case | 主要验证内容 | 对应验证点 | 实施状态与条件 |
@@ -42,14 +48,14 @@ test负责配置watchdog、调用 `seq.start(env.agent.sequencer)`、等待排�
 
 首次运行使用4槽、64 B行、32位字、32位地址、10 ns时钟及当时的10 ns内存延迟配置，实际响应间隔为2拍，默认严格下一拍push模式。固定 `+ntb_random_seed=20261119` 运行至32070 ns，reserve/push/send/response均为1063，九类模式计数全部满足预期，`c_reserve_push`命中1063次，UVM_WARNING/ERROR/FATAL均为0。当前配置已改为直接指定2拍；后续10 ns和4 ns时钟回归同样通过，详见下文周期检查记录。
 
-- [sequence拆分后固定seed运行日志](../../verif_mshr/sim/work/log/wbb_data_pattern_sequence_seed20261119.log)
-- [对应波形](../../verif_mshr/sim/work/wave/wbb_data_pattern_sequence_seed20261119.fsdb)
-- [编译日志](../../verif_mshr/sim/work/log/wbb_data_pattern_sequence_compile.log)
-- [基础case回归日志](../../verif_mshr/sim/work/log/wbb_base_after_sequence_split.log)：两笔写回通过。
+- [sequence拆分后固定seed运行日志](../../verif_mshr/sim_wbb/work/log/wbb_data_pattern_sequence_seed20261119.log)
+- [对应波形](../../verif_mshr/sim_wbb/work/wave/wbb_data_pattern_sequence_seed20261119.fsdb)
+- [编译日志](../../verif_mshr/sim_wbb/work/log/wbb_data_pattern_sequence_compile.log)
+- [基础case回归日志](../../verif_mshr/sim_wbb/work/log/wbb_base_after_sequence_split.log)：两笔写回通过。
 
-本次编译使用 `verif_mshr/generated/WriteBackBuffer.v`，SHA-256为 `ac3e5cd84054c7cb32d1f1d628a88003533a96cbc760e60af234ae882642960e`。日志和波形位于可清理的 `sim/work` 下，执行 `make clean` 前应按需归档。
+该次编译使用的当时路径是`verif_mshr/generated/WriteBackBuffer.v`（现生成文件位置为`verif_mshr/generated/wbb/WriteBackBuffer.v`），当时RTL的SHA-256为 `ac3e5cd84054c7cb32d1f1d628a88003533a96cbc760e60af234ae882642960e`。日志和波形位于可清理的 `sim_wbb/work` 下，执行 `make clean` 前应按需归档。
 
-这些结果提供 WBR-007、WBS-001、CFG-005 的当前配置数据通路证据；本轮实际使用槽0/1，不作为全槽隔离、全部候选状态或其他配置已经完成的依据。C++存储的字节地址端序由 `RefModel/test/test_sparse_memory.cpp` 的原始字节读取检查补充，本次 `make -C RefModel run-memory` 通过。三个验证点在主表中仍保留未闭合，后续按必要场景补齐。
+这些早期结果提供 WBR-007、WBS-001、CFG-005 的数据通路证据；该次运行实际使用槽0/1，单独不能证明全槽隔离和全部候选状态。C++存储的字节地址端序由 `RefModel/test/test_sparse_memory.cpp` 的原始字节读取检查补充，当时 `make -C RefModel run-memory` 通过。随后新增的全槽、复用、候选状态和流水case补齐了当前配置的必要场景，这三项现已按主表登记为本配置已闭合；其他硬件配置仍单独待验。
 
 ## 容量 case 实现与结果（2026-11-19）
 
@@ -57,7 +63,7 @@ test负责配置watchdog、调用 `seq.start(env.agent.sequencer)`、等待排�
 
 内存 driver 的 `mem_max_pending` 设为 N，`mem_write_latency_cycles` 设为 `4*N+16` 拍。默认4槽时每个请求等待32拍响应，使第5笔请求确实遇到满槽；延迟不再乘以时钟周期或换算成ns。仍使用原有严格下一拍 push 的 driver，未增加上游流水或延迟 push。
 
-时钟配置统一由 `tb_top` 创建并逐级传递，capacity test只读取 `clk_cfg.initial_reset_cycles` 计算总超时预算。test、env和clock agent均不在配置缺失时另建对象；缺失或空句柄会明确报错。[config_db跟踪回归日志](../../verif_mshr/sim/work/log/wbb_capacity_clock_config.log)记录了此前配置传递调整；当前按周期响应的结果如下。
+时钟配置统一由 `tb_top` 创建并逐级传递，capacity test只读取 `clk_cfg.initial_reset_cycles` 计算总超时预算。test、env和clock agent均不在配置缺失时另建对象；缺失或空句柄会明确报错。[config_db跟踪回归日志](../../verif_mshr/sim_wbb/work/log/wbb_capacity_clock_config.log)记录了此前配置传递调整；当前按周期响应的结果如下。
 
 test 通过 analysis 连接接收现有 monitor 的沿前采样。每拍先检查状态，再统计该拍的 reserve/send/response，保证响应握手当拍仍按槽尚未释放处理。检查原有 C++ WBB 模型、scoreboard 和 SVA 的同时，还必须命中以下场景：
 
@@ -78,13 +84,13 @@ test 通过 analysis 连接接收现有 monitor 的沿前采样。每拍先检�
 
 这是确定性定向case，地址和数据没有随机化，运行时未指定随机seed。使用的 generated RTL SHA-256为 `ac3e5cd84054c7cb32d1f1d628a88003533a96cbc760e60af234ae882642960e`，与数据模式case一致。
 
-- [10 ns容量case日志](../../verif_mshr/sim/work/log/wbb_capacity_cycles_10ns.log) / [4 ns日志](../../verif_mshr/sim/work/log/wbb_capacity_cycles_4ns.log)：每笔均等待32拍。
-- [10 ns容量case波形](../../verif_mshr/sim/work/wave/wbb_capacity_cycles_10ns.fsdb) / [4 ns波形](../../verif_mshr/sim/work/wave/wbb_capacity_cycles_4ns.fsdb)
-- [编译日志](../../verif_mshr/sim/work/log/wbb_cycle_latency_compile.log)
-- [10 ns基础case回归](../../verif_mshr/sim/work/log/wbb_base_cycles_10ns.log) / [4 ns回归](../../verif_mshr/sim/work/log/wbb_base_cycles_4ns.log)：各2笔写回，每笔响应间隔2拍。
-- [10 ns数据模式case回归](../../verif_mshr/sim/work/log/wbb_data_pattern_cycles_10ns.log) / [4 ns回归](../../verif_mshr/sim/work/log/wbb_data_pattern_cycles_4ns.log)：各1063笔写回，每笔响应间隔2拍。
+- [10 ns容量case日志](../../verif_mshr/sim_wbb/work/log/wbb_capacity_cycles_10ns.log) / [4 ns日志](../../verif_mshr/sim_wbb/work/log/wbb_capacity_cycles_4ns.log)：每笔均等待32拍。
+- [10 ns容量case波形](../../verif_mshr/sim_wbb/work/wave/wbb_capacity_cycles_10ns.fsdb) / [4 ns波形](../../verif_mshr/sim_wbb/work/wave/wbb_capacity_cycles_4ns.fsdb)
+- [编译日志](../../verif_mshr/sim_wbb/work/log/wbb_cycle_latency_compile.log)
+- [10 ns基础case回归](../../verif_mshr/sim_wbb/work/log/wbb_base_cycles_10ns.log) / [4 ns回归](../../verif_mshr/sim_wbb/work/log/wbb_base_cycles_4ns.log)：各2笔写回，每笔响应间隔2拍。
+- [10 ns数据模式case回归](../../verif_mshr/sim_wbb/work/log/wbb_data_pattern_cycles_10ns.log) / [4 ns回归](../../verif_mshr/sim_wbb/work/log/wbb_data_pattern_cycles_4ns.log)：各1063笔写回，每笔响应间隔2拍。
 
-本case提供 WBR-001、002、004、005、006 和 WBS-005、009 的容量边界证据，覆盖最后一槽预留、满槽拒绝以及已发送未响应的占用保持。N>1时全reserved、长时间待发数据保持、send背压和不同响应顺序仍由后续case完成；本轮 `stalled_cycles=0`，不能作为send背压已经验证的依据。验证点主表保持未闭合，已通过的具体场景登记在证据表。
+本case提供 WBR-001、002、004、005、006 和 WBS-005、009 的容量边界证据，覆盖最后一槽预留、满槽拒绝以及已发送未响应的占用保持。该次运行 `stalled_cycles=0`，单独不能证明send背压通过。N>1的全reserved、长时间待发数据保持、send背压和不同响应顺序已由后续delayed_push、query、send_backpressure及response_order等case补充，当前配置的综合判定见主表，保留这里的历史运行数据供追溯。
 
 ## 周期延迟的环境自检（2026-11-19）
 
@@ -95,7 +101,7 @@ test 通过 analysis 连接接收现有 monitor 的沿前采样。每拍先检�
 - 时钟10 ns/4 ns × 延迟1/2/32拍，共6组正常自检通过；每组3笔响应精确满足配置拍数，另有2笔检查响应背压与顺序恢复，5笔内存数据回读均正确。
 - 0拍延迟负例正确触发 `MEM_CONFIG` fatal；这属于预期环境错误。
 - 严格/延迟push/bind断言自测在10 ns和4 ns下通过。自测普通等待和超时使用时钟沿，停钟复位场景使用持续运行的参考时钟。
-- 运行脚本：[check_wbb_memory_timing.py](../../verif_mshr/sim/script/check_wbb_memory_timing.py)。[1拍日志](../../verif_mshr/sim/work/memory_timing/log/period_4_latency_1.log)、[32拍日志](../../verif_mshr/sim/work/memory_timing/log/period_4_latency_32.log)、[0拍负例日志](../../verif_mshr/sim/work/memory_timing/log/period_10_latency_0.log)。
+- 运行脚本：[check_wbb_memory_timing.py](../../verif_mshr/sim_wbb/script/check_wbb_memory_timing.py)。[1拍日志](../../verif_mshr/sim_wbb/work/memory_timing/log/period_4_latency_1.log)、[32拍日志](../../verif_mshr/sim_wbb/work/memory_timing/log/period_4_latency_32.log)、[0拍负例日志](../../verif_mshr/sim_wbb/work/memory_timing/log/period_10_latency_0.log)。
 
 时钟翻转仍使用TB顶层配置的实际时间周期；monitor的 `#1step`、异步复位断言的1 ps及自测等待断言结果的2 ps用于仿真采样和结算，不表示事务延迟，不改成等待整拍。
 
@@ -110,9 +116,9 @@ test 通过 analysis 连接接收现有 monitor 的沿前采样。每拍先检�
 
 | Case | 10 ns日志 | 4 ns日志 |
 | --- | --- | --- |
-| 基础写回 | [日志](../../verif_mshr/sim/work/log/wbb_base_helpers_base_10ns.log) | [日志](../../verif_mshr/sim/work/log/wbb_base_helpers_base_4ns.log) |
-| 数据模式 | [日志](../../verif_mshr/sim/work/log/wbb_base_helpers_data_pattern_10ns.log) | [日志](../../verif_mshr/sim/work/log/wbb_base_helpers_data_pattern_4ns.log) |
-| 容量边界 | [日志](../../verif_mshr/sim/work/log/wbb_base_helpers_capacity_10ns.log) | [日志](../../verif_mshr/sim/work/log/wbb_base_helpers_capacity_4ns.log) |
+| 基础写回 | [日志](../../verif_mshr/sim_wbb/work/log/wbb_base_helpers_base_10ns.log) | [日志](../../verif_mshr/sim_wbb/work/log/wbb_base_helpers_base_4ns.log) |
+| 数据模式 | [日志](../../verif_mshr/sim_wbb/work/log/wbb_base_helpers_data_pattern_10ns.log) | [日志](../../verif_mshr/sim_wbb/work/log/wbb_base_helpers_data_pattern_4ns.log) |
+| 容量边界 | [日志](../../verif_mshr/sim_wbb/work/log/wbb_base_helpers_capacity_10ns.log) | [日志](../../verif_mshr/sim_wbb/work/log/wbb_base_helpers_capacity_4ns.log) |
 
 ## 全部非流水 case 的首次回归（修复前，2026-11-19）
 
@@ -120,7 +126,7 @@ test 通过 analysis 连接接收现有 monitor 的沿前采样。每拍先检�
 
 本轮使用当前4槽generated RTL，SHA-256仍为 `ac3e5cd84054c7cb32d1f1d628a88003533a96cbc760e60af234ae882642960e`。时钟为10 ns和4 ns，随机case使用seed=1/2/3，其余case使用seed=1。共26组：**20组通过、6组失败**。失败没有列入白名单，回归脚本以退出码1结束。
 
-[本轮完整汇总及每组log/FSDB链接](../../verif_mshr/sim/work/regression/reports/run_20261119_080300_487790/summary.md)；[机器可读结果](../../verif_mshr/sim/work/regression/reports/run_20261119_080300_487790/summary.json)。工作目录可被clean清除，提交或归档验证证据时应另外保存这些产物。
+[本轮完整汇总及每组log/FSDB链接](../../verif_mshr/sim_wbb/work/regression/reports/run_20261119_080300_487790/summary.relocated.md)；[机器可读结果](../../verif_mshr/sim_wbb/work/regression/reports/run_20261119_080300_487790/summary.json)。工作目录可被clean清除，提交或归档验证证据时应另外保存这些产物。
 
 | Case | 每组写回数 | 两种时钟下的结果与实际证据 |
 | --- | --- | --- |
@@ -151,7 +157,7 @@ test 通过 analysis 连接接收现有 monitor 的沿前采样。每拍先检�
 运行全部case：
 
 ```sh
-python3 verif_mshr/sim/script/run_wbb_regression.py
+python3 verif_mshr/sim_wbb/script/run_wbb_regression.py
 ```
 
 ### WBB-DUT-001：send背压期间新候选替换已呈现请求
@@ -178,16 +184,16 @@ python3 verif_mshr/sim/script/run_wbb_regression.py
 
 除定向case外，延迟push case在295 ns复现同类问题；随机seed=2在1285、1875、7995 ns复现三次。4 ns时钟下对应相同采样拍，结果一致。
 
-- [定向失败日志](../../verif_mshr/sim/work/regression/strict/log/run_20261119_080300_487790/wbb_send_backpressure_test_p10_s1.log)
-- [定向失败波形](../../verif_mshr/sim/work/regression/strict/wave/run_20261119_080300_487790/wbb_send_backpressure_test_p10_s1.fsdb)
-- [首次复现的逐拍采样表](../../verif_mshr/sim/work/log/wbb_send_backpressure_edges.tsv)
-- [延迟push失败日志](../../verif_mshr/sim/work/regression/delayed/log/run_20261119_080300_487790/wbb_delayed_push_test_p10_s1.log)
-- [随机seed2失败日志](../../verif_mshr/sim/work/regression/strict/log/run_20261119_080300_487790/wbb_random_test_p10_s2.log)
+- [定向失败日志](../../verif_mshr/sim_wbb/work/regression/strict/log/run_20261119_080300_487790/wbb_send_backpressure_test_p10_s1.log)
+- [定向失败波形](../../verif_mshr/sim_wbb/work/regression/strict/wave/run_20261119_080300_487790/wbb_send_backpressure_test_p10_s1.fsdb)
+- [首次复现的逐拍采样表](../../verif_mshr/sim_wbb/work/log/wbb_send_backpressure_edges.tsv)
+- [延迟push失败日志](../../verif_mshr/sim_wbb/work/regression/delayed/log/run_20261119_080300_487790/wbb_delayed_push_test_p10_s1.log)
+- [随机seed2失败日志](../../verif_mshr/sim_wbb/work/regression/strict/log/run_20261119_080300_487790/wbb_random_test_p10_s2.log)
 
 单独复现：
 
 ```sh
-python3 verif_mshr/sim/script/run_wbb_regression.py --tests wbb_send_backpressure_test --periods 10
+python3 verif_mshr/sim_wbb/script/run_wbb_regression.py --tests wbb_send_backpressure_test --periods 10
 ```
 
 首次回归时WBS-002记为DUT失败，保留上述历史证据。最新修复已通过下面的复核；参数组合、热复位及暂缓的流水场景仍按各自验证点单独安排。
@@ -206,7 +212,7 @@ python3 verif_mshr/sim/script/run_wbb_regression.py --tests wbb_send_backpressur
 
 此前失败的场景没有被删除或绕过：背压case仍为挂起ID3、插入ID0、10拍停顿和1次候选插入；延迟push仍有5笔延迟、最大间隔13拍、全reserved保持7拍；random seed2仍完成32批128笔、112拍发送背压、11次乱序响应。独立的 `WBB_STABILITY` 和 `WBB_DUT_SEND_STABLE` 均未再报错。
 
-[本轮汇总与每组日志/波形](../../verif_mshr/sim/work/regression/reports/run_20261119_092126_919356/summary.md) · [JSON结果](../../verif_mshr/sim/work/regression/reports/run_20261119_092126_919356/summary.json) · [输入文件哈希](../../verif_mshr/sim/work/regression/reports/run_20261119_092126_919356/inputs.json)。修复过程说明见[用户的DebugNote](../../Architecture/DebugNote/WBB-DUT-001_发送背压保持问题.md)。
+[本轮汇总与每组日志/波形](../../verif_mshr/sim_wbb/work/regression/reports/run_20261119_092126_919356/summary.relocated.md) · [JSON结果](../../verif_mshr/sim_wbb/work/regression/reports/run_20261119_092126_919356/summary.json) · [输入文件哈希](../../verif_mshr/sim_wbb/work/regression/reports/run_20261119_092126_919356/inputs.json)。修复过程说明见[用户的DebugNote](../../Architecture/DebugNote/WBB-DUT-001_发送背压保持问题.md)。
 
 ## 流水 case 实现与回归（2026-11-20）
 
@@ -233,9 +239,9 @@ SVA自测新增合法反向槽序流水和同槽返回负例，在10 ns/4 ns下s
 pipeline的reserve/push/send/response均为13，`c_reserve_push`命中13次、`c_overlap`命中8次、`c_full_release`命中2次；运行时长分别610 ns/244 ns。
 其他case仍为零reserve/push重叠，原串行和延迟批次行为保持。DUT和C++参考模型未修改，仍使用修复后的 `7e55ed10a7f44bdc...` RTL。
 
-- [本轮完整汇总](../../verif_mshr/sim/work/regression/reports/run_20261120_010402_307499/summary.md)
-- [10 ns流水日志](../../verif_mshr/sim/work/regression/strict/log/run_20261120_010402_307499/wbb_pipeline_test_p10_s1.log) / [4 ns日志](../../verif_mshr/sim/work/regression/strict/log/run_20261120_010402_307499/wbb_pipeline_test_p4_s1.log)
-- [10 ns流水波形](../../verif_mshr/sim/work/regression/strict/wave/run_20261120_010402_307499/wbb_pipeline_test_p10_s1.fsdb) / [4 ns波形](../../verif_mshr/sim/work/regression/strict/wave/run_20261120_010402_307499/wbb_pipeline_test_p4_s1.fsdb)
+- [本轮完整汇总](../../verif_mshr/sim_wbb/work/regression/reports/run_20261120_010402_307499/summary.relocated.md)
+- [10 ns流水日志](../../verif_mshr/sim_wbb/work/regression/strict/log/run_20261120_010402_307499/wbb_pipeline_test_p10_s1.log) / [4 ns日志](../../verif_mshr/sim_wbb/work/regression/strict/log/run_20261120_010402_307499/wbb_pipeline_test_p4_s1.log)
+- [10 ns流水波形](../../verif_mshr/sim_wbb/work/regression/strict/wave/run_20261120_010402_307499/wbb_pipeline_test_p10_s1.fsdb) / [4 ns波形](../../verif_mshr/sim_wbb/work/regression/strict/wave/run_20261120_010402_307499/wbb_pipeline_test_p4_s1.fsdb)
 
 ## 适用 case 的双输入模式（2026-11-20）
 
@@ -263,13 +269,13 @@ query流水变体为了覆盖全部重叠查询组合要求至少4槽，原seria
 
 本轮编号 `run_20261120_013657_184228`：12个case、10 ns/4 ns，random用seed1/2/3，其余seed1，共 **42/42 PASS**，全部UVM_WARNING/ERROR/FATAL为0。DUT与C++参考模型未修改。
 
-[完整回归汇总](../../verif_mshr/sim/work/regression/reports/run_20261120_013657_184228/summary.md) · [JSON结果](../../verif_mshr/sim/work/regression/reports/run_20261120_013657_184228/summary.json) · [输入文件哈希](../../verif_mshr/sim/work/regression/reports/run_20261120_013657_184228/inputs.json)。
+[完整回归汇总](../../verif_mshr/sim_wbb/work/regression/reports/run_20261120_013657_184228/summary.relocated.md) · [JSON结果](../../verif_mshr/sim_wbb/work/regression/reports/run_20261120_013657_184228/summary.json) · [输入文件哈希](../../verif_mshr/sim_wbb/work/regression/reports/run_20261120_013657_184228/inputs.json)。
 
 ```sh
 # 全部模式与case
-python3 verif_mshr/sim/script/run_wbb_regression.py
+python3 verif_mshr/sim_wbb/script/run_wbb_regression.py
 # 只选择随机case的流水变体
-python3 verif_mshr/sim/script/run_wbb_regression.py --tests wbb_random_test --input-modes pipeline
+python3 verif_mshr/sim_wbb/script/run_wbb_regression.py --tests wbb_random_test --input-modes pipeline
 ```
 
 ## 执行口径

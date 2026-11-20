@@ -88,7 +88,7 @@ endtask
 // 保存的是地址和数据本身，driver 后续修改 transaction 对象不会改变这里的记录。
 task wbb_data_pattern_sequence::send_pattern(pattern_kind_t kind, bit [LINE_WIDTH-1:0] line_data);
     pattern_record_t record;
-    wbb_transaction tr;
+    wbb_transaction item;
 
     record.kind = kind;
     record.addr = ADDR_WIDTH'((records.size() + 1) * BLOCK_SIZE);
@@ -103,12 +103,12 @@ task wbb_data_pattern_sequence::send_pattern(pattern_kind_t kind, bit [LINE_WIDT
     if (input_mode == WBB_INPUT_SERIAL) begin
         writeback_line(record.addr, line_data, record.addr, '0);
     end else begin
-        tr = wbb_transaction::type_id::create("pattern_writeback");
-        tr.addr = record.addr;
-        tr.line_data = line_data;
-        tr.q0Addr = record.addr;
-        tr.q1Addr = '0;
-        pending_items.push_back(tr);
+        item = wbb_transaction::type_id::create("pattern_writeback");
+        item.addr = record.addr;
+        item.line_data = line_data;
+        item.q0Addr = record.addr;
+        item.q1Addr = '0;
+        pending_items.push_back(item);
         if (pending_items.size() == WBB_ENTRIES) begin
             flush_patterns();
         end

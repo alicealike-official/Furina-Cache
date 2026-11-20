@@ -77,16 +77,16 @@ class wbb_activity_monitor extends uvm_subscriber #(wbb_sample);
 
     function new(string name = "wbb_activity_monitor", uvm_component parent = null);
         super.new(name, parent);
-        foreach (query_matrix[i, j]) begin
-            query_matrix[i][j] = 0;
+        foreach (query_matrix[q0_stage, q1_stage]) begin
+            query_matrix[q0_stage][q1_stage] = 0;
         end
     endfunction
 
     extern virtual function void write(wbb_sample t);
     extern function int address_stage(bit [ADDR_WIDTH-1:0] addr);
-    extern function void record_queries(wbb_sample tr);
-    extern function void record_events(wbb_sample tr);
-    extern function void record_pipeline_events(wbb_sample tr, wbb_sample previous);
+    extern function void record_queries(wbb_sample sample);
+    extern function void record_events(wbb_sample sample);
+    extern function void record_pipeline_events(wbb_sample sample, wbb_sample previous_sample);
     extern function activity_snapshot_t snapshot();
     extern task wait_cycles(int count);
     extern task wait_for_sends(int target);
@@ -98,42 +98,52 @@ endclass
 
 // 先按沿前历史统计场景，再登记本拍事件；最后通知等待这些事件的 sequence。
 function void wbb_activity_monitor::write(wbb_sample t);
-    wbb_sample tr;
-    wbb_sample previous;
+    wbb_sample sample;
+    wbb_sample previous_sample;
 
-    previous = last_sample;
-    tr = t;
-    last_sample = tr;
-    if (tr.rst_n !== 1'b1) begin
+    // 保留前后两拍样本，用于检测满槽释放后的恢复。
+    previous_sample = last_sample;
+    // t是uvm_subscriber::write规定的形参名，保留以匹配基类接口。
+    sample = t;
+    last_sample = sample;
+    if (sample.rst_n !== 1'b1) begin
         return;
     end
+
+    // 按沿前状态统计流水/查询和资源占用，不先修改槽历史。
     cycle++;
-    record_pipeline_events(tr, previous);
-    record_queries(tr);
+    record_pipeline_events(sample, previous_sample);
+    record_queries(sample);
     if ($countones(loaded & ~issued) > max_pending) begin
         max_pending = $countones(loaded & ~issued);
     end
-    if ((&occupied) && loaded == '0 && tr.full === 1'b1) begin
+    if ((&occupied) && loaded == '0 && sample.full === 1'b1) begin
         full_reserved_cycles++;
     end
-    if (tr.send_valid === 1'b1 && tr.send_ready === 1'b0) begin
+
+    // 记录真实发送背压，以及背压期间新push的候选。
+    if (sample.send_valid === 1'b1 && sample.send_ready === 1'b0) begin
         send_stall_cycles++;
-        if (tr.push_en === 1'b1 && tr.push_slot != tr.send_payload_id) begin
+        if (sample.push_en === 1'b1 && sample.push_slot != sample.send_payload_id) begin
             stall_new_candidate_cycles++;
         end
     end
-    if (tr.memWriteResp_valid && tr.memWriteResp_ready) begin
-        if (tr.reserve_en && tr.reserveOk) reserve_response_cycles++;
-        if (tr.push_en) push_response_cycles++;
-        if (tr.send_valid && tr.send_ready) send_response_cycles++;
-        if (tr.reserve_en && tr.reserveOk && tr.push_en) begin
+
+    // 统计响应与reserve、push、send在同一采样沿发生的组合。
+    if (sample.memWriteResp_valid && sample.memWriteResp_ready) begin
+        if (sample.reserve_en && sample.reserveOk) reserve_response_cycles++;
+        if (sample.push_en) push_response_cycles++;
+        if (sample.send_valid && sample.send_ready) send_response_cycles++;
+        if (sample.reserve_en && sample.reserveOk && sample.push_en) begin
             reserve_push_response_cycles++;
-            if (tr.send_valid && tr.send_ready) begin
+            if (sample.send_valid && sample.send_ready) begin
                 reserve_push_send_response_cycles++;
             end
         end
     end
-    record_events(tr);
+
+    // 覆盖统计结束后才更新事件历史，并唤醒等待中的sequence。
+    record_events(sample);
     ->sampled;
 endfunction
 
@@ -151,51 +161,56 @@ function int wbb_activity_monitor::address_stage(bit [ADDR_WIDTH-1:0] addr);
 endfunction
 
 // 记录两查询口在不同阶段的组合，另统计同址命中、异址双命中和非空时双不命中。
-function void wbb_activity_monitor::record_queries(wbb_sample tr);
-    int stage0;
-    int stage1;
+function void wbb_activity_monitor::record_queries(wbb_sample sample);
+    int q0_stage;
+    int q1_stage;
 
-    stage0 = address_stage(tr.q0Addr);
-    stage1 = address_stage(tr.q1Addr);
-    query_matrix[stage0][stage1]++;
-    if (tr.q0Same && tr.q1Same) begin
-        if (tr.q0Addr == tr.q1Addr) same_hit_cycles++;
+    q0_stage = address_stage(sample.q0Addr);
+    q1_stage = address_stage(sample.q1Addr);
+    query_matrix[q0_stage][q1_stage]++;
+    if (sample.q0Same && sample.q1Same) begin
+        if (sample.q0Addr == sample.q1Addr) same_hit_cycles++;
         else different_hit_cycles++;
     end
-    if (!tr.q0Same && !tr.q1Same) begin
+    if (!sample.q0Same && !sample.q1Same) begin
         if (occupied != '0) query_none_while_occupied++;
         else empty_query_cycles++;
     end
 endfunction
 
 // 保存实际握手的槽号、顺序和拍数；响应完成时只移除对应的在途ID。
-function void wbb_activity_monitor::record_events(wbb_sample tr);
+function void wbb_activity_monitor::record_events(wbb_sample sample);
     int slot;
     int delay_cycles;
 
-    if (tr.reserve_en && tr.reserveOk && !$isunknown(tr.reserveSlot) && tr.reserveSlot < WBB_ENTRIES) begin
-        slot = tr.reserveSlot;
+    // 登记成功reserve的地址、槽号和采样拍。
+    if (sample.reserve_en && sample.reserveOk && !$isunknown(sample.reserveSlot) && sample.reserveSlot < WBB_ENTRIES) begin
+        slot = sample.reserveSlot;
         occupied[slot] = 1;
-        slot_addr[slot] = tr.reserve_addr;
+        slot_addr[slot] = sample.reserve_addr;
         reserved_at[slot] = cycle;
         reserve_uses[slot]++;
         reserve_slots.push_back(slot);
         reserve_cycles.push_back(cycle);
-        reserve_samples.push_back(tr);
+        reserve_samples.push_back(sample);
         reserve_count++;
     end
-    if (tr.push_en && !$isunknown(tr.push_slot) && tr.push_slot < WBB_ENTRIES) begin
-        slot = tr.push_slot;
+
+    // 登记push及预留到push的间隔，槽从reserved进入待发阶段。
+    if (sample.push_en && !$isunknown(sample.push_slot) && sample.push_slot < WBB_ENTRIES) begin
+        slot = sample.push_slot;
         delay_cycles = int'(cycle - reserved_at[slot]);
         if (delay_cycles > 1) delayed_push_count++;
         if (delay_cycles > max_push_delay) max_push_delay = delay_cycles;
         loaded[slot] = 1;
         push_cycles.push_back(cycle);
-        push_samples.push_back(tr);
+        push_samples.push_back(sample);
         push_count++;
     end
-    if (tr.send_valid && tr.send_ready && !$isunknown(tr.send_payload_id) && tr.send_payload_id < WBB_ENTRIES) begin
-        slot = tr.send_payload_id;
+
+    // 登记发送ID、连续发送长度和轮询回绕；发送不释放占用。
+    if (sample.send_valid && sample.send_ready && !$isunknown(sample.send_payload_id) && sample.send_payload_id < WBB_ENTRIES) begin
+        slot = sample.send_payload_id;
         issued[slot] = 1;
         send_ids.push_back(slot);
         send_cycles.push_back(cycle);
@@ -208,9 +223,11 @@ function void wbb_activity_monitor::record_events(wbb_sample tr);
     end else begin
         send_burst = 0;
     end
-    if (tr.memWriteResp_valid && tr.memWriteResp_ready && !$isunknown(tr.memWriteResp_payload_id) &&
-        tr.memWriteResp_payload_id < WBB_ENTRIES) begin
-        slot = tr.memWriteResp_payload_id;
+
+    // 按实际响应ID移除在途记录，并释放对应槽。
+    if (sample.memWriteResp_valid && sample.memWriteResp_ready && !$isunknown(sample.memWriteResp_payload_id) &&
+        sample.memWriteResp_payload_id < WBB_ENTRIES) begin
+        slot = sample.memWriteResp_payload_id;
         for (int index = 0; index < in_flight_ids.size(); index++) begin
             if (in_flight_ids[index] == slot) begin
                 if (index > 0) response_reorders++;
@@ -229,59 +246,67 @@ endfunction
 
 // 记录流水重叠、预留被阻塞时仍完成push，以及满槽响应后的下一拍恢复。
 // 这些只是场景计数；槽归属、输出数据和时序是否符合规格仍由原模型及SVA检查。
-function void wbb_activity_monitor::record_pipeline_events(wbb_sample tr, wbb_sample previous);
-    if (tr.reserve_en === 1'b1 && tr.reserveOk === 1'b0) begin
+function void wbb_activity_monitor::record_pipeline_events(wbb_sample sample, wbb_sample previous_sample);
+
+    // 记录预留阻塞时旧push仍完成，以及满槽当拍接受响应的情况。
+    if (sample.reserve_en === 1'b1 && sample.reserveOk === 1'b0) begin
         blocked_reserve_cycles++;
         waiting_for_overlap = 1;
-        if (tr.push_en === 1'b1) begin
+        if (sample.push_en === 1'b1) begin
             blocked_push_cycles++;
         end
-        if (tr.full === 1'b1 && tr.memWriteResp_valid === 1'b1 && tr.memWriteResp_ready === 1'b1) begin
+        if (sample.full === 1'b1 && sample.memWriteResp_valid === 1'b1 && sample.memWriteResp_ready === 1'b1) begin
             full_response_block_count++;
         end
     end
-    if (tr.reserve_en === 1'b1 && tr.reserveOk === 1'b1 && tr.push_en === 1'b1) begin
+
+    // 记录实际reserve/push重叠；曾阻塞的批次在此确认恢复。
+    if (sample.reserve_en === 1'b1 && sample.reserveOk === 1'b1 && sample.push_en === 1'b1) begin
         overlap_count++;
         if (waiting_for_overlap) begin
             resumed_overlap_count++;
             waiting_for_overlap = 0;
         end
     end
-    if (tr.push_en === 1'b1 && tr.reserve_en === 1'b0) begin
+
+    // 尾部push或空闲表示该段结束，清除跨批次的恢复等待标记。
+    if (sample.push_en === 1'b1 && sample.reserve_en === 1'b0) begin
         tail_push_count++;
         // 只有尾部push说明当前一段已结束，不能把旧停顿记到下一批的重叠上。
         waiting_for_overlap = 0;
-    end else if (tr.reserve_en === 1'b0 && tr.push_en === 1'b0) begin
+    end else if (sample.reserve_en === 1'b0 && sample.push_en === 1'b0) begin
         // 失败的reserve也可以合法撤回；经过空闲后再开始新请求，不算原先停顿的流水恢复。
         waiting_for_overlap = 0;
     end
-    if (previous != null && previous.rst_n === 1'b1 &&
-        previous.full === 1'b1 && previous.reserve_en === 1'b1 && previous.reserveOk === 1'b0 &&
-        previous.memWriteResp_valid === 1'b1 && previous.memWriteResp_ready === 1'b1 &&
-        tr.full === 1'b0 && tr.reserve_en === 1'b1 && tr.reserveOk === 1'b1 &&
-        tr.reserve_addr === previous.reserve_addr &&
-        BUS_ID_WIDTH'(tr.reserveSlot) === previous.memWriteResp_payload_id) begin
+
+    // 检查满槽响应后的下一拍，同一等待地址使用刚释放槽成功预留。
+    if (previous_sample != null && previous_sample.rst_n === 1'b1 &&
+        previous_sample.full === 1'b1 && previous_sample.reserve_en === 1'b1 && previous_sample.reserveOk === 1'b0 &&
+        previous_sample.memWriteResp_valid === 1'b1 && previous_sample.memWriteResp_ready === 1'b1 &&
+        sample.full === 1'b0 && sample.reserve_en === 1'b1 && sample.reserveOk === 1'b1 &&
+        sample.reserve_addr === previous_sample.reserve_addr &&
+        BUS_ID_WIDTH'(sample.reserveSlot) === previous_sample.memWriteResp_payload_id) begin
         full_response_recovery_count++;
     end
 endfunction
 
 // 返回当前事件计数的值副本，供多阶段case在开始/结束时记录，再检查每段实际增加了多少次。
 function wbb_activity_monitor::activity_snapshot_t wbb_activity_monitor::snapshot();
-    activity_snapshot_t value;
+    activity_snapshot_t counters;
 
-    value.cycle = cycle;
-    value.reserve_count = reserve_count;
-    value.push_count = push_count;
-    value.send_count = send_count;
-    value.response_count = response_count;
-    value.overlap_count = overlap_count;
-    value.blocked_reserve_cycles = blocked_reserve_cycles;
-    value.blocked_push_cycles = blocked_push_cycles;
-    value.full_response_block_count = full_response_block_count;
-    value.full_response_recovery_count = full_response_recovery_count;
-    value.resumed_overlap_count = resumed_overlap_count;
-    value.tail_push_count = tail_push_count;
-    return value;
+    counters.cycle = cycle;
+    counters.reserve_count = reserve_count;
+    counters.push_count = push_count;
+    counters.send_count = send_count;
+    counters.response_count = response_count;
+    counters.overlap_count = overlap_count;
+    counters.blocked_reserve_cycles = blocked_reserve_cycles;
+    counters.blocked_push_cycles = blocked_push_cycles;
+    counters.full_response_block_count = full_response_block_count;
+    counters.full_response_recovery_count = full_response_recovery_count;
+    counters.resumed_overlap_count = resumed_overlap_count;
+    counters.tail_push_count = tail_push_count;
+    return counters;
 endfunction
 
 // 等待指定数量的已完成采样拍；返回点在上升沿之后，可安全准备下一下降沿使用的配置。

@@ -43,8 +43,12 @@ task wbb_pipeline_sequence::run_continuous_batch(int batch_index, int first_inde
     cfg.mem_send_enable = 1;
     cfg.mem_response_order = WBB_MEM_FIFO;
     cfg.mem_response_enable = !hold_responses;
+
+    // 保存起点后提交流水批次，响应门控决定是否先占满所有槽。
     starts[batch_index] = obs.snapshot();
     send_pipeline_batch(first_index, count);
+
+    // 提交结束后放行响应，排空并保存终点计数。
     obs.wait_cycles(1);
     cfg.mem_response_enable = 1;
     obs.wait_until_empty();
@@ -60,8 +64,12 @@ task wbb_pipeline_sequence::run_stalled_batch();
     cfg.mem_send_enable = 1;
     cfg.mem_response_order = WBB_MEM_FIFO;
     cfg.mem_response_enable = 0;
+
+    // 记录起点和发送目标，接下来两个分支分别提交批次与控制响应。
     starts[1] = obs.snapshot();
     send_target = obs.send_count + WBB_ENTRIES;
+
+    // 批次超过槽数会等待；另一个分支在满槽保持规定拍数后解除等待。
     fork
         send_pipeline_batch(WBB_ENTRIES, WBB_ENTRIES + 2);
         begin
@@ -70,6 +78,8 @@ task wbb_pipeline_sequence::run_stalled_batch();
             cfg.mem_response_enable = 1;
         end
     join
+
+    // 等待最后的发送/响应完成，保存整批结束状态。
     obs.wait_until_empty();
     ends[1] = obs.snapshot();
 endtask

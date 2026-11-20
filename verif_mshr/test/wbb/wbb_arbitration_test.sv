@@ -42,6 +42,7 @@ function void wbb_arbitration_test::check_send_burst(wbb_arbitration_sequence se
     int id;
     int wraps;
 
+    // 初始化槽集合和回绕计数，并确认本次连续发送的记录已经齐全。
     seen = '0;
     wraps = 0;
     if (env.activity.send_ids.size() < seq.burst_start + WBB_ENTRIES ||
@@ -49,6 +50,8 @@ function void wbb_arbitration_test::check_send_burst(wbb_arbitration_sequence se
         `error("Arbitration burst records are incomplete", "WBB_ARBITRATION_RECORDS")
         return;
     end
+
+    // 逐笔检查ID合法且不重复，同时计算相邻发送间隔和末槽到首槽回绕。
     for (int index = 0; index < WBB_ENTRIES; index++) begin
         id = env.activity.send_ids[seq.burst_start + index];
         if (id < 0 || id >= WBB_ENTRIES || seen[id]) begin
@@ -65,6 +68,8 @@ function void wbb_arbitration_test::check_send_burst(wbb_arbitration_sequence se
             end
         end
     end
+
+    // 汇总检查全部槽均被服务，并记录实际覆盖计数。
     check_count("slots sent in released burst", $countones(seen), WBB_ENTRIES);
     check_count("last-to-first wrap inside burst", wraps, 1, 1);
     `info($sformatf("pending=%0d burst=%0d slots=%b wraps=%0d", seq.pending_before_release,

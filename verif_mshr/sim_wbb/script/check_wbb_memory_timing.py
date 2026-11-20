@@ -32,7 +32,7 @@ def compile_harness():
         f"+incdir+{uvm}", "+incdir+../src/common/pkg",
         "+incdir+../src/common/config", "+incdir+../src/common/component",
         "+incdir+../src/wbb", str(uvm / "uvm.sv"), str(uvm / "dpi/uvm_dpi.cc"),
-        "../generated/wbb_params_pkg.sv", "../src/common/interface/clk_rst_interface.sv",
+        "../generated/wbb/wbb_params_pkg.sv", "../src/common/interface/clk_rst_interface.sv",
         "../src/wbb/interface/wbb_interface.sv", "../src/common/pkg/clk_rst_pkg.sv",
         "../src/wbb/pkg/wbb_pkg.sv", "../test/adapter/wbb_memory_timing_check.sv",
         "../dpi/wbb_dpi.cpp", "-CFLAGS", "-DVCS -std=c++17",

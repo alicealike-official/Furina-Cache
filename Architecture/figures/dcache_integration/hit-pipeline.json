@@ -1,0 +1,109 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "01.0.1.0.1.0.1.0"
+    },
+    {
+      "name": "cpu.valid",
+      "wave": "1.......0......."
+    },
+    {
+      "name": "cpu.ready",
+      "wave": "1..............."
+    },
+    {
+      "name": "cpu request",
+      "wave": "=...=...x.......",
+      "data": [
+        "W(A,D), idW",
+        "R(A), idR"
+      ]
+    },
+    {
+      "name": "cache.r1.en",
+      "wave": "1.......0......."
+    },
+    {
+      "name": "S2 request (conceptual)",
+      "wave": "=.=...=...=.....",
+      "data": [
+        "IDLE",
+        "W(A,D)",
+        "R(A)",
+        "IDLE"
+      ]
+    },
+    {
+      "name": "s1Valid",
+      "wave": "0.1.......0....."
+    },
+    {
+      "name": "s2Stuck",
+      "wave": "0..............."
+    },
+    {
+      "name": "hitWrite / cache.w1.en",
+      "wave": "0.1...0........."
+    },
+    {
+      "name": "cache.w1.data",
+      "wave": "x.=...x.........",
+      "data": [
+        "D"
+      ]
+    },
+    {
+      "name": "wrFifo.push.valid",
+      "wave": "0.1...0........."
+    },
+    {
+      "name": "wrFifo.push.ready",
+      "wave": "1..............."
+    },
+    {
+      "name": "wrFifo.push.id",
+      "wave": "x.=...x.........",
+      "data": [
+        "idW"
+      ]
+    },
+    {
+      "name": "p1Valid",
+      "wave": "0.....1...0....."
+    },
+    {
+      "name": "p1Data",
+      "wave": "x.....=.........",
+      "data": [
+        "D"
+      ]
+    },
+    {
+      "name": "hitRead / bypass",
+      "wave": "0.....1...0....."
+    },
+    {
+      "name": "rdFifo.push.valid",
+      "wave": "0.....1...0....."
+    },
+    {
+      "name": "rdFifo.push.ready",
+      "wave": "1..............."
+    },
+    {
+      "name": "rdFifo.push.id / data",
+      "wave": "x.....=...x.....",
+      "data": [
+        "idR / D"
+      ]
+    }
+  ],
+  "head": {
+    "text": "Hit write then read: W1 and response enqueue share the commit edge",
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · ·"
+  },
+  "config": {
+    "hscale": 1
+  }
+}

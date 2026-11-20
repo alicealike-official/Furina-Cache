@@ -1,0 +1,59 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "01.0.1.0.1.0.1.0.1.0"
+    },
+    {
+      "name": "alloc.en (new B)",
+      "wave": "1...0..............."
+    },
+    {
+      "name": "alloc.tag/index",
+      "wave": "=...x...............",
+      "data": [
+        "B"
+      ]
+    },
+    {
+      "name": "memReadReq.valid",
+      "wave": "1.............0....."
+    },
+    {
+      "name": "memReadReq.ready",
+      "wave": "0.......1..........."
+    },
+    {
+      "name": "memReadReq.addr / id",
+      "wave": "=.........=...x.....",
+      "data": [
+        "A / 3",
+        "B / 0"
+      ]
+    },
+    {
+      "name": "Entry 3 phase (conceptual)",
+      "wave": "=.........=.........",
+      "data": [
+        "SEND",
+        "WAIT"
+      ]
+    },
+    {
+      "name": "Entry 0 phase (conceptual)",
+      "wave": "=.=...........=.....",
+      "data": [
+        "IDLE",
+        "SEND",
+        "WAIT"
+      ]
+    }
+  ],
+  "head": {
+    "text": "Read request held while a lower-index SEND candidate arrives",
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · · · E4 · ·"
+  },
+  "config": {
+    "hscale": 1
+  }
+}

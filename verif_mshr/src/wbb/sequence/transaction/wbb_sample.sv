@@ -26,7 +26,6 @@ class wbb_sample extends uvm_sequence_item;
 
     logic full;
 
-
     `uvm_object_utils(wbb_sample)
 
     function new(string name = "wbb_sample");

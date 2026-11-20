@@ -1,0 +1,107 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "01.0.1.0.1.0.1.0.1.0"
+    },
+    {
+      "name": "cpu.valid",
+      "wave": "1...0..............."
+    },
+    {
+      "name": "cpu.ready",
+      "wave": "1..................."
+    },
+    {
+      "name": "cpu request block",
+      "wave": "=...x...............",
+      "data": [
+        "A"
+      ]
+    },
+    {
+      "name": "S2 request (conceptual)",
+      "wave": "=.=...=.............",
+      "data": [
+        "IDLE",
+        "miss A",
+        "IDLE"
+      ]
+    },
+    {
+      "name": "doAlloc / mshr.alloc.en",
+      "wave": "0.1...0............."
+    },
+    {
+      "name": "cache.clr.en / r2.en",
+      "wave": "0.1...0............."
+    },
+    {
+      "name": "wbb.reserve.en",
+      "wave": "0.1...0............."
+    },
+    {
+      "name": "wbb.reserveOk",
+      "wave": "1..................."
+    },
+    {
+      "name": "wbb.reserve.addr / slot",
+      "wave": "x.=...x.............",
+      "data": [
+        "V / k"
+      ]
+    },
+    {
+      "name": "pushPend / wbb.push.en",
+      "wave": "0.....1...0........."
+    },
+    {
+      "name": "pushSlot / cache.r2.line",
+      "wave": "x.....=.............",
+      "data": [
+        "k / DV"
+      ]
+    },
+    {
+      "name": "memReadReq.valid",
+      "wave": "0.....1...0........."
+    },
+    {
+      "name": "memReadReq.ready",
+      "wave": "1..................."
+    },
+    {
+      "name": "memReadReq.addr / id",
+      "wave": "x.....=...x.........",
+      "data": [
+        "A / a"
+      ]
+    },
+    {
+      "name": "memWriteReq.valid",
+      "wave": "0.........1...0....."
+    },
+    {
+      "name": "memWriteReq.ready",
+      "wave": "1..................."
+    },
+    {
+      "name": "memWriteReq.addr / data / id",
+      "wave": "x.........=...x.....",
+      "data": [
+        "V / DV / k"
+      ]
+    },
+    {
+      "name": "lockMask[victim set/way]",
+      "wave": "0.....1............."
+    }
+  ],
+  "head": {
+    "text": "Dirty eviction: reserve and R2 at E1, aligned push at E2; A != V",
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · · · E4 · ·"
+  },
+  "config": {
+    "hscale": 1
+  }
+}

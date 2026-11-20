@@ -75,9 +75,9 @@ WBB 已经把一笔请求放到 `send` 接口上，`send_valid=1`，但内存暂
 
 修复前证据：
 
-- [定向失败日志](../../verif_mshr/sim/work/regression/strict/log/run_20261119_080300_487790/wbb_send_backpressure_test_p10_s1.log)：305 ns 同时报告 `WBB_STABILITY` 和 `WBB_DUT_SEND_STABLE`；6 笔请求最终均已发送、响应。
-- [逐拍采样表](../../verif_mshr/sim/work/log/wbb_send_backpressure_edges.tsv)：295 ns 行记录沿前 `sendIdx=3`、沿后 `sendIdx=0`，`rrPtr` 始终为 0。
-- [修复前回归汇总](../../verif_mshr/sim/work/regression/reports/run_20261119_080300_487790/summary.md)：26 组中 20 组通过、6 组失败；背压定向、延迟 push、随机 seed 2 均在 10 ns 和 4 ns 时钟下复现此问题。
+- [定向失败日志](../../verif_mshr/sim_wbb/work/regression/strict/log/run_20261119_080300_487790/wbb_send_backpressure_test_p10_s1.log)：305 ns 同时报告 `WBB_STABILITY` 和 `WBB_DUT_SEND_STABLE`；6 笔请求最终均已发送、响应。
+- [逐拍采样表](../../verif_mshr/sim_wbb/work/log/wbb_send_backpressure_edges.tsv)：295 ns 行记录沿前 `sendIdx=3`、沿后 `sendIdx=0`，`rrPtr` 始终为 0。
+- [修复前回归汇总](../../verif_mshr/sim_wbb/work/regression/reports/run_20261119_080300_487790/summary.relocated.md)：26 组中 20 组通过、6 组失败；背压定向、延迟 push、随机 seed 2 均在 10 ns 和 4 ns 时钟下复现此问题。
 
 ### 只修复 DUT 时的中间结果
 
@@ -132,6 +132,8 @@ WBB 已经把一笔请求放到 `send` 接口上，`send_valid=1`，但内存暂
 设计修改位于 [WriteBackBuffer.scala 的发送仲裁部分](../../Design/DCacheMSHR/src/main/scala/furina/dcache/WriteBackBuffer.scala)：将轮询候选与实际输出槽分开，增加 `sendHold` 和 `sendHoldIdx`，在背压时记住当前槽，握手时才解除保持并更新对应槽的 issued 和轮询起点。默认 4 槽配置新增 1 位保持标志和 2 位槽号寄存器，没有额外复制 512 位行数据。
 
 本地 `Design/DCacheMSHR/rtl/WriteBackBuffer.v` 已重新生成，保持原来的低有效 `resetn` 接口。为了匹配现有 UVM 顶层的 `.reset(~rst_n)` 接线，本轮使用 `WbbVerificationVerilog` 在临时目录生成高有效 reset 的验证 RTL；没有修改验证顶层或原目录 `verif_mshr/generated/` 的文件。
+
+上述路径和复位接线记录的是该次修复时的操作。后续目录整理将WBB生成文件移至`verif_mshr/generated/wbb/`，仿真入口及历史产物移至`verif_mshr/sim_wbb/`；本节的历史操作、结果和版本未因此改写，历史汇总链接使用`summary.relocated.md`迁移视图。
 
 参考模型修改位于 `RefModel/Cache/WriteBackBuffer.hpp`：reset 清除新增状态，`sendReq()` 优先返回锁定槽，`tick()` 在沿前请求被背压时记住槽号、握手时解除锁定，私有成员新增保持标志和槽号。没有修改参考模型的测试文件。
 

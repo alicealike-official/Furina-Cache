@@ -1,0 +1,74 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "01.0.1.0.1.0.1.0.1.0.1.0"
+    },
+    {
+      "name": "memReadResp.valid",
+      "wave": "1...0..................."
+    },
+    {
+      "name": "memReadResp.ready",
+      "wave": "1......................."
+    },
+    {
+      "name": "memReadResp.id / line",
+      "wave": "=...x...................",
+      "data": [
+        "a / R0"
+      ]
+    },
+    {
+      "name": "fill.en",
+      "wave": "0.1...........0........."
+    },
+    {
+      "name": "fillReady",
+      "wave": "0...........1..........."
+    },
+    {
+      "name": "fill target / line",
+      "wave": "x.=...........x.........",
+      "data": [
+        "A / R0"
+      ]
+    },
+    {
+      "name": "replay.valid",
+      "wave": "0.............1...0....."
+    },
+    {
+      "name": "replay.ready",
+      "wave": "1......................."
+    },
+    {
+      "name": "replay.id / type / data",
+      "wave": "x.............=...x.....",
+      "data": [
+        "0 / R / R0[w]"
+      ]
+    },
+    {
+      "name": "Entry a phase (conceptual)",
+      "wave": "=.=...........=...=.....",
+      "data": [
+        "WAIT",
+        "FILL-W",
+        "REPLAY",
+        "IDLE"
+      ]
+    },
+    {
+      "name": "lockMask[bitA]",
+      "wave": "1.................0....."
+    }
+  ],
+  "head": {
+    "text": "Single fill candidate: no replay before fill acceptance",
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · · · E4 · · · E5 · ·"
+  },
+  "config": {
+    "hscale": 1
+  }
+}

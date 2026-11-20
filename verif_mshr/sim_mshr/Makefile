@@ -7,6 +7,7 @@ UVM_HOME = ../../verif_env/uvm-1.2
 
 #可配置的线程数
 THREADS ?= 10
+SIM_ARGS ?=
 SVA_DEFINES ?=
 
 
@@ -31,23 +32,24 @@ $(DIRS):
 $(DUMP_TCL): 
 	@echo "Generating TCL script for waveform dump..."
 	@echo "fsdbDumpfile \"$(WAVEFORM)\"" > $@
-	@echo "fsdbDumpvars 0 \"tb_top\"" >> $@
+	@echo "fsdbDumpvars 0 \"mshr_tb_top\"" >> $@
 	@echo "run" >> $@
 	@echo "TCL script generated: $(DUMP_TCL)"
 
 vcs_all: clean vcs_compile vcs_simulate
 
 vcs_compile: $(DIRS)
+	@rm -f $(CSRC_DIR)/mshr_dpi.o
 	vcs -notice -debug_acc+all -j$(THREADS) -timescale=1ns/1ps \
         -sverilog -LDFLAGS -rdynamic -full64 \
 		+incdir+$(UVM_HOME)/src/ \
 		$(UVM_HOME)/src/uvm.sv \
 		$(UVM_HOME)/src/dpi/uvm_dpi.cc \
-		../dpi/wbb_dpi.cpp \
+		../dpi/mshr_dpi.cpp \
 		-Mdir=$(CSRC_DIR) \
 		-cm line+cond+fsm+branch+tgl+assert \
   		-cm_dir $(WORK_DIR)/simv.vdb \
-        -f $(DUT) -f $(TB) $(SVA_DEFINES) \
+        -f $(DUT) -f $(TB) -top mshr_tb_top $(SVA_DEFINES) \
 		-kdb \
 		-l $(VCS_COMP_LOG) \
 		-CFLAGS "-DVCS -std=c++17" \
@@ -57,10 +59,10 @@ vcs_simulate: $(SIMV) $(DUMP_TCL)
 	$(SIMV) \
     +fsdb+autoflush \
 	+wave=$(WAVEFORM) \
-	$(if $(strip $(TEST_NAME)),+UVM_TESTNAME=$(TEST_NAME)) \
+	$(if $(strip $(TEST_NAME)),+UVM_TESTNAME=$(TEST_NAME)) $(SIM_ARGS) \
 	-cm line+cond+fsm+branch+tgl+assert \
 	-cm_dir  $(WORK_DIR)/simv.vdb \
-	-cm_name $(if $(strip $(TEST_NAME)),$(TEST_NAME),wbb_base_test) \
+	-cm_name $(if $(strip $(TEST_NAME)),$(TEST_NAME),mshr_base_test) \
 	-ucli -do $(DUMP_TCL) \
 	-l $(VCS_SIM_LOG)
 
@@ -83,21 +85,28 @@ help:
 	@echo "  run_verdi            - 单独打开 Verdi 查看波形"
 	@echo "  clean                - 清理所有仿真生成的文件"
 
-# Generate RTL and SV parameters from the same Scala CacheConfig.
-WBB_ENTRIES ?= 4
+# MSHR独立生成目录；RTL与参数包来自同一Scala配置。
+MSHR_ENTRIES ?= 4
+MSHR_MAX_PENDING ?= 4
 generate:
-	cd ../../Design/DCacheMSHR && sbt "runMain furina.dcache.WbbVerificationVerilog rtl $(WBB_ENTRIES) ../../verif_mshr/src/wbb/pkg/wbb_params_pkg.sv"
+	cd ../../Design/DCacheMSHR && sbt "runMain furina.dcache.MshrVerificationVerilog ../../verif_mshr/generated/mshr $(MSHR_ENTRIES) $(MSHR_MAX_PENDING)"
 
-# Standalone SV/C++ ABI check; does not run a DUT functional case.
+run: vcs_simulate
+
+# 独立SV/C++ ABI检查，使用相同参数包，不实例化DUT。
 check_dpi: $(DIRS)
+	@mkdir -p $(WORK_DIR)/dpi
 	vcs -full64 -sverilog -timescale=1ns/1ps \
-		+incdir+../src/wbb ../src/wbb/pkg/wbb_params_pkg.sv \
-		../test/adapter/dpi_adapter_check.sv ../dpi/wbb_dpi.cpp \
-		-CFLAGS "-std=c++17" -top dpi_adapter_check \
-		-Mdir=$(WORK_DIR)/dpi_csrc -o $(RUN_DIR)/dpi_check \
-		-l $(LOG_DIR)/dpi_compile.log
-	$(RUN_DIR)/dpi_check -l $(LOG_DIR)/dpi_check.log
+		+incdir+../src/mshr ../generated/mshr/mshr_params_pkg.sv \
+		../test/adapter/mshr_dpi_check.sv ../dpi/mshr_dpi.cpp \
+		-CFLAGS "-std=c++17" -top mshr_dpi_check \
+		-Mdir=$(WORK_DIR)/dpi/csrc -o $(WORK_DIR)/dpi/simv -l $(WORK_DIR)/dpi/compile.log
+	$(WORK_DIR)/dpi/simv -l $(WORK_DIR)/dpi/run.log
 
-# IO assertion self-test: synthetic legal/illegal traces; no DUT implementation.
-check_sva:
-	python3 ./script/check_wbb_sva.py
+check_memory:
+	python3 -B ./script/check_mshr_memory_timing.py
+
+check_framework:
+	python3 -B ./script/run_mshr_framework.py
+
+.PHONY: generate run vcs_all vcs_compile vcs_simulate run_verdi clean merge_cov help check_dpi check_memory check_framework

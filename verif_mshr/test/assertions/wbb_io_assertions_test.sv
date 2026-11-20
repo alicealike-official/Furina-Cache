@@ -7,10 +7,10 @@ module wbb_io_assertions_test;
 `else
     localparam bit STRICT = 1;
 `endif
-    localparam logic [31:0] A = 32'h1000;
-    localparam logic [31:0] B = 32'h2000;
-    localparam logic [127:0] D = 128'h00112233445566778899aabbccddeeff;
-    localparam logic [127:0] E = ~D;
+    localparam logic [31:0] FIRST_ADDR = 32'h1000;
+    localparam logic [31:0] SECOND_ADDR = 32'h2000;
+    localparam logic [127:0] FIRST_LINE = 128'h00112233445566778899aabbccddeeff;
+    localparam logic [127:0] SECOND_LINE = ~FIRST_LINE;
     real clock_period_ns = 10.0;
     logic reference_clk = 0;
     logic clk = 0;
@@ -119,7 +119,7 @@ module wbb_io_assertions_test;
         @(negedge clk);
     endtask
 
-    // Reset the history and start each scenario from an explicitly empty IO trace.
+    // 先核对上一场景错误已全部登记，再复位接口历史并记录本场景计数起点。
     task restart();
         if (checks.env_error_count != accounted_env || checks.dut_error_count != accounted_dut) begin
             $fatal(1, "Unexpected assertion outside a checked scenario");
@@ -159,56 +159,62 @@ module wbb_io_assertions_test;
             checks.env_error_count - env_before, checks.dut_error_count - dut_before);
     endtask
 
-    // Reserve A in slot 0; after returning, the next edge is the mandatory push edge.
-    task reserve_a();
+    // 为首地址预留槽0；返回后紧接的下一采样沿必须完成对应push。
+    task reserve_first_line();
         reserve_en = 1;
-        reserve_addr = A;
-        q0Addr = A;
+        reserve_addr = FIRST_ADDR;
+        q0Addr = FIRST_ADDR;
         tick();
         reserve_en = 0;
         reserveSlot = 1;
         q0Same = 1;
     endtask
 
-    // Complete the previous reservation and prepare the first legal send of its payload.
-    task push_a();
+    // 装载首行数据，并在push完成后准备该行的首个合法发送。
+    task push_first_line();
         push_en = 1;
         push_slot = 0;
-        push_line = D;
+        push_line = FIRST_LINE;
         tick();
         push_en = 0;
         send_valid = 1;
-        send_payload_addr = A;
-        send_payload_wData = D;
+        send_payload_addr = FIRST_ADDR;
+        send_payload_wData = FIRST_LINE;
         send_payload_id = 0;
     endtask
 
-    // Exercise two slots with concurrent reserve/push and send/push, then out-of-order acks.
+    // 构造两槽的预留/push及发送/push重叠，再按指定方式返回响应。
     task two_slots(bit overlap_ack = 0);
-        reserve_a();
+
+        // 先预留首行，再构造首行push与第二行预留同拍。
+        reserve_first_line();
         reserve_en = 1;
-        reserve_addr = B;
+        reserve_addr = SECOND_ADDR;
         push_en = 1;
         push_slot = 0;
-        push_line = D;
-        q1Addr = B;
+        push_line = FIRST_LINE;
+        q1Addr = SECOND_ADDR;
         tick();
         reserve_en = 0;
         reserveOk = 0;
         full = 1;
         q1Same = 1;
         push_slot = 1;
-        push_line = E;
+        push_line = SECOND_LINE;
+
+        // 下一沿同时接受首行发送和第二行push。
         send_valid = 1;
         send_ready = 1;
-        send_payload_addr = A;
-        send_payload_wData = D;
+        send_payload_addr = FIRST_ADDR;
+        send_payload_wData = FIRST_LINE;
         send_payload_id = 0;
         tick();
         push_en = 0;
-        send_payload_addr = B;
-        send_payload_wData = E;
+        send_payload_addr = SECOND_ADDR;
+        send_payload_wData = SECOND_LINE;
         send_payload_id = 1;
+
+        // 第二行发送时，可选择同时返回首行响应。
         if (overlap_ack) begin
             memWriteResp_valid = 1;
             memWriteResp_payload_id = 0;
@@ -236,6 +242,8 @@ module wbb_io_assertions_test;
             memWriteResp_payload_id = 0;
             tick();
         end
+
+        // 全部响应处理后回到空态，检查没有遗留占用。
         idle_values();
         tick();
     endtask
@@ -243,42 +251,50 @@ module wbb_io_assertions_test;
     // 使用槽1再槽0提交两笔流水：第二次reserve与第一次push同拍，尾部push仍在下一拍完成。
     // 同时检查两笔不同数据的发送和响应；2槽配置下reserve和push各连续2拍，成功重叠1次。
     task reverse_slot_pipeline();
+
+        // 首行使用槽1，先记录与最低空槽不同的合法选择。
         reserve_en = 1;
-        reserve_addr = A;
+        reserve_addr = FIRST_ADDR;
         reserveSlot = 1;
-        q0Addr = A;
+        q0Addr = FIRST_ADDR;
         tick();
 
-        reserve_addr = B;
+        // 第二行预留槽0，同时向首行的槽1完成push。
+        reserve_addr = SECOND_ADDR;
         reserveSlot = 0;
         push_en = 1;
         push_slot = 1;
-        push_line = D;
+        push_line = FIRST_LINE;
         q0Same = 1;
-        q1Addr = B;
+        q1Addr = SECOND_ADDR;
         tick();
 
         reserve_en = 0;
+
+        // 两槽已占满；完成第二行push并发送首行。
         reserveOk = 0;
         full = 1;
         q1Same = 1;
         push_slot = 0;
-        push_line = E;
+        push_line = SECOND_LINE;
         send_valid = 1;
         send_ready = 1;
-        send_payload_addr = A;
-        send_payload_wData = D;
+        send_payload_addr = FIRST_ADDR;
+        send_payload_wData = FIRST_LINE;
         send_payload_id = 1;
         tick();
 
         push_en = 0;
-        send_payload_addr = B;
-        send_payload_wData = E;
+
+        // 发送第二行，同时接受首行响应，检查不同槽交叉。
+        send_payload_addr = SECOND_ADDR;
+        send_payload_wData = SECOND_LINE;
         send_payload_id = 0;
         memWriteResp_valid = 1;
         memWriteResp_payload_id = 1;
         tick();
 
+        // 最后接受第二行响应，恢复空态。
         send_valid = 0;
         memWriteResp_payload_id = 0;
         full = 0;
@@ -294,16 +310,17 @@ module wbb_io_assertions_test;
     initial begin
         idle_values();
         rst_n = 0;
+        // 合法场景：完成预留、装载、发送和响应，同时检查请求/响应背压保持。
         restart();
-        reserve_a();
-        push_a();
+        reserve_first_line();
+        push_first_line();
         tick();
         tick();
         send_ready = 1;
         tick();
         send_valid = 0;
         send_ready = 0;
-        q1Addr = A;
+        q1Addr = FIRST_ADDR;
         q1Same = 1;
         memWriteResp_valid = 1;
         memWriteResp_payload_id = 0;
@@ -315,107 +332,122 @@ module wbb_io_assertions_test;
         tick();
         expect_result("legal lifecycle and request/response backpressure", 0, 0);
 
+        // 合法场景：覆盖同拍重叠、满槽及乱序释放。
         restart();
         two_slots();
         expect_result("overlap, full, out-of-order responses and release", 0, 0);
 
+        // 合法场景：不同槽的发送与响应在同一沿接受。
         restart();
         two_slots(1);
         expect_result("send and response for different slots on the same edge", 0, 0);
 
+        // 合法场景：连续预留/push使用不同槽，并保留最后一笔尾push。
         restart();
         reverse_slot_pipeline();
         expect_result("consecutive reserve/push with different slots and tail push", 0, 0);
 
+        // 模式边界：严格模式缺少下一拍push应报错，延迟模式允许后续push。
         restart();
-        reserve_a();
+        reserve_first_line();
         tick();
         if (STRICT) begin
             expect_result("missing next-edge push", 1, 0, "WBB_ENV_PUSH_NEXT");
         end else begin
-            push_a();
+            push_first_line();
             tick();
             expect_result("explicit delayed-push profile", 0, 0);
         end
 
+        // 输入违约：未预留就push，必须报告槽归属错误。
         restart();
         push_en = 1;
-        push_line = D;
+        push_line = FIRST_LINE;
         tick();
         expect_result("push without reservation", 1, 0, "WBB_ENV_PUSH_OWNER");
 
+        // 输入违约：不能用本沿新预留为本沿push提供槽。
         restart();
         reserve_en = 1;
-        reserve_addr = A;
+        reserve_addr = FIRST_ADDR;
         push_en = 1;
-        push_line = D;
+        push_line = FIRST_LINE;
         tick();
         expect_result("same-edge reserve/push forbidden", 1, 0, "WBB_ENV_PUSH_OWNER");
 
+        // 输入违约：push槽号不是之前承诺的槽。
         restart();
-        reserve_a();
+        reserve_first_line();
         push_en = 1;
-        push_line = D;
+        push_line = FIRST_LINE;
         push_slot = 1;
         tick();
         expect_result("push wrong slot", 1, 0, "WBB_ENV_PUSH_OWNER");
 
+        // 输入违约：对已经占用的地址重复预留。
         restart();
-        reserve_a();
+        reserve_first_line();
         push_en = 1;
-        push_line = D;
+        push_line = FIRST_LINE;
         reserve_en = 1;
-        reserve_addr = A;
+        reserve_addr = FIRST_ADDR;
         tick();
         expect_result("duplicate address reservation", 1, 0, "WBB_ENV_DUPLICATE_ADDR");
 
+        // 输出违约：发送被阻塞时改变整行数据。
         restart();
-        reserve_a();
-        push_a();
+        reserve_first_line();
+        push_first_line();
         tick();
-        send_payload_wData = E;
+        send_payload_wData = SECOND_LINE;
         tick();
         expect_result("send data changed under backpressure", 0, 1, "WBB_DUT_SEND_STABLE");
 
+        // 输出违约：未握手就撤回已呈现的发送请求。
         restart();
-        reserve_a();
-        push_a();
+        reserve_first_line();
+        push_first_line();
         tick();
         send_valid = 0;
         tick();
         expect_result("send valid withdrawn under backpressure", 0, 1, "WBB_DUT_SEND_STABLE");
 
+        // 输出违约：槽内还没有push数据就产生发送。
         restart();
         send_valid = 1;
-        send_payload_addr = A;
-        send_payload_wData = D;
+        send_payload_addr = FIRST_ADDR;
+        send_payload_wData = FIRST_LINE;
         tick();
         expect_result("send without pushed data", 0, 1, "WBB_DUT_SEND_OWNER");
 
+        // 输出违约：同一生命周期已发送槽重复发送。
         restart();
-        reserve_a();
-        push_a();
+        reserve_first_line();
+        push_first_line();
         send_ready = 1;
         tick();
         tick();
         expect_result("same slot sent twice", 0, 1, "WBB_DUT_SEND_OWNER");
 
+        // 输入违约：响应没有对应的先前发送。
         restart();
         memWriteResp_valid = 1;
         tick();
         expect_result("response without earlier send", 1, 0, "WBB_ENV_RESPONSE_OWNER");
 
+        // 输入违约：当前契约不允许首次发送和响应同沿。
         restart();
-        reserve_a();
-        push_a();
+        reserve_first_line();
+        push_first_line();
         send_ready = 1;
         memWriteResp_valid = 1;
         tick();
         expect_result("zero-cycle response forbidden", 1, 0, "WBB_ENV_RESPONSE_OWNER");
 
+        // 输入违约：响应被阻塞时更换ID。
         restart();
-        reserve_a();
-        push_a();
+        reserve_first_line();
+        push_first_line();
         send_ready = 1;
         tick();
         send_valid = 0;
@@ -426,9 +458,10 @@ module wbb_io_assertions_test;
         tick();
         expect_result("response ID changed under backpressure", 1, 0, "WBB_ENV_RESPONSE_STABLE");
 
+        // 输入违约：完整总线ID超出合法槽范围。
         restart();
-        reserve_a();
-        push_a();
+        reserve_first_line();
+        push_first_line();
         send_ready = 1;
         tick();
         send_valid = 0;
@@ -437,113 +470,123 @@ module wbb_io_assertions_test;
         tick();
         expect_result("noncanonical response ID", 1, 0, "WBB_ENV_RESPONSE_ID");
 
+        // 输出违约：空态却报告满槽且不能预留。
         restart();
         full = 1;
         reserveOk = 0;
         tick();
         expect_result("incorrect full/capacity", 0, 1, "WBB_DUT_CAPACITY");
 
+        // 输出违约：空槽选择指向已经占用的位置。
         restart();
-        reserve_a();
+        reserve_first_line();
         reserveSlot = 0;
         push_en = 1;
-        push_line = D;
+        push_line = FIRST_LINE;
         tick();
         expect_result("reserveSlot names occupied slot", 0, 1, "WBB_DUT_RESERVE_SLOT");
 
+        // 输出违约：旧push同拍，新的成功预留却返回同一个槽。
         restart();
-        reserve_a();
+        reserve_first_line();
         reserve_en = 1;
-        reserve_addr = B;
+        reserve_addr = SECOND_ADDR;
         reserveSlot = 0;
         push_en = 1;
         push_slot = 0;
-        push_line = D;
+        push_line = FIRST_LINE;
         tick();
         expect_result("concurrent reserve returns the legal push slot", 0, 1, "WBB_DUT_OVERLAP_SLOT");
 
+        // 输出违约：仅预留阶段的地址没有被查询命中。
         restart();
-        reserve_a();
+        reserve_first_line();
         q0Same = 0;
         push_en = 1;
-        push_line = D;
+        push_line = FIRST_LINE;
         tick();
         expect_result("reserved address missing from query", 0, 1, "WBB_DUT_QUERY0");
 
+        // 输出违约：未占用的地址被错误报告命中。
         restart();
         q1Same = 1;
         tick();
         expect_result("false query hit", 0, 1, "WBB_DUT_QUERY1");
 
+        // 输入违约：有效预留地址不是块对齐地址。
         restart();
         reserve_en = 1;
-        reserve_addr = A + 1;
+        reserve_addr = FIRST_ADDR + 1;
         tick();
         expect_result("misaligned reserve", 1, 0, "WBB_ENV_RESERVE_ADDR");
 
+        // 输入违约：常开查询口携带未对齐地址。
         restart();
-        q0Addr = A + 1;
+        q0Addr = FIRST_ADDR + 1;
         tick();
         expect_result("misaligned query", 1, 0, "WBB_ENV_QUERY_ADDR");
 
+        // 输出违约：DUT资源反馈含X。
         restart();
         reserveOk = 1'bx;
         tick();
         expect_result("unknown DUT control", 0, 1, "WBB_DUT_CONTROL_X");
 
+        // 输出违约：背压期间新增候选，不得取代原挂起请求。
         restart();
         // A non-lowest free slot is legal: the architecture does not mandate lowest-free allocation.
         reserveSlot = 1;
         reserve_en = 1;
-        reserve_addr = A;
+        reserve_addr = FIRST_ADDR;
         tick();
         reserve_en = 0;
         reserveSlot = 0;
         push_en = 1;
         push_slot = 1;
-        push_line = D;
+        push_line = FIRST_LINE;
         tick();
         push_en = 0;
         send_valid = 1;
-        send_payload_addr = A;
+        send_payload_addr = FIRST_ADDR;
         send_payload_id = 1;
-        send_payload_wData = D;
+        send_payload_wData = FIRST_LINE;
         reserve_en = 1;
-        reserve_addr = B;
+        reserve_addr = SECOND_ADDR;
         tick();
         reserve_en = 0;
         reserveOk = 0;
         full = 1;
         push_en = 1;
         push_slot = 0;
-        push_line = E;
+        push_line = SECOND_LINE;
         tick();
         push_en = 0;
-        send_payload_addr = B;
+        send_payload_addr = SECOND_ADDR;
         send_payload_id = 0;
-        send_payload_wData = E;
+        send_payload_wData = SECOND_LINE;
         tick();
         expect_result("new candidate must not replace a stalled request", 0, 1, "WBB_DUT_SEND_STABLE");
 
+        // 输出违约：持续待发槽被其他成功发送超越规定次数。
         restart();
-        reserve_a();
+        reserve_first_line();
         push_en = 1;
-        push_line = D;
+        push_line = FIRST_LINE;
         reserve_en = 1;
-        reserve_addr = B;
+        reserve_addr = SECOND_ADDR;
         tick();
         reserve_en = 0;
         reserveOk = 0;
         full = 1;
         push_slot = 1;
-        push_line = E;
+        push_line = SECOND_LINE;
         tick();
         push_en = 0;
         send_valid = 1;
         send_ready = 1;
         send_payload_id = 1;
-        send_payload_addr = B;
-        send_payload_wData = E;
+        send_payload_addr = SECOND_ADDR;
+        send_payload_wData = SECOND_LINE;
         tick();
         send_valid = 0;
         memWriteResp_valid = 1;
@@ -554,20 +597,21 @@ module wbb_io_assertions_test;
         reserveOk = 1;
         reserveSlot = 1;
         reserve_en = 1;
-        reserve_addr = B;
+        reserve_addr = SECOND_ADDR;
         tick();
         reserve_en = 0;
         full = 1;
         reserveOk = 0;
         push_en = 1;
         push_slot = 1;
-        push_line = E;
+        push_line = SECOND_LINE;
         tick();
         push_en = 0;
         send_valid = 1;
         tick();
         expect_result("pending slot overtaken beyond RR bound", 0, 1, "WBB_DUT_RR_BOUND");
 
+        // 复位场景：停钟后检查合法异步清空，并注入未清空输出的负例。
         restart();
         clock_enable = 0;
         rst_n = 0;

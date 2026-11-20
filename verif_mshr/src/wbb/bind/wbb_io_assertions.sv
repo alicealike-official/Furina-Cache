@@ -89,11 +89,11 @@ module wbb_io_assertions #(
         query0_expected = 0;
         query1_expected = 0;
         duplicate_addr = 0;
-        for (int i = 0; i < WBB_ENTRIES; i++) begin
-            if (occupied[i]) begin
-                query0_expected |= (saved_addr[i] == q0Addr);
-                query1_expected |= (saved_addr[i] == q1Addr);
-                duplicate_addr |= (saved_addr[i] == reserve_addr);
+        for (int slot_index = 0; slot_index < WBB_ENTRIES; slot_index++) begin
+            if (occupied[slot_index]) begin
+                query0_expected |= (saved_addr[slot_index] == q0Addr);
+                query1_expected |= (saved_addr[slot_index] == q1Addr);
+                duplicate_addr |= (saved_addr[slot_index] == reserve_addr);
             end
         end
         reserve_slot_free = 0;
@@ -125,10 +125,10 @@ module wbb_io_assertions #(
             history_valid <= 1;
             reserve_due <= 0;
             due_slot <= '0;
-            for (int i = 0; i < WBB_ENTRIES; i++) begin
-                saved_addr[i] <= '0;
-                saved_data[i] <= '0;
-                other_sends[i] <= 0;
+            for (int slot_index = 0; slot_index < WBB_ENTRIES; slot_index++) begin
+                saved_addr[slot_index] <= '0;
+                saved_data[slot_index] <= '0;
+                other_sends[slot_index] <= 0;
             end
         end else if (seen_reset && history_valid) begin
             reserve_due <= reserve_fire;
@@ -158,11 +158,11 @@ module wbb_io_assertions #(
                     loaded[memWriteResp_payload_id] <= 0;
                     issued[memWriteResp_payload_id] <= 0;
                 end
-                for (int i = 0; i < WBB_ENTRIES; i++) begin
-                    if (!pending[i] || (send_fire && $unsigned(send_payload_id) == i)) begin
-                        other_sends[i] <= 0;
+                for (int slot_index = 0; slot_index < WBB_ENTRIES; slot_index++) begin
+                    if (!pending[slot_index] || (send_fire && $unsigned(send_payload_id) == slot_index)) begin
+                        other_sends[slot_index] <= 0;
                     end else if (send_fire) begin
-                        other_sends[i] <= other_sends[i] + 1;
+                        other_sends[slot_index] <= other_sends[slot_index] + 1;
                     end
                 end
             end
@@ -326,31 +326,31 @@ module wbb_io_assertions #(
                 |=> push_en && push_slot == $past(reserveSlot))
                 else report_failure(1, "PUSH_NEXT", "Successful reserve requires push to that slot on the next edge");
         end
-        for (genvar i = 0; i < WBB_ENTRIES; i++) begin : g_slot
+        for (genvar slot_index = 0; slot_index < WBB_ENTRIES; slot_index++) begin : g_slot
 
             // 【DUT】槽 i 的发送有效且归属合法时，发送地址必须等于该槽成功 reserve 的地址，数据等于其 push 数据。
             // 有效但受反压时同样比较，发现槽号、地址或整行数据串扰。
             a_dut_send_content: assert property (@(posedge clk) disable iff (!rst_n)
-                seen_reset && history_valid && send_valid && send_has_data && $unsigned(send_payload_id) == i
-                |-> send_payload_addr === saved_addr[i] && send_payload_wData === saved_data[i])
-                else report_failure(0, "SEND_CONTENT", $sformatf("Slot %0d send differs from accepted reserve/push", i));
+                seen_reset && history_valid && send_valid && send_has_data && $unsigned(send_payload_id) == slot_index
+                |-> send_payload_addr === saved_addr[slot_index] && send_payload_wData === saved_data[slot_index])
+                else report_failure(0, "SEND_CONTENT", $sformatf("Slot %0d send differs from accepted reserve/push", slot_index));
             if (CHECK_RR_FAIRNESS) begin : g_fairness
 
                 // 【DUT】槽 i 持续待发时，其他槽的成功发送最多允许超越它 WBB_ENTRIES-1 次。
                 // 每次其他槽握手前检查此前的超越次数；统计单位是成功握手次数，外部反压等待拍不计入。
                 a_dut_rr_bound: assert property (@(posedge clk) disable iff (!rst_n)
-                    seen_reset && history_valid && pending[i] && send_fire && send_has_data &&
-                    $unsigned(send_payload_id) != i |-> other_sends[i] < WBB_ENTRIES - 1)
-                    else report_failure(0, "RR_BOUND", $sformatf("Slot %0d overtaken by too many accepted sends", i));
+                    seen_reset && history_valid && pending[slot_index] && send_fire && send_has_data &&
+                    $unsigned(send_payload_id) != slot_index |-> other_sends[slot_index] < WBB_ENTRIES - 1)
+                    else report_failure(0, "RR_BOUND", $sformatf("Slot %0d overtaken by too many accepted sends", slot_index));
             end
 
             // 【覆盖】记录 q0 查询命中槽 i 的 reserved 阶段，即槽已占用但数据尚未 push 的场景。
             c_reserved_query: cover property (@(posedge clk) disable iff (!rst_n)
-                history_valid && occupied[i] && !loaded[i] && q0Addr == saved_addr[i] && q0Same);
+                history_valid && occupied[slot_index] && !loaded[slot_index] && q0Addr == saved_addr[slot_index] && q0Same);
 
             // 【覆盖】记录 q1 查询命中槽 i 的 issued 阶段，确认测试观察到了等待写响应期间的地址占用。
             c_issued_query: cover property (@(posedge clk) disable iff (!rst_n)
-                history_valid && issued[i] && q1Addr == saved_addr[i] && q1Same);
+                history_valid && issued[slot_index] && q1Addr == saved_addr[slot_index] && q1Same);
         end
     endgenerate
 

@@ -414,7 +414,7 @@ UVM运行时，输入违约报告 `WBB_ENV_*`，输出违约报告 `WBB_DUT_*`�
 ### 14.1 运行检查器自测
 
 ```sh
-make -C verif_mshr/sim check_sva
+make -C verif_mshr/sim_wbb check_sva
 ```
 
 该入口仅编译checker、人工IO轨迹和接口桩，不使用 `dut.f`，不编译或运行WBB RTL。
@@ -423,7 +423,7 @@ make -C verif_mshr/sim check_sva
 2026-11-17在VCS O-2018.09-SP2上三组均通过。
 
 2026-11-20加入同拍不同槽的明确检查及合法/非法流水轨迹后，strict/delayed各29个场景和bind在10 ns、4 ns两种时钟下通过。完整UVM流水case继续开启严格下一拍断言，默认4槽的连续、满槽恢复、尾部场景也通过。
-日志位于 `verif_mshr/sim/work/assertions/{strict,delayed,bind}/`。
+日志位于 `verif_mshr/sim_wbb/work/assertions/{strict,delayed,bind}/`。
 负例故意产生assertion error；脚本通过场景检查和成功标记判定自测结果，不能要求负例日志零错误。
 
 ### 14.2 在完整环境中使用
@@ -432,7 +432,7 @@ make -C verif_mshr/sim check_sva
 需要显式允许延迟push时：
 
 ```sh
-make -C verif_mshr/sim vcs_compile SVA_DEFINES=+define+WBB_ALLOW_DELAYED_PUSH
+make -C verif_mshr/sim_wbb vcs_compile SVA_DEFINES=+define+WBB_ALLOW_DELAYED_PUSH
 ```
 
 此开关只调整push期限，不改变DUT、driver或其他所有权/Stream断言。

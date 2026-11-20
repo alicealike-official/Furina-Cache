@@ -3,6 +3,7 @@
 
 import argparse
 from collections import Counter
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -18,7 +19,7 @@ import time
 
 SIM_DIR = Path(__file__).resolve().parents[1]
 REGRESSION_DIR = SIM_DIR / "work" / "regression"
-DUT_FILE = SIM_DIR.parent / "generated" / "WriteBackBuffer.v"
+DUT_FILE = SIM_DIR.parent / "generated" / "wbb" / "WriteBackBuffer.v"
 COVERAGE = "line+cond+fsm+branch+tgl+assert"
 TEST_ORDER = (
     "wbb_base_test",
@@ -46,6 +47,69 @@ COUNTER_PATTERN = re.compile(
     r"response=(\d+) full_cycles=(\d+) stalled_cycles=(\d+)"
 )
 COUNTER_NAMES = ("cycles", "reserve", "push", "send", "response", "full_cycles", "stalled_cycles")
+
+
+def resolve_artifact_path(value):
+    """把历史WBB产物路径定位到当前目录；只计算位置，不修改历史记录或文件。"""
+    path = Path(value)
+    parts = path.parts
+    for index, part in enumerate(parts):
+        if part != "verif_mshr" or index + 1 >= len(parts):
+            continue
+        suffix = parts[index + 1:]
+        if suffix[0] in ("sim", "sim_wbb"):
+            return SIM_DIR.joinpath(*suffix[1:])
+        if suffix[0] == "generated":
+            relative = suffix[1:]
+            if len(relative) == 1 and relative[0] in ("WriteBackBuffer.v", "wbb_params_pkg.sv"):
+                return SIM_DIR.parent / "generated" / "wbb" / relative[0]
+            if len(relative) == 2 and relative[0] == "wbb" and relative[1] in ("WriteBackBuffer.v", "wbb_params_pkg.sv"):
+                return SIM_DIR.parent / "generated" / "wbb" / relative[1]
+    if not path.is_absolute() and parts and parts[0] == "work":
+        return SIM_DIR / path
+    return path
+
+
+def report_view(summary):
+    """复制报告后只重定位展示用的产物字段，保留原command、dut_file、结果和哈希。"""
+    view = deepcopy(summary)
+    artifact_fields = ("binary", "log", "console_log", "waveform", "wave", "tcl")
+    records = list(view.get("builds", {}).values()) + view.get("results", [])
+    for record in records:
+        for field in artifact_fields:
+            if record.get(field):
+                record[field] = str(resolve_artifact_path(record[field]))
+    return view
+
+
+def artifact_link(label, value, report_path=None):
+    """生成相对于报告文件的产物链接，使总表与每轮副本在不同目录仍能正确导航。"""
+    if not value:
+        return "-"
+    target = resolve_artifact_path(value)
+    if report_path is not None:
+        parent = Path(report_path).resolve().parent
+        if not target.is_absolute():
+            target = parent / target
+        target_text = Path(os.path.relpath(target, parent)).as_posix()
+    else:
+        target_text = target.as_posix()
+    return f"[{label}](<{target_text}>)"
+
+
+def report_detail_path(summary, report_path):
+    """仅在迁移导航页属于当前run时使用它，避免latest报告更新后仍指向旧结果。"""
+    report_path = Path(report_path)
+    relocated = report_path.with_suffix(".relocated.md")
+    run_id = summary.get("run_id")
+    if isinstance(run_id, str) and run_id:
+        try:
+            run_ids = re.findall(r"^Run: `([^`]+)`\s*$", relocated.read_text(), re.MULTILINE)
+        except OSError:
+            run_ids = []
+        if run_ids == [run_id]:
+            return relocated
+    return report_path.with_suffix(".md")
 
 
 def result_status(result):
@@ -182,7 +246,8 @@ class TerminalReport:
                 self.emit("        Log: " + str(row.get("log", "-")))
         self.emit()
         self.emit("  Report: " + str(report_path))
-        self.emit("  Detail: " + str(report_path.with_suffix(".md")))
+        detail_path = report_detail_path(summary, report_path)
+        self.emit("  Detail: " + str(detail_path))
         self.emit()
         return status == "PASS"
 
@@ -404,8 +469,8 @@ def run_case(test, input_mode, period, seed, build, run_id, dut_sha256):
     return result
 
 
-def markdown_summary(summary):
-    """输出便于查阅的结果表，日志和波形链接指向本轮独立目录。"""
+def markdown_summary(summary, report_path=None):
+    """输出便于查阅的结果表；给定报告位置时，日志和波形使用可搬移的相对链接。"""
     rows = ["# WBB regression", "", f"Run: `{summary['run_id']}`", "",
             f"DUT SHA-256: `{summary['dut_sha256']}`", "",
             "| Test | Input | Profile | Period (ns) | Seed | Result | Error IDs / reason | Events | Log | Wave |",
@@ -417,8 +482,8 @@ def markdown_summary(summary):
         errors = errors.replace("|", "\\|").replace("\n", " ")
         counts = result["counts"]
         events = "/".join(str(counts.get(name, "-")) for name in ("reserve", "push", "send", "response"))
-        log_link = f"[log](<{result['log']}>)"
-        wave_link = f"[fsdb](<{result['waveform']}>)" if result["waveform"] else "-"
+        log_link = artifact_link("log", result.get("log"), report_path)
+        wave_link = artifact_link("fsdb", result.get("waveform"), report_path)
         rows.append(f"| {result['test']} | {result.get('input_mode') or '-'} | {result['profile']} | "
                     f"{period_text(result['period_ns'])} | "
                     f"{result['seed']} | {'PASS' if result['pass'] else 'FAIL'} | {errors or '-'} | "
@@ -431,15 +496,27 @@ def markdown_summary(summary):
     return "\n".join(rows) + "\n"
 
 
+def relocated_markdown(summary, report_path, source_report_path=None):
+    """返回明确标注的历史报告迁移视图；调用方另存副本，不覆盖原JSON、Markdown或输入哈希。"""
+    report_path = Path(report_path)
+    source = Path(source_report_path) if source_report_path is not None else report_path.with_name("summary.json")
+    markdown = markdown_summary(report_view(summary), report_path)
+    notice = ("Artifact links were relocated after the WBB directory migration. "
+              "This is a navigation copy, not a new simulation result. "
+              "Original JSON and input-hash records are unchanged. Source: "
+              + artifact_link("the original summary", source, report_path) + ".")
+    return markdown.replace("# WBB regression\n", "# WBB regression relocated view\n\n" + notice + "\n", 1)
+
+
 def save_summary(summary):
     """每完成一个组合就更新总表，并保存本轮副本，避免中断时丢失已经得到的结果。"""
     report_dir = REGRESSION_DIR / "reports" / summary["run_id"]
     report_dir.mkdir(parents=True, exist_ok=True)
     json_text = json.dumps(summary, indent=4, ensure_ascii=False) + "\n"
-    markdown = markdown_summary(summary)
     for directory in (REGRESSION_DIR, report_dir):
         (directory / "summary.json").write_text(json_text)
-        (directory / "summary.md").write_text(markdown)
+        report_path = directory / "summary.md"
+        report_path.write_text(markdown_summary(summary, report_path))
 
 
 def main(argv=None):
@@ -455,7 +532,7 @@ def main(argv=None):
         except (OSError, ValueError) as error:
             console.progress("FAIL", f"Cannot read report: {error}")
             return 1
-        return 0 if console.summary(summary, report_path) else 1
+        return 0 if console.summary(report_view(summary), report_path) else 1
     started = time.monotonic()
     run_id = datetime.now(timezone.utc).strftime("run_%Y%m%d_%H%M%S_%f")
     dut_sha256 = file_hash(DUT_FILE)

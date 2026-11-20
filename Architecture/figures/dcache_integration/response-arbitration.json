@@ -1,0 +1,116 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "01.0.1.0.1.0.1.0.1.0"
+    },
+    {
+      "name": "S2 request (conceptual)",
+      "wave": "=.=...=...=.........",
+      "data": [
+        "read A",
+        "read C",
+        "write E",
+        "G waiting"
+      ]
+    },
+    {
+      "name": "rdFifo.push.ready",
+      "wave": "1.............0....."
+    },
+    {
+      "name": "wrFifo.push.ready",
+      "wave": "1.........0........."
+    },
+    {
+      "name": "respFullAny / s2Stuck",
+      "wave": "0.........1........."
+    },
+    {
+      "name": "commit",
+      "wave": "1.........0........."
+    },
+    {
+      "name": "hitRead",
+      "wave": "1.....0............."
+    },
+    {
+      "name": "hitWrite",
+      "wave": "0.....1...0........."
+    },
+    {
+      "name": "replay.valid",
+      "wave": "1.............0....."
+    },
+    {
+      "name": "replay.ready",
+      "wave": "1.0...1.......0....."
+    },
+    {
+      "name": "replay.isWrite",
+      "wave": "1.0................."
+    },
+    {
+      "name": "replay.id / type / data",
+      "wave": "=.=.......=...x.....",
+      "data": [
+        "idB / W / -",
+        "idD / R / DD",
+        "idF / R / DF"
+      ]
+    },
+    {
+      "name": "rdFifo.push.valid",
+      "wave": "1.............0....."
+    },
+    {
+      "name": "rdFifo.push.id / data",
+      "wave": "=.=...=...=...x.....",
+      "data": [
+        "idA / DA",
+        "idC / DC",
+        "idD / DD",
+        "idF / DF"
+      ]
+    },
+    {
+      "name": "wrFifo.push.valid",
+      "wave": "1.0...1...0........."
+    },
+    {
+      "name": "wrFifo.push.id",
+      "wave": "=.x...=...x.........",
+      "data": [
+        "idB",
+        "idE"
+      ]
+    },
+    {
+      "name": "rd occupancy (conceptual)",
+      "wave": "=.=...=...=...=.....",
+      "data": [
+        "0 / 4",
+        "1 / 4",
+        "2 / 4",
+        "3 / 4",
+        "4 / 4"
+      ]
+    },
+    {
+      "name": "wr occupancy (conceptual)",
+      "wave": "=.=.......=.........",
+      "data": [
+        "2 / 4",
+        "3 / 4",
+        "4 / 4"
+      ]
+    }
+  ],
+  "head": {
+    "text": "Response arbitration: type-local priority; CPU stall does not gate other-type replay",
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · · · E4 · ·"
+  },
+  "config": {
+    "hscale": 1
+  }
+}

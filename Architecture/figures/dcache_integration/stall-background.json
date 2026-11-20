@@ -1,0 +1,122 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "01.0.1.0.1.0.1.0.1.0.1.0"
+    },
+    {
+      "name": "cpu.valid (B)",
+      "wave": "1...0..................."
+    },
+    {
+      "name": "cpu.ready",
+      "wave": "1.0...........1........."
+    },
+    {
+      "name": "cpu request block",
+      "wave": "=...x...................",
+      "data": [
+        "X (B)"
+      ]
+    },
+    {
+      "name": "S2 request (conceptual)",
+      "wave": "=.=...............=.....",
+      "data": [
+        "A: evict X",
+        "B: read X",
+        "IDLE"
+      ]
+    },
+    {
+      "name": "s1Valid",
+      "wave": "1.................0....."
+    },
+    {
+      "name": "wbb.q1Same",
+      "wave": "0.1...........0........."
+    },
+    {
+      "name": "s2Stuck",
+      "wave": "0.1...........0........."
+    },
+    {
+      "name": "commit / mshr.alloc.en",
+      "wave": "1.0...........1...0....."
+    },
+    {
+      "name": "merge.en / cache.w1.en",
+      "wave": "0......................."
+    },
+    {
+      "name": "cache.r1.en",
+      "wave": "1.............0........."
+    },
+    {
+      "name": "cache.r1.index / wordOff",
+      "wave": "=.............x.........",
+      "data": [
+        "setX / wordB"
+      ]
+    },
+    {
+      "name": "wbb.reserve.en / cache.r2.en",
+      "wave": "1.0....................."
+    },
+    {
+      "name": "wbb.reserve.addr / slot",
+      "wave": "=.x.....................",
+      "data": [
+        "X / k"
+      ]
+    },
+    {
+      "name": "pushPend / wbb.push.en",
+      "wave": "0.1...0................."
+    },
+    {
+      "name": "pushSlot / cache.r2.line",
+      "wave": "x.=.....................",
+      "data": [
+        "k / DX"
+      ]
+    },
+    {
+      "name": "memWriteReq.valid",
+      "wave": "0.....1...0............."
+    },
+    {
+      "name": "memWriteReq.ready",
+      "wave": "1......................."
+    },
+    {
+      "name": "memWriteReq.addr / data / id",
+      "wave": "x.....=...x.............",
+      "data": [
+        "X / DX / k"
+      ]
+    },
+    {
+      "name": "memWriteResp.valid",
+      "wave": "0...........1...0......."
+    },
+    {
+      "name": "memWriteResp.ready",
+      "wave": "1......................."
+    },
+    {
+      "name": "memWriteResp.id",
+      "wave": "x...........=...x.......",
+      "data": [
+        "k"
+      ]
+    }
+  ],
+  "head": {
+    "text": "B waits for evicted X: pending push and memory completion continue during stall",
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · · · E4 · · · E5 · ·"
+  },
+  "config": {
+    "hscale": 1
+  }
+}

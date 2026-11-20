@@ -31,7 +31,7 @@ for profile in ("strict", "delayed", "bind"):
     if profile == "bind":
         command += ["+incdir+" + str(uvm / "src"), str(uvm / "src/uvm.sv"),
                     str(uvm / "src/dpi/uvm_dpi.cc"), "-CFLAGS", "-DVCS",
-                    str(env / "generated/wbb_params_pkg.sv"),
+                    str(env / "generated/wbb/wbb_params_pkg.sv"),
                     str(env / "src/wbb/interface/wbb_interface.sv"), str(checker),
                     str(env / "src/wbb/bind/bind_wbb.sv"),
                     str(env / "test/assertions/wbb_bind_test.sv"), "-top", "tb_top"]

@@ -3,7 +3,7 @@ class wbb_scoreboard extends uvm_scoreboard;
     // C++ 稀疏内存的 SV 封装句柄，通过 DPI 访问独立的实际/期望内存实例。
     // 存储实现见 RefModel/MEM/SparseMemory.hpp，SV 封装见 model/wbb_memory_store.sv。
     wbb_memory_store memory;
-    wbb_sample previous;
+    wbb_sample previous_sample;
     int checked_cycles;
     int reserve_count;
     int push_count;
@@ -30,7 +30,6 @@ class wbb_scoreboard extends uvm_scoreboard;
 
 endclass
 
-
 function void wbb_scoreboard::build_phase(uvm_phase phase);
     super.build_phase(phase);
     if (!uvm_config_db #(wbb_memory_store)::get(this, "", "memory", memory)) begin
@@ -38,57 +37,68 @@ function void wbb_scoreboard::build_phase(uvm_phase phase);
     end
 endfunction
 
+// 比较同一拍的实际IO和C++预测，独立检查请求保持，再累计真实握手。
 function void wbb_scoreboard::write(wbb_compare_item item);
-    wbb_sample tr;
-    tr = item.actual_sample;
+    wbb_sample sample;
+
+    // 取得同一拍的实际采样和C++预测，先比较容量与地址查询。
+    sample = item.actual_sample;
     checked_cycles++;
-    if (tr.reserveOk !== (item.expected_reserve_ok != 0) || tr.full !== (item.expected_full != 0)) begin
+    if (sample.reserveOk !== (item.expected_reserve_ok != 0) || sample.full !== (item.expected_full != 0)) begin
         `error("Capacity outputs differ from C++ WBB model", "WBB_CAPACITY")
     end
-    if (item.expected_reserve_ok && tr.reserveSlot !== SLOT_WIDTH'(item.expected_reserve_slot)) begin
+    if (item.expected_reserve_ok && sample.reserveSlot !== SLOT_WIDTH'(item.expected_reserve_slot)) begin
         `error("Reserved slot differs from C++ WBB model", "WBB_RESERVE")
     end
-    if (tr.q0Same !== (item.expected_q0_same != 0) || tr.q1Same !== (item.expected_q1_same != 0)) begin
+    if (sample.q0Same !== (item.expected_q0_same != 0) || sample.q1Same !== (item.expected_q1_same != 0)) begin
         `error("Address queries differ from C++ WBB model", "WBB_QUERY")
     end
-    if (tr.send_valid !== (item.expected_send_valid != 0)) begin
+
+    // 比较发送有效性及地址、数据、ID；无效载荷不作功能比较。
+    if (sample.send_valid !== (item.expected_send_valid != 0)) begin
         `error("Send valid differs from C++ WBB model", "WBB_SEND")
     end
-    if (item.expected_send_valid && (tr.send_payload_addr !== item.expected_send_addr ||
-        tr.send_payload_id !== BUS_ID_WIDTH'(item.expected_send_id) ||
-        tr.send_payload_wData !== item.expected_send_data)) begin
+    if (item.expected_send_valid && (sample.send_payload_addr !== item.expected_send_addr ||
+        sample.send_payload_id !== BUS_ID_WIDTH'(item.expected_send_id) ||
+        sample.send_payload_wData !== item.expected_send_data)) begin
         `error("Write address/data/ID differs from C++ WBB model", "WBB_SEND")
     end
-    if (tr.memWriteResp_ready !== 1'b1) begin
+    if (sample.memWriteResp_ready !== 1'b1) begin
         `error("Current WBB contract requires write-response ready high", "WBB_RESPONSE")
     end
     // Protocol checking does not predict WBB behavior.
-    if (previous != null && previous.send_valid && !previous.send_ready) begin
-        if (tr.send_valid !== 1'b1 || tr.send_payload_id !== previous.send_payload_id ||
-            tr.send_payload_addr !== previous.send_payload_addr ||
-            tr.send_payload_wData !== previous.send_payload_wData) begin
+
+    // 独立检查上一拍已挂起请求的保持，不能只依赖模型一致。
+    if (previous_sample != null && previous_sample.send_valid && !previous_sample.send_ready) begin
+        if (sample.send_valid !== 1'b1 || sample.send_payload_id !== previous_sample.send_payload_id ||
+            sample.send_payload_addr !== previous_sample.send_payload_addr ||
+            sample.send_payload_wData !== previous_sample.send_payload_wData) begin
             `error("Send payload changed while backpressured", "WBB_STABILITY")
         end
     end
-    if (tr.reserve_en && tr.reserveOk) begin
+
+    // 仅按实际接受事件累计四类事务，并记录满槽/背压周期。
+    if (sample.reserve_en && sample.reserveOk) begin
         reserve_count++;
     end
-    if (tr.push_en) begin
+    if (sample.push_en) begin
         push_count++;
     end
-    if (tr.send_valid && tr.send_ready) begin
+    if (sample.send_valid && sample.send_ready) begin
         send_count++;
     end
-    if (tr.memWriteResp_valid && tr.memWriteResp_ready) begin
+    if (sample.memWriteResp_valid && sample.memWriteResp_ready) begin
         response_count++;
     end
-    if (tr.full) begin
+    if (sample.full) begin
         full_cycles++;
     end
-    if (tr.send_valid && !tr.send_ready) begin
+    if (sample.send_valid && !sample.send_ready) begin
         stalled_cycles++;
     end
-    previous = tr;
+
+    // 保留本拍采样，供下一拍的背压保持检查使用。
+    previous_sample = sample;
 endfunction
 
 function void wbb_scoreboard::check_phase(uvm_phase phase);

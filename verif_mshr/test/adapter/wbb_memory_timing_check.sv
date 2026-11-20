@@ -53,9 +53,9 @@ package wbb_memory_timing_pkg;
         extern task run_checks();
         extern task send_request(int unsigned id, int ordinal);
         extern task wait_for_responses(int count);
-        extern function void write(wbb_sample tr);
-        extern function void check_response(wbb_sample tr);
-        extern function void record_request(wbb_sample tr);
+        extern function void write(wbb_sample sample);
+        extern function void check_response(wbb_sample sample);
+        extern function void record_request(wbb_sample sample);
         extern function void check_memory_data();
     endclass
 
@@ -123,6 +123,8 @@ package wbb_memory_timing_pkg;
     // 先检查三笔无背压响应恰好晚 L 拍，再阻塞两笔响应，检查队首等待时 valid/id 保持。
     // 第二阶段结束后恢复 ready，两笔响应必须按顺序各完成一次，不能因等待而丢失。
     task wbb_memory_timing_test::run_checks();
+
+        // 先用无背压请求检查配置的精确响应拍数。
         wait (vif.rst_n === 1'b1);
         @(negedge vif.clk);
         vif.memWriteResp_ready <= 1;
@@ -131,6 +133,7 @@ package wbb_memory_timing_pkg;
         end
         wait_for_responses(EXACT_REQUESTS);
 
+        // 再保持响应背压，确认待响应记录不被提前移除。
         expect_exact = 0;
         @(negedge vif.clk);
         vif.memWriteResp_ready <= 0;
@@ -175,43 +178,48 @@ package wbb_memory_timing_pkg;
     endtask
 
     // 从 monitor 的有效采样独立计拍，先检查已有响应再登记新请求，不读取 driver 的内部周期数。
-    function void wbb_memory_timing_test::write(wbb_sample tr);
-        if (tr.rst_n !== 1'b1) begin
+    function void wbb_memory_timing_test::write(wbb_sample sample);
+        if (sample.rst_n !== 1'b1) begin
             return;
         end
         sample_cycle++;
-        check_response(tr);
-        record_request(tr);
+        check_response(sample);
+        record_request(sample);
     endfunction
 
     // 依据本自检记录的接收拍判断响应何时应出现，并检查实际握手的延迟和背压时的稳定性。
     // 没有前项阻塞且 ready=1 时，握手必须恰好晚 L 拍；背压期间只要求保持，不强求握手时间。
-    function void wbb_memory_timing_test::check_response(wbb_sample tr);
+    function void wbb_memory_timing_test::check_response(wbb_sample sample);
         int unsigned id;
         int unsigned removed_id;
-        longint unsigned age;
+        longint unsigned elapsed_cycles;
 
-        if (previous_stall && (tr.memWriteResp_valid !== 1'b1 || tr.memWriteResp_payload_id !== held_id)) begin
+        // 先检查前一拍挂起的响应是否保持。
+        if (previous_stall && (sample.memWriteResp_valid !== 1'b1 || sample.memWriteResp_payload_id !== held_id)) begin
             `error("Response changed while ready was low", "MEM_TIMING_STABILITY")
         end
+
+        // 按独立记录的请求接受拍计算到期时间，检查早回、晚回和响应归属。
         if (pending_ids.size() == 0) begin
-            if (tr.memWriteResp_valid !== 1'b0) begin
+            if (sample.memWriteResp_valid !== 1'b0) begin
                 `error("Response appeared without an earlier request", "MEM_TIMING_EARLY")
             end
         end else begin
             id = pending_ids[0];
-            age = sample_cycle - accepted_at[id];
-            if (age >= cfg.mem_write_latency_cycles) begin
-                if (tr.memWriteResp_valid !== 1'b1 || tr.memWriteResp_payload_id !== BUS_ID_WIDTH'(id)) begin
+            elapsed_cycles = sample_cycle - accepted_at[id];
+            if (elapsed_cycles >= cfg.mem_write_latency_cycles) begin
+                if (sample.memWriteResp_valid !== 1'b1 || sample.memWriteResp_payload_id !== BUS_ID_WIDTH'(id)) begin
                     `error("The due head response was not presented at the expected edge", "MEM_TIMING_DUE")
                 end
-            end else if (tr.memWriteResp_valid !== 1'b0) begin
+            end else if (sample.memWriteResp_valid !== 1'b0) begin
                 `error("Response appeared before the configured number of cycles", "MEM_TIMING_EARLY")
             end
-            if (tr.memWriteResp_valid === 1'b1 && tr.memWriteResp_ready === 1'b1) begin
+
+            // 实际握手后再核对精确延迟并移除这笔请求。
+            if (sample.memWriteResp_valid === 1'b1 && sample.memWriteResp_ready === 1'b1) begin
                 if (exact_response[id]) begin
-                    if (age != cfg.mem_write_latency_cycles) begin
-                        `error($sformatf("Expected exactly %0d cycles, observed %0d", cfg.mem_write_latency_cycles, age), "MEM_TIMING_LATENCY")
+                    if (elapsed_cycles != cfg.mem_write_latency_cycles) begin
+                        `error($sformatf("Expected exactly %0d cycles, observed %0d", cfg.mem_write_latency_cycles, elapsed_cycles), "MEM_TIMING_LATENCY")
                     end else begin
                         exact_matches++;
                     end
@@ -222,8 +230,10 @@ package wbb_memory_timing_pkg;
                 responses++;
             end
         end
-        previous_stall = tr.memWriteResp_valid === 1'b1 && tr.memWriteResp_ready === 1'b0;
-        held_id = tr.memWriteResp_payload_id;
+
+        // 保存本拍背压与载荷，供下一拍保持检查；挂起响应不能让driver提前报空闲。
+        previous_stall = sample.memWriteResp_valid === 1'b1 && sample.memWriteResp_ready === 1'b0;
+        held_id = sample.memWriteResp_payload_id;
         if (previous_stall) begin
             stalled_samples++;
             if (memory_driver.is_idle()) begin
@@ -233,11 +243,11 @@ package wbb_memory_timing_pkg;
     endfunction
 
     // 记录实际 send 握手的采样拍和 ID，检查未完成的 ID 没有被重复使用。
-    function void wbb_memory_timing_test::record_request(wbb_sample tr);
+    function void wbb_memory_timing_test::record_request(wbb_sample sample);
         int unsigned id;
 
-        if (tr.send_valid === 1'b1 && tr.send_ready === 1'b1) begin
-            id = tr.send_payload_id;
+        if (sample.send_valid === 1'b1 && sample.send_ready === 1'b1) begin
+            id = sample.send_payload_id;
             if (accepted_at.exists(id)) begin
                 `fatal("Timing stimulus reused an outstanding ID", "MEM_TIMING_ID")
             end

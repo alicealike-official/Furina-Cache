@@ -1,0 +1,71 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "01.0.1.0.1.0.1.0.1.0.1.0"
+    },
+    {
+      "name": "fill.en (B)",
+      "wave": "1.0....................."
+    },
+    {
+      "name": "fillReady",
+      "wave": "1......................."
+    },
+    {
+      "name": "fill.tag/index/way",
+      "wave": "=.x.....................",
+      "data": [
+        "B (Entry 0)"
+      ]
+    },
+    {
+      "name": "replay.valid",
+      "wave": "1.................0....."
+    },
+    {
+      "name": "replay.ready",
+      "wave": "0...........1..........."
+    },
+    {
+      "name": "replay.id / type / data",
+      "wave": "=.............=...x.....",
+      "data": [
+        "idA / R / DA",
+        "idB / R / DB"
+      ]
+    },
+    {
+      "name": "Entry 3 phase (conceptual)",
+      "wave": "=.............=.........",
+      "data": [
+        "REPLAY",
+        "IDLE"
+      ]
+    },
+    {
+      "name": "Entry 0 phase (conceptual)",
+      "wave": "=.=...............=.....",
+      "data": [
+        "FILL-W",
+        "REPLAY",
+        "IDLE"
+      ]
+    },
+    {
+      "name": "lockMask[bitA]",
+      "wave": "1.............0........."
+    },
+    {
+      "name": "lockMask[bitB]",
+      "wave": "1.................0....."
+    }
+  ],
+  "head": {
+    "text": "Replay A is held; Entry 0 becomes eligible after fill at E0",
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · · · E4 · · · E5 · ·"
+  },
+  "config": {
+    "hscale": 1
+  }
+}

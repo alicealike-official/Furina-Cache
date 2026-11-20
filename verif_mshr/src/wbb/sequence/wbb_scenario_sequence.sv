@@ -27,32 +27,33 @@ class wbb_scenario_sequence extends wbb_base_sequence;
         bit [ADDR_WIDTH-1:0] q0 = '0, bit [ADDR_WIDTH-1:0] q1 = '0);
     extern task send_pipeline_batch(int first_index, int count);
     extern task release_response(int id);
-    extern task query_pairs(bit [ADDR_WIDTH-1:0] a, bit [ADDR_WIDTH-1:0] b, bit [ADDR_WIDTH-1:0] miss);
+    extern task query_pairs(bit [ADDR_WIDTH-1:0] first_addr, bit [ADDR_WIDTH-1:0] last_addr,
+        bit [ADDR_WIDTH-1:0] miss_addr);
     extern function int get_record_count();
     extern function writeback_record_t get_record(int index);
 endclass
 
 task wbb_scenario_sequence::pre_body();
-    wbb_sequencer sqr;
+    wbb_sequencer sequencer;
 
     super.pre_body();
-    if (!$cast(sqr, get_sequencer())) begin
+    if (!$cast(sequencer, get_sequencer())) begin
         `fatal("Scenario sequence requires wbb_sequencer", "WBB_SEQUENCE_CONFIG")
     end
-    cfg = sqr.cfg;
-    obs = sqr.observations;
+    cfg = sequencer.cfg;
+    obs = sequencer.observations;
     records.delete();
 endtask
 
 // 按编号生成非零块地址，遇到负编号或地址溢出时明确报错。
 function bit [ADDR_WIDTH-1:0] wbb_scenario_sequence::block_addr(int index);
-    longint unsigned value;
+    longint unsigned block_address;
 
-    value = (64'(index) + 1) * BLOCK_SIZE;
-    if (index < 0 || value == 0 || 64'(ADDR_WIDTH'(value)) != value) begin
+    block_address = (64'(index) + 1) * BLOCK_SIZE;
+    if (index < 0 || block_address == 0 || 64'(ADDR_WIDTH'(block_address)) != block_address) begin
         `fatal("Scenario block address is out of range", "WBB_SEQUENCE_ADDRESS")
     end
-    return ADDR_WIDTH'(value);
+    return ADDR_WIDTH'(block_address);
 endfunction
 
 // 生成每个字都可区分的数据；不同编号使用不同的整行内容。
@@ -79,6 +80,7 @@ task wbb_scenario_sequence::send_data(bit [ADDR_WIDTH-1:0] addr, bit [LINE_WIDTH
     record.addr = addr;
     record.line_data = line_data;
     records.push_back(record);
+
     writeback_line(addr, line_data, q0, q1, push_delay_cycles);
 endtask
 
@@ -87,6 +89,7 @@ endtask
 task wbb_scenario_sequence::send_group(wbb_transaction items[$]);
     writeback_record_t record;
 
+    // 保存原始激励，供test在提交结束后逐笔检查地址、数据及最终内存内容。
     foreach (items[index]) begin
         if (items[index] == null) begin
             `fatal("Scenario group contains a null writeback", "WBB_SEQUENCE_GROUP")
@@ -95,6 +98,8 @@ task wbb_scenario_sequence::send_group(wbb_transaction items[$]);
         record.line_data = items[index].line_data;
         records.push_back(record);
     end
+
+    // 由base sequence选择串行或流水提交，避免各场景重复实现批次调度。
     submit_writebacks(items, cfg.input_mode);
 endtask
 
@@ -116,6 +121,7 @@ function wbb_batch_transaction wbb_scenario_sequence::make_batch(int first_index
     wbb_batch_transaction batch;
     writeback_record_t record;
 
+    // 检查批次数量，再设置整批的调度方式与查询参数。
     if (count <= 0) begin
         `fatal("A writeback batch must contain at least one entry", "WBB_SEQUENCE_BATCH")
     end
@@ -126,22 +132,30 @@ function wbb_batch_transaction wbb_scenario_sequence::make_batch(int first_index
     if (mode == WBB_BATCH_PIPELINED) begin
         batch.hold_cycles = 0;
     end
+
     for (int index = 0; index < count; index++) begin
-        wbb_transaction tr;
-        tr = wbb_transaction::type_id::create($sformatf("entry_%0d", index));
-        tr.addr = block_addr(first_index + index);
-        tr.line_data = make_line(first_index + index);
-        tr.q0Addr = tr.addr;
-        tr.q1Addr = q1;
+        wbb_transaction item;
+
+        // 每笔写回使用自己的块地址和数据；普通批次查询本笔地址。
+        item = wbb_transaction::type_id::create($sformatf("entry_%0d", index));
+        item.addr = block_addr(first_index + index);
+        item.line_data = make_line(first_index + index);
+        item.q0Addr = item.addr;
+        item.q1Addr = q1;
+
+        // 流水批次同时查询上一笔预留地址和本笔地址，观察两个阶段的交接。
         if (mode == WBB_BATCH_PIPELINED) begin
-            tr.q0Addr = index == 0 ? '0 : block_addr(first_index + index - 1);
-            tr.q1Addr = tr.addr;
+            item.q0Addr = index == 0 ? '0 : block_addr(first_index + index - 1);
+            item.q1Addr = item.addr;
         end
-        batch.entries.push_back(tr);
-        record.addr = tr.addr;
-        record.line_data = tr.line_data;
+
+        // 将事务加入批次，并保存不依赖事务句柄后续修改的原始数据副本。
+        batch.entries.push_back(item);
+        record.addr = item.addr;
+        record.line_data = item.line_data;
         records.push_back(record);
     end
+
     return batch;
 endfunction
 
@@ -157,26 +171,37 @@ endtask
 // 在采样沿之后选择一个已发送ID返回响应，等真正握手后再暂停后续响应。
 // 下一下降沿才应用配置，避免与memory driver在同一个下降沿修改/读取配置产生竞争。
 task wbb_scenario_sequence::release_response(int id);
-    int target;
+    int response_target;
 
+    // 在采样后选择要返回的已发送ID，并记录此次响应的累计计数目标。
     obs.wait_cycles(1);
-    target = obs.response_count + 1;
+    response_target = obs.response_count + 1;
     cfg.mem_response_order = WBB_MEM_SELECTED;
     cfg.mem_selected_response_id = id;
     cfg.mem_response_enable = 1;
-    obs.wait_for_responses(target);
+
+    // 等到实际响应握手再关闭放行，不能只因已设置valid就认为响应完成。
+    obs.wait_for_responses(response_target);
     cfg.mem_response_enable = 0;
 endtask
 
-// 查询同址、异址、左边命中、右边命中和双不命中；输出正确性由现有模型及断言检查。
-task wbb_scenario_sequence::query_pairs(bit [ADDR_WIDTH-1:0] a, bit [ADDR_WIDTH-1:0] b,
-    bit [ADDR_WIDTH-1:0] miss);
-    query(a, a);
-    query(a, b);
-    query(b, a);
-    query(a, miss);
-    query(miss, a);
-    query(miss, miss);
+// 对本轮首尾写回地址和未占用地址执行六种查询组合；输出正确性由模型及断言检查。
+// 首尾地址占用时应命中，释放后重复执行这些查询时应不命中，方法自身不固定期望值。
+task wbb_scenario_sequence::query_pairs(bit [ADDR_WIDTH-1:0] first_addr, bit [ADDR_WIDTH-1:0] last_addr,
+    bit [ADDR_WIDTH-1:0] miss_addr);
+    // 两口查询同一个写回地址。
+    query(first_addr, first_addr);
+
+    // 两口查询不同写回地址，并交换查询口，检查两路独立性。
+    query(first_addr, last_addr);
+    query(last_addr, first_addr);
+
+    // 一个口查写回地址，另一个口查未占用地址，再交换两口。
+    query(first_addr, miss_addr);
+    query(miss_addr, first_addr);
+
+    // 两口都查询未占用地址。
+    query(miss_addr, miss_addr);
 endtask
 
 // 返回本场景已准备的写回事务数量，查询和空闲操作不计入其中。

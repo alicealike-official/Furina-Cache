@@ -1,0 +1,77 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "01.0.1.0.1.0.1.0"
+    },
+    {
+      "name": "replay.valid (last A)",
+      "wave": "1.0............."
+    },
+    {
+      "name": "replay.ready",
+      "wave": "1..............."
+    },
+    {
+      "name": "replay.id",
+      "wave": "=.x.............",
+      "data": [
+        "idA"
+      ]
+    },
+    {
+      "name": "hasFree",
+      "wave": "0.1...0........."
+    },
+    {
+      "name": "freeEntry",
+      "wave": "x.=...x.........",
+      "data": [
+        "a"
+      ]
+    },
+    {
+      "name": "alloc.en (new B)",
+      "wave": "0...1...0......."
+    },
+    {
+      "name": "alloc.tag/index",
+      "wave": "x...=...x.......",
+      "data": [
+        "B"
+      ]
+    },
+    {
+      "name": "m0.hit (query A)",
+      "wave": "1.0............."
+    },
+    {
+      "name": "m1.hit (query B)",
+      "wave": "0.....1........."
+    },
+    {
+      "name": "lockMask[bitA]",
+      "wave": "1.0............."
+    },
+    {
+      "name": "lockMask[bitB]",
+      "wave": "0.....1........."
+    },
+    {
+      "name": "Entry a phase (conceptual)",
+      "wave": "=.=...=.........",
+      "data": [
+        "REPLAY(A)",
+        "IDLE",
+        "SEND(B)"
+      ]
+    }
+  ],
+  "head": {
+    "text": "Full table: final replay frees an Entry for the next edge",
+    "tick": "· E0 · · · E1 · · · E2 · · · E3 · ·"
+  },
+  "config": {
+    "hscale": 1
+  }
+}
