@@ -1,4 +1,17 @@
 class wbb_driver extends uvm_driver #(wbb_transaction);
+    typedef struct packed {
+        bit [ADDR_WIDTH-1:0] addr;
+        bit [LINE_WIDTH-1:0] line_data;
+        bit [ADDR_WIDTH-1:0] q0Addr;
+        bit [ADDR_WIDTH-1:0] q1Addr;
+    } pipeline_entry_t;
+
+    typedef struct packed {
+        bit valid;
+        logic [SLOT_WIDTH-1:0] slot;
+        pipeline_entry_t entry;
+    } pipeline_push_t;
+
     virtual wbb_interface vif;
     wbb_config cfg;
     `uvm_component_utils(wbb_driver)
@@ -21,6 +34,13 @@ class wbb_driver extends uvm_driver #(wbb_transaction);
     extern task drive_nonwriteback(wbb_transaction tr);
     extern task drive_batch(wbb_batch_transaction batch);
     extern task hold_batch(wbb_batch_transaction batch);
+    extern function void snapshot_pipeline_entries(wbb_batch_transaction batch,
+        output pipeline_entry_t entries[$]);
+    extern task drive_pipeline_batch(wbb_batch_transaction batch);
+    extern task drive_pipeline_cycle(bit reserve_valid, pipeline_entry_t reserve_entry,
+        pipeline_push_t pending_push);
+    extern function bit sample_pipeline_reserve(pipeline_entry_t entry,
+        output pipeline_push_t next_push);
     extern task drive_reserve(wbb_transaction tr, output logic [SLOT_WIDTH-1:0] slot);
     extern task wait_reserve_success(wbb_transaction tr, output logic [SLOT_WIDTH-1:0] slot);
     extern task wait_before_push(wbb_transaction tr);
@@ -62,7 +82,7 @@ task wbb_driver::run_phase(uvm_phase phase);
     end
 endtask
 
-// 根据操作类型分派：普通写回完成 reserve/push，查询或空闲保持指定拍数，批量写回先全部预留再全部 push。
+// 根据操作类型分派：普通写回完成 reserve/push，查询或空闲保持指定拍数，批次按指定方式调度。
 // 所有操作都由同一个 driver 驱动上游信号，结束后才 item_done，不等待内存响应。
 task wbb_driver::drive_transaction(wbb_transaction tr);
     logic [SLOT_WIDTH-1:0] slot;
@@ -71,7 +91,11 @@ task wbb_driver::drive_transaction(wbb_transaction tr);
     check_transaction(tr);
     if ($cast(batch, tr)) begin
         check_batch(batch);
-        drive_batch(batch);
+        if (batch.mode == WBB_BATCH_PIPELINED) begin
+            drive_pipeline_batch(batch);
+        end else begin
+            drive_batch(batch);
+        end
     end else if (tr.operation == WBB_WRITEBACK) begin
         drive_reserve(tr, slot);
         drive_push(tr, slot);
@@ -114,16 +138,25 @@ function void wbb_driver::require_delayed_mode();
     end
 endfunction
 
-// 批量操作必须包含1到N笔不同地址的普通写回；每笔只提供数据，等待拍数由批次统一控制。
-// 拒绝嵌套批次和单笔延迟设置，避免一笔数据到底何时 push 出现两种解释。
+// 批次包含不同地址的完整写回，不允许嵌套批次或单笔延迟设置。
+// DEFERRED 最多N笔且需要显式延迟模式；PIPELINED 可超过N笔，但hold_cycles必须为0。
 function void wbb_driver::check_batch(wbb_batch_transaction batch);
     wbb_batch_transaction nested;
 
-    require_delayed_mode();
+    if ($isunknown(batch.mode) || !(batch.mode inside {WBB_BATCH_DEFERRED, WBB_BATCH_PIPELINED})) begin
+        `fatal("Unknown WBB batch mode", "WBB_BATCH")
+    end
     if (batch.operation != WBB_WRITEBACK || batch.push_delay_cycles != 1 ||
-        batch.entries.size() == 0 || batch.entries.size() > WBB_ENTRIES ||
-        $isunknown(batch.hold_cycles) || batch.hold_cycles == 0) begin
-        `fatal("Batch requires 1..WBB_ENTRIES writebacks and positive hold_cycles", "WBB_BATCH")
+        batch.entries.size() == 0) begin
+        `fatal("Batch requires ordinary writebacks and at least one entry", "WBB_BATCH")
+    end
+    if (batch.mode == WBB_BATCH_DEFERRED) begin
+        require_delayed_mode();
+        if (batch.entries.size() > WBB_ENTRIES || $isunknown(batch.hold_cycles) || batch.hold_cycles == 0) begin
+            `fatal("Deferred batch requires 1..WBB_ENTRIES entries and positive hold_cycles", "WBB_BATCH")
+        end
+    end else if ($isunknown(batch.hold_cycles) || batch.hold_cycles != 0) begin
+        `fatal("Pipelined batch requires hold_cycles=0 and next-cycle push", "WBB_BATCH")
     end
     foreach (batch.entries[i]) begin
         check_transaction(batch.entries[i]);
@@ -173,6 +206,108 @@ task wbb_driver::drive_batch(wbb_batch_transaction batch);
         drive_push(batch.entries[i], slots[i]);
     end
 endtask
+
+// 在开始流水批次时复制每笔的地址、数据和查询地址，后续不再依赖sequence对象中的可变字段。
+function void wbb_driver::snapshot_pipeline_entries(wbb_batch_transaction batch,
+    output pipeline_entry_t entries[$]);
+    pipeline_entry_t entry;
+
+    entries.delete();
+    foreach (batch.entries[index]) begin
+        entry.addr = batch.entries[index].addr;
+        entry.line_data = batch.entries[index].line_data;
+        entry.q0Addr = batch.entries[index].q0Addr;
+        entry.q1Addr = batch.entries[index].q1Addr;
+        entries.push_back(entry);
+    end
+endfunction
+
+// 每拍同时处理旧push和新reserve；新reserve失败时，旧push仍在本拍完成。
+// 每次成功预留都生成且只生成一份下一拍push记录；全部push采样后撤销输出，再结束整个item。
+task wbb_driver::drive_pipeline_batch(wbb_batch_transaction batch);
+    pipeline_entry_t entries[$];
+    pipeline_entry_t reserve_entry;
+    pipeline_push_t pending_push;
+    int next_index;
+    int unsigned reserve_wait_cycles;
+    bit reserve_valid;
+
+    snapshot_pipeline_entries(batch, entries);
+    next_index = 0;
+    reserve_wait_cycles = 0;
+    pending_push = '0;
+    while (next_index < entries.size() || pending_push.valid) begin
+        @(negedge vif.clk);
+        if (vif.rst_n !== 1'b1) begin
+            `fatal("Reset during a pipelined batch", "WBB_RESET")
+        end
+        reserve_valid = next_index < entries.size();
+        reserve_entry = '0;
+        if (reserve_valid) begin
+            reserve_entry = entries[next_index];
+        end
+        drive_pipeline_cycle(reserve_valid, reserve_entry, pending_push);
+        @(vif.mon_cb);
+        if (vif.mon_cb.rst_n !== 1'b1) begin
+            `fatal("Reset while sampling a pipelined batch", "WBB_RESET")
+        end
+        // 本拍的push没有ready；采样完成即消费，不能因新reserve失败而重复发送。
+        pending_push = '0;
+        if (reserve_valid) begin
+            reserve_wait_cycles++;
+            if (sample_pipeline_reserve(reserve_entry, pending_push)) begin
+                next_index++;
+                reserve_wait_cycles = 0;
+            end else if (reserve_wait_cycles >= cfg.reserve_timeout_cycles) begin
+                `fatal($sformatf("Pipeline reservation timed out after %0d cycles at address 0x%h",
+                    cfg.reserve_timeout_cycles, reserve_entry.addr), "WBB_RESERVE_TIMEOUT")
+            end
+        end
+    end
+    @(negedge vif.clk);
+    drive_idle();
+endtask
+
+// 在一个下降沿一次性准备两组信号，禁止两个并发task分别覆盖reserve/push或查询口。
+// 查询地址整对跟随当前reserve项；没有reserve时才使用尾部push项的查询地址。
+task wbb_driver::drive_pipeline_cycle(bit reserve_valid, pipeline_entry_t reserve_entry,
+    pipeline_push_t pending_push);
+    vif.reserve_en <= reserve_valid;
+    vif.reserve_addr <= reserve_valid ? reserve_entry.addr : '0;
+    vif.push_en <= pending_push.valid;
+    vif.push_slot <= pending_push.valid ? pending_push.slot : '0;
+    vif.push_line <= pending_push.valid ? pending_push.entry.line_data : '0;
+    if (reserve_valid) begin
+        vif.q0Addr <= reserve_entry.q0Addr;
+        vif.q1Addr <= reserve_entry.q1Addr;
+    end else if (pending_push.valid) begin
+        vif.q0Addr <= pending_push.entry.q0Addr;
+        vif.q1Addr <= pending_push.entry.q1Addr;
+    end else begin
+        vif.q0Addr <= '0;
+        vif.q1Addr <= '0;
+    end
+endtask
+
+// 只在本拍reserve真实成功时保存返回槽号和该笔数据，供紧接的下一拍push使用。
+// 失败时返回空记录；槽号始终取成功采样沿的值，不能在下一拍重新读取reserveSlot。
+function bit wbb_driver::sample_pipeline_reserve(pipeline_entry_t entry,
+    output pipeline_push_t next_push);
+    next_push = '0;
+    if (vif.mon_cb.reserve_en !== 1'b1 || $isunknown(vif.mon_cb.reserveOk)) begin
+        `fatal("Pipeline reserve enable/feedback is invalid or unknown", "WBB_RESERVE")
+    end
+    if (vif.mon_cb.reserveOk !== 1'b1) begin
+        return 0;
+    end
+    if ($isunknown(vif.mon_cb.reserveSlot) || $unsigned(vif.mon_cb.reserveSlot) >= WBB_ENTRIES) begin
+        `fatal("Invalid reserved slot in pipelined batch", "WBB_RESERVE")
+    end
+    next_push.valid = 1;
+    next_push.slot = vif.mon_cb.reserveSlot;
+    next_push.entry = entry;
+    return 1;
+endfunction
 
 // 最后一笔 reserve 成功后撤销请求，使用 batch 的查询地址等待 hold_cycles 个采样拍。
 // 首个 push 在最后一次 reserve 后的第 hold_cycles+1 拍采样；等待时不会多发 reserve。

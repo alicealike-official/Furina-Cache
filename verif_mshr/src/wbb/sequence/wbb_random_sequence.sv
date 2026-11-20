@@ -4,6 +4,9 @@ class wbb_random_sequence extends wbb_scenario_sequence;
     localparam int WRITEBACK_COUNT = BATCH_COUNT * WBB_ENTRIES;
     int completed_batches = 0;
     int randomized_lines = 0;
+    // 不含受控第一批，记录随机阶段实际出现的重叠及有重叠的批次数。
+    int random_phase_overlaps = 0;
+    int overlapping_random_batches = 0;
 
     `uvm_object_utils(wbb_random_sequence)
 
@@ -17,13 +20,20 @@ class wbb_random_sequence extends wbb_scenario_sequence;
 endclass
 
 task wbb_random_sequence::body();
+    int overlap_before;
+
     if (WBB_ENTRIES < 2) begin
         `fatal("Random reordering case requires at least two slots", "WBB_CASE_CONFIG")
     end
     prime_stall_and_reordering();
     for (int batch = 1; batch < BATCH_COUNT; batch++) begin
+        overlap_before = obs.overlap_count;
         send_random_batch();
         obs.wait_until_empty();
+        random_phase_overlaps += obs.overlap_count - overlap_before;
+        if (obs.overlap_count > overlap_before) begin
+            overlapping_random_batches++;
+        end
         completed_batches++;
     end
     cfg.mem_random_ready = 0;
@@ -33,10 +43,13 @@ task wbb_random_sequence::body();
     cfg.mem_response_order = WBB_MEM_FIFO;
 endtask
 
-// 打乱本批地址顺序，随机化整行数据、两查询地址及事务间空闲拍数。
+// 两种模式共用地址排列、整行数据和查询地址的随机生成。
+// 串行模式保留每笔之前的随机空闲；流水模式把第一笔的gap用于整批之前，再连续提交本批N项。
 // 每个地址在一批中只使用一次；下一批开始前等待全空，因此不会向在途地址重复reserve。
 task wbb_random_sequence::send_random_batch();
     int order[$];
+    wbb_transaction items[$];
+    int unsigned batch_gap;
     int unsigned gap;
     int unsigned q0_index;
     int unsigned q1_index;
@@ -46,6 +59,7 @@ task wbb_random_sequence::send_random_batch();
         order.push_back(index);
     end
     order.shuffle();
+    batch_gap = 0;
     foreach (order[index]) begin
         if (!std::randomize(line_data, gap, q0_index, q1_index) with {
             gap inside {[0:3]};
@@ -54,11 +68,28 @@ task wbb_random_sequence::send_random_batch();
         }) begin
             `fatal("Failed to randomize WBB batch data and timing", "WBB_RANDOMIZE")
         end
-        if (gap > 0) begin
+        if (cfg.input_mode == WBB_INPUT_PIPELINE) begin
+            wbb_transaction tr;
+
+            tr = wbb_transaction::type_id::create($sformatf("random_item_%0d", index));
+            tr.addr = block_addr(order[index]);
+            tr.line_data = line_data;
+            tr.q0Addr = block_addr(q0_index);
+            tr.q1Addr = block_addr(q1_index);
+            items.push_back(tr);
+            if (index == 0) begin
+                batch_gap = gap;
+            end
+        end else begin
             idle_cycles(gap);
+            send_data(block_addr(order[index]), line_data, block_addr(q0_index), block_addr(q1_index));
         end
-        send_data(block_addr(order[index]), line_data, block_addr(q0_index), block_addr(q1_index));
         randomized_lines++;
+    end
+    if (cfg.input_mode == WBB_INPUT_PIPELINE) begin
+        idle_cycles(batch_gap);
+        // send_group统一保存原始数据并提交流水批次，不能再逐笔调用send_data重复登记。
+        send_group(items);
     end
 endtask
 

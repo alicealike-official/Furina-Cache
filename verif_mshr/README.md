@@ -3,8 +3,8 @@
 直接例化 `WriteBackBuffer`，复用 `RefModel/Cache/WriteBackBuffer.hpp` 作为 WBB 参考模型。
 后端存储使用 `RefModel/MEM/SparseMemory.hpp` 的纯 C++ 稀疏内存。
 基础 `wbb_base_test` 已接入两笔完整写回激励，逐笔经过 reserve、push、内存发送和响应释放。
-规划中的11个非流水case均已实现。用户修复DUT和C++参考模型后，最新冷编译回归26组全部通过，UVM_WARNING/ERROR/FATAL均为0。
-完整结果见[最新回归汇总](sim/work/regression/reports/run_20261119_092126_919356/summary.md)和[验证记录](../验证计划/DCacheWithMshr/WBB_case规划_note.md)。修复前20通过/6失败的报告仍保留用于对照。
+规划中的12个case均已实现，5个适用case支持串行/流水两种输入模式。最新42组回归全部通过，UVM_WARNING/ERROR/FATAL均为0。
+完整结果见[最新回归汇总](sim/work/regression/reports/run_20261120_013657_184228/summary.md)和[验证记录](../验证计划/DCacheWithMshr/WBB_case规划_note.md)。此前修复前后的报告仍保留用于对照。
 
 ## 结构与信号归属
 
@@ -32,7 +32,7 @@
 - `src/wbb/component/scoreboard/`：比较模型输出、检查协议、计数守恒和最终存储内容。
 - `wbb_compare_item`：同拍比较数据，`actual_sample` 引用 monitor 的实际采样，`expected_*` 保存模型期望值；经 `compare_port` / `compare_export` 传给 scoreboard。
 - `dpi/`：C ABI 适配，处理参数、整行转换、对象生命周期和错误返回。
-- `test/wbb/`：基础、数据模式、容量、查询、复用、背压、仲裁、响应顺序、事件交叉、延迟push和随机case；不包含pipeline case。
+- `test/wbb/`：基础、数据模式、容量、查询、复用、背压、仲裁、响应顺序、事件交叉、延迟push、流水和随机case。
 - `test/adapter/`：独立DPI和内存driver自检，不实例化WBB DUT。
 
 上游 `wbb_transaction` 默认表示一笔完整写回事务，包含随机化字段 `addr`、`line_data`、`q0Addr`、`q1Addr`，三个地址均约束为块对齐。
@@ -45,7 +45,13 @@ WBB 满时 driver 保持预留请求并等待，最多 `reserve_timeout_cycles` 
 q0/q1 分别由本笔 transaction 指定，预留等待及 push 阶段保持，空闲时恢复为0。
 两个查询地址可以相同或不同，也可以与写回地址不同。所有上游信号仍只由一个driver驱动。
 普通写回的 `push_delay_cycles` 默认1，只有显式延迟编译模式才能大于1。
-`wbb_batch_transaction` 包含多笔完整写回：先全部reserve，保持指定采样拍数，再逐笔push；整批完成才item_done，整个过程没有reserve/push同拍。
+`wbb_batch_transaction` 包含多笔完整写回，`mode` 是TB的调度选项，不是DUT信号：
+
+- 默认 `WBB_BATCH_DEFERRED`：最多N笔，先全部reserve，保持指定拍数，再逐笔push，需要显式延迟编译配置。
+- `WBB_BATCH_PIPELINED`：可超过N笔，`hold_cycles=0`，每笔reserve成功后严格下一拍push，同时尝试下一笔reserve。满槽只能阻止新预留，不能阻止旧push。
+
+两种模式都在整批最后一笔push被采样、输出撤销后才item_done，不等待内存响应。
+流水时查询地址整对来自当前reserve项；没有reserve时来自尾部push项，避免两个阶段争用查询口。
 `send_ready`、`memWriteResp_valid/id` 只由 memory driver 驱动。
 DUT 的 `send_valid/addr/data/id`、`memWriteResp_ready` 由 monitor 观察。
 所有 SV 类使用4空格缩进、分行构造函数、extern类外实现和原环境日志宏。
@@ -64,10 +70,32 @@ DUT 的 `send_valid/addr/data/id`、`memWriteResp_ready` 由 monitor 观察。
 | `check_memory_line(addr, expected, label, fatal_on_mismatch)` | 统一经C++/DPI读取实际内存并比较整行，返回是否相同；准备阶段可要求失败即fatal |
 | `run_scenario(seq, expected)` | 启动场景sequence、等待响应、检查完整事务数量和最终内存 |
 | `check_scenario_data(seq)` | 对多次写入同一地址使用最后一版数据做最终内存比较；每次发送仍由模型及SVA独立检查 |
+| `check_scenario_inputs(seq, before)` | 逐笔对照原始数据与实际reserve/push输入，防止重复地址的新版本覆盖掩盖较早输入错误 |
+| `configure_input_mode()` / `check_input_mode_coverage(before)` | 统一选择、记录输入模式，并检查串行无重叠、流水实际发生重叠且push仍严格下一拍 |
 
 capacity子test负责观察满槽和释放事件、指定各项需要出现的次数；pattern子test负责各数据模式的数量要求，
 只有内存比较成功才增加对应模式的计数。它们调用base的判断和报错方法，原有测试要求和等待顺序保持不变。
 公共计数和内存错误分别使用 `WBB_TEST_COUNT`、`WBB_TEST_MEMORY`，诊断中包含具体场景名称。
+
+## 串行与流水输入模式
+
+`cfg.input_mode` 是TB的提交方式，不是DUT信号。`wbb_base_sequence::submit_writebacks(items, mode)` 统一选择逐笔提交或流水批次，
+`wbb_scenario_sequence::send_group(items)` 另保存原始数据并按配置调用该接口；具体地址、数据和查询值由各sequence生成。
+普通单笔 `writeback_line()` 不会自动跨item流水；流水变体把适用的一组事务交给批次驱动，准备操作和查询/空闲操作可以单独执行。
+
+| Case | 输入模式及新增覆盖 |
+| --- | --- |
+| random | serial/pipeline；流水时批间随机空闲，批内连续提交，后续31个随机批次都必须实际出现重叠 |
+| reuse | serial/pipeline；A/B/A三轮数据生成及旧地址检查共用，每轮流水要求N−1次重叠 |
+| data_pattern | serial/pipeline；全一预置独立完成并确认，正式数据按最多N项流水提交，保留九类模式和尾部不足N项的检查 |
+| query | serial/pipeline；流水时重新安排查询值，直接查询同拍正在push的RESERVED地址，额外检查重叠期间的查询组合 |
+| event_collision | serial保留三个两事件场景；pipeline检查三事件与四事件同拍，分别为6笔和7笔写回 |
+| pipeline | 固定pipeline；继续验证连续、满槽恢复和尾部，使用strict编译配置 |
+| 其他case | 固定serial，保持原有定向目标；delayed_push仍使用显式延迟编译配置 |
+
+可切换case默认使用配置中的模式（默认serial），命令行 `+WBB_INPUT_MODE=serial` 或 `pipeline` 可覆盖。
+固定模式case始终采用自身声明的模式，不受配置字段切换；不匹配的命令行请求会fatal。
+所有流水输入都要求strict编译配置。base统一检查实际重叠，回归脚本还会核对模式日志与请求一致，不能只靠传入参数就宣称流水覆盖。
 
 ## 每拍流程
 
@@ -127,7 +155,7 @@ scoreboard逐拍比较容量/空槽/地址查询/发送valid及有效payload，�
 仅支持启动复位：DUT使用高有效异步reset，TB低有效rst_n取反，下降沿释放。
 两个内存对象初始化为空，WBB模型复位；运行中再次复位会明确报错。
 上游driver当前串行完成一笔事务的reserve/push后再处理下一笔，item之间有空闲间隔；
-后续若需要前一笔push与后一笔reserve同拍，再扩展流水驱动，完整transaction的语义不变。
+该默认单笔路径保持原样。需要重叠时使用显式流水批次，由单个逐拍循环组合驱动reserve/push，不并行调用原来的串行task。
 
 ## 参数与错误处理
 
@@ -166,16 +194,17 @@ Makefile沿用原结构。当前filelist实际使用 `verif_mshr/generated/Write
 基础用例成功标记为 `WBB_TEST_PASS`，检查两笔事务四类事件计数、C++预测结果、最终内存内容及IO协议。
 旧 work/ 中历史smoke/capacity日志不代表当前框架的验证结论。
 
-在仓库根目录按验证计划顺序运行全部非流水case：
+在仓库根目录按验证计划顺序运行全部case：
 
 ```sh
 python3 verif_mshr/sim/script/run_wbb_regression.py
 ```
 
-脚本默认运行10 ns/4 ns时钟，随机case使用seed=1/2/3，其余case用seed=1，总计26组。
+脚本默认运行10 ns/4 ns时钟，随机case使用seed=1/2/3，其余case用seed=1；五个可切换case各跑serial/pipeline，共42组。
 严格/延迟编译产物分开放在 `sim/work/regression/strict` 和 `delayed`，每轮日志、波形、TCL、覆盖名称单独保存。
-支持 `--tests`、`--periods`、`--random-seeds` 和 `--skip-compile`。有任何真实错误时最终退出码为1，失败后继续其余case，不豁免已知DUT错误。
-回归结束后，终端自动打印对齐的汇总表、通过/失败/未运行数量、总结果和失败日志路径。
+支持 `--tests`、`--periods`、`--random-seeds`、`--input-modes` 和 `--skip-compile`。`--input-modes`只选择可切换case的模式，固定模式case保持自身模式。
+有任何真实错误时最终退出码为1，失败后继续其余case，不豁免已知DUT错误。
+回归结束后，终端自动打印对齐的汇总表、通过/失败/未运行数量、总结果和失败日志路径。Input列表示上游输入模式，Mode列表示strict/delayed编译配置。
 PASS使用绿色，FAIL使用红色，WARNING/NOT RUN使用黄色；窄终端省略profile和事件数列，详细内容仍在报告中。
 `--color auto` 为默认值：检测到交互终端才启用颜色，并遵循 `NO_COLOR`；可用 `--color always` 强制或 `--color never` 关闭。
 JSON、Markdown和仿真日志保持纯文本，颜色只用于终端输出。未运行与未完成项单独统计，仍使整体结果失败。
@@ -187,7 +216,14 @@ python3 verif_mshr/sim/script/run_wbb_regression.py \
     --report verif_mshr/sim/work/regression/summary.json
 ```
 
-`summary.json` 和 `summary.md` 记录配置、DUT哈希、各case结果及证据链接；最新归档位于 `reports/run_20261119_092126_919356/`，另有 `inputs.json` 记录本轮RTL、Scala、模型和DPI源码的哈希。
+`summary.json` 和 `summary.md` 记录配置、DUT哈希、各case结果及证据链接；日志、波形和覆盖名称均区分输入模式，旧报告没有该字段时显示 `-`。
+最新归档位于 `reports/run_20261120_013657_184228/`，另有 `inputs.json` 记录本轮设计、模型及验证相关源码的哈希。
+
+例如只跑随机case的流水变体：
+
+```sh
+python3 verif_mshr/sim/script/run_wbb_regression.py --tests wbb_random_test --input-modes pipeline
+```
 
 单独运行延迟push case时必须显式选择对应编译配置：
 
@@ -198,7 +234,26 @@ make -C verif_mshr/sim vcs_simulate WORK_DIR=work/delayed/ TEST_NAME=wbb_delayed
 
 历史DUT问题 **WBB-DUT-001** 已由用户在DUT和C++模型中补充发送保持后修复。
 本次冷编译复核中，背压case、延迟push case及随机seed=2在10 ns/4 ns下全部通过，目标场景仍命中，独立保持断言没有放宽。
-修复前的问题时序和日志保留在验证记录中；本结论对应当前4槽配置及已执行种子，不替代其他参数或暂缓流水场景的验证。
+修复前的问题时序和日志保留在验证记录中；本结论对应当前4槽配置及已执行种子，其他参数和热复位仍需单独验证。
+
+## 流水 case（2026-11-20）
+
+[wbb_pipeline_sequence](src/wbb/sequence/wbb_pipeline_sequence.sv) 生成4个流水批次：N笔连续输入、N+2笔满槽等待、单笔尾部、两笔再次启动。
+后两个批次前各插入3拍空闲。默认4槽共13笔写回，地址和数据均由sequence生成；查询对也由sequence准备。
+[wbb_pipeline_test](test/wbb/wbb_pipeline_test.sv) 复用base的完整事务/内存检查，再逐笔核对push比成功reserve恰好晚1拍、使用当时返回的槽号、数据未串到其他事务、查询来源正确。
+
+公共activity提供计数快照和只读reserve/push采样记录，按阶段检查场景；不只依靠整轮 `c_overlap` 总数。
+连续4笔产生3次重叠；6笔满槽段等待7拍，命中1次“新reserve失败但旧push正常”、1次满槽响应当拍拒绝、1次次拍恢复及1次恢复后重叠。
+单笔和双笔阶段各正确完成尾部，两段空闲均没有新事务；总重叠8次，四类事务计数均13。
+
+流水case使用strict编译配置，不启用 `WBB_ALLOW_DELAYED_PUSH`。单独运行：
+
+```sh
+python3 verif_mshr/sim/script/run_wbb_regression.py --tests wbb_pipeline_test
+```
+
+10 ns/4 ns两种时钟均通过，分别运行610 ns/244 ns。新断言 `a_dut_overlap_slot` 明确检查合法旧push与新reserve同拍时槽号不同；
+独立SVA自测在两种时钟下strict/delayed各29个场景及bind通过。原有case的 `c_overlap` 仍为0，未改变默认驱动方式。
 
 修改时钟周期可以在编译后直接给TB顶层传参，例如：
 

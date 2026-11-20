@@ -5,7 +5,14 @@ typedef enum int {
     WBB_MEM_SELECTED
 } wbb_mem_order_t;
 
+typedef enum int {
+    WBB_INPUT_SERIAL,
+    WBB_INPUT_PIPELINE
+} wbb_input_mode_t;
+
 class wbb_config extends uvm_object;
+    // TB的上游提交方式，不是DUT信号；只有声明支持两种模式的case允许切换。
+    wbb_input_mode_t input_mode = WBB_INPUT_SERIAL;
     uvm_active_passive_enum is_active = UVM_ACTIVE;
     int unsigned timeout_cycles = 2000;
     int unsigned reserve_timeout_cycles = 1000;

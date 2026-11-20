@@ -240,6 +240,57 @@ module wbb_io_assertions_test;
         tick();
     endtask
 
+    // 使用槽1再槽0提交两笔流水：第二次reserve与第一次push同拍，尾部push仍在下一拍完成。
+    // 同时检查两笔不同数据的发送和响应；2槽配置下reserve和push各连续2拍，成功重叠1次。
+    task reverse_slot_pipeline();
+        reserve_en = 1;
+        reserve_addr = A;
+        reserveSlot = 1;
+        q0Addr = A;
+        tick();
+
+        reserve_addr = B;
+        reserveSlot = 0;
+        push_en = 1;
+        push_slot = 1;
+        push_line = D;
+        q0Same = 1;
+        q1Addr = B;
+        tick();
+
+        reserve_en = 0;
+        reserveOk = 0;
+        full = 1;
+        q1Same = 1;
+        push_slot = 0;
+        push_line = E;
+        send_valid = 1;
+        send_ready = 1;
+        send_payload_addr = A;
+        send_payload_wData = D;
+        send_payload_id = 1;
+        tick();
+
+        push_en = 0;
+        send_payload_addr = B;
+        send_payload_wData = E;
+        send_payload_id = 0;
+        memWriteResp_valid = 1;
+        memWriteResp_payload_id = 1;
+        tick();
+
+        send_valid = 0;
+        memWriteResp_payload_id = 0;
+        full = 0;
+        reserveOk = 1;
+        reserveSlot = 1;
+        q0Same = 0;
+        tick();
+
+        idle_values();
+        tick();
+    endtask
+
     initial begin
         idle_values();
         rst_n = 0;
@@ -271,6 +322,10 @@ module wbb_io_assertions_test;
         restart();
         two_slots(1);
         expect_result("send and response for different slots on the same edge", 0, 0);
+
+        restart();
+        reverse_slot_pipeline();
+        expect_result("consecutive reserve/push with different slots and tail push", 0, 0);
 
         restart();
         reserve_a();
@@ -395,6 +450,17 @@ module wbb_io_assertions_test;
         push_line = D;
         tick();
         expect_result("reserveSlot names occupied slot", 0, 1, "WBB_DUT_RESERVE_SLOT");
+
+        restart();
+        reserve_a();
+        reserve_en = 1;
+        reserve_addr = B;
+        reserveSlot = 0;
+        push_en = 1;
+        push_slot = 0;
+        push_line = D;
+        tick();
+        expect_result("concurrent reserve returns the legal push slot", 0, 1, "WBB_DUT_OVERLAP_SLOT");
 
         restart();
         reserve_a();

@@ -20,6 +20,7 @@ class wbb_data_pattern_test extends wbb_base_test;
     function new(string name = "wbb_data_pattern_test",
         uvm_component parent = null);
         super.new(name, parent);
+        supports_input_modes = 1;
     endfunction
 
     extern virtual function void build_phase(uvm_phase phase);
@@ -49,11 +50,13 @@ task wbb_data_pattern_test::run_sequence();
 
     preload_seq = wbb_data_pattern_sequence::type_id::create("preload_seq");
     preload_seq.preload_only = 1;
+    preload_seq.input_mode = cfg.input_mode;
     preload_seq.start(env.agent.sequencer);
     wait_for_drain();
     check_preload();
 
     seq = wbb_data_pattern_sequence::type_id::create("seq");
+    seq.input_mode = cfg.input_mode;
     seq.start(env.agent.sequencer);
     wait_for_drain();
     check_count("generated patterns", seq.get_record_count(), EXPECTED_PATTERNS);

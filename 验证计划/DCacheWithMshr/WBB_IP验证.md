@@ -13,7 +13,7 @@ Cache victim选择、R2取数、清valid原子性、MSHR分配和Stage2冻结的
 复位为异步低有效，默认reserve成功后下一拍push，延迟push显式启用。
 原WBR-001的最低空槽和WBS-007的精确仲裁顺序保留供追溯，IP规格允许的选择范围与当前模型精确检查需要分别登记。
 WBR-006的全reserved子场景（N>1）及WBR-008的长延迟子场景归延迟模式。
-WBR-009流水重叠当前暂缓实施，仍保留为待覆盖项。
+WBR-009流水重叠已由strict配置下的wbb_pipeline_test执行，默认4槽在10 ns/4 ns下回归通过；其他参数仍需另行登记。
 
 保留原验证点编号、优先级、检查方式和历史状态，新增“本文件检查范围”列限定本层职责。原条目的文字作为追溯基线，遇到后来确认的接口约定时按本文件范围说明执行。
 
@@ -100,7 +100,7 @@ WBR-009流水重叠当前暂缓实施，仍保留为待覆盖项。
 | WBR-006 | 满空组合 | 模块 IP | P0 | 全reserved、全valid、reserved/valid混合、仅剩一槽分别检查 full/reserveOk | 状态组合覆盖 | 未闭合 | 严格下一拍模式检查全loaded/issued及混合占用；N>1的全reserved仅在显式延迟模式执行。 |
 | WBR-007 | push 地址数据归属 | 模块 IP | P0 | push.slot 对应预留槽，保存整行数据且不改该槽地址或其他槽 | 不同地址/图样比对 | 未闭合 | 检查本槽的地址/数据关联，并关联a_env_push_next检查严格下一拍的push槽号。 |
 | WBR-008 | 仅预留不发送 | 模块 IP | P0 | reserved&&!valid 不成为发送候选，延迟 push 不发送旧数据 | 长延迟 push | 未闭合 | 默认模式检查一拍reserved窗口；长延迟push需显式允许延迟并扩展driver。 |
-| WBR-009 | push 槽与预留槽不同 | 模块 IP | P0 | 同拍 push 旧预留槽、reserve 新槽，两者各自生效 | 并发定向 | 未闭合 | 保留为后续项，用户当前暂缓上游reserve/push流水验证。 |
+| WBR-009 | push 槽与预留槽不同 | 模块 IP | P0 | 同拍 push 旧预留槽、reserve 新槽，两者各自生效 | 并发定向 | 本配置回归通过 | strict模式13笔写回、8次重叠；逐笔槽号/数据/下一拍push检查，覆盖满槽停顿恢复与尾部；新增a_dut_overlap_slot，详见[case记录](WBB_case规划_note.md)。 |
 | WBR-010 | 双查询口独立 | 模块 IP | P0 | q0/q1 同址、异址、各命中不同槽、只命中其一均正确 | 组合扫描 | 未闭合 | WBB 独立IP端口、合法输入前提及对应模型/断言检查。 |
 | WBR-011 | issued 仍参与查询 | 模块 IP | P0 | 写已发送未响应时同址仍被匹配且槽仍占用 | 状态/查询断言 | 未闭合 | WBB 独立IP端口、合法输入前提及对应模型/断言检查。 |
 | WBR-012 | 查询地址粒度 | 模块 IP | P1 | 输入均为块对齐地址；模块全地址比较由上层提供正确粒度，不让字地址误用 | 输入契约断言 | 未闭合 | WBB 独立IP端口、合法输入前提及对应模型/断言检查。 |
@@ -195,6 +195,7 @@ WBR-009流水重叠当前暂缓实施，仍保留为待覆盖项。
 | 验证点编号 | DUT配置 / 策略 / 验证层级 | test / sequence | checker / assertion / coverage bin | RTL版本 / seed / 日志 | 结果 / 缺陷 / 豁免依据 |
 | --- | --- | --- | --- | --- | --- |
 | 待填 | 待填 | 待填 | 待填 | 待填 | 未闭合 |
+| WBR-007、009、010、013、014、015；CFG-005；WBS-010、012；RND-001、008、010（输入模式组合） | 默认4槽 / serial与pipeline / 10 ns及4 ns / random seed1/2/3 | random、reuse、data_pattern、query、event_collision共用test增加流水变体；其余case保留固定模式 | 原C++/SVA检查、逐笔原始输入比较、实际重叠计数、重叠期间查询、三/四事件同拍 | DUT SHA-256前缀 `7e55ed10a7f44bdc`；[42组汇总](../../verif_mshr/sim/work/regression/reports/run_20261120_013657_184228/summary.md) | 42/42 PASS，输入模式标记与请求一致；新增覆盖及数量见[case记录](WBB_case规划_note.md)，不替代其他参数或集成验证 |
 | WBR-007、WBS-001、CFG-005（数据通路子场景） | 4槽 / 64 B行 / 32位字 / 严格下一拍push / WBB IP | `wbb_data_pattern_test` / `wbb_data_pattern_sequence` | C++ WBB逐拍比较、`a_dut_send_content`、实际内存对原始激励回读、九类图样数量、四事件计数 | generated RTL SHA-256前缀 `ac3e5cd84054c7cb`；seed=20261119；[日志](../../verif_mshr/sim/work/log/wbb_data_pattern_sequence_seed20261119.log) | 当前配置1062个图样+1笔预置通过，完整写回1063笔，UVM_ERROR/FATAL=0；全槽、候选状态及配置组合继续补齐，详见[case note](WBB_case规划_note.md) |
 | WBR-001、002、004、005、006；WBS-005、009（容量边界场景） | 4槽 / 64 B行 / 10 ns及4 ns时钟 / 32拍响应延迟 / 严格下一拍push / WBB IP | `wbb_capacity_test` / `wbb_capacity_sequence` | C++ WBB比较、容量/槽归属SVA、`c_full_release`、case命中计数、C++内存回读 | generated RTL SHA-256前缀 `ac3e5cd84054c7cb`；定向无随机激励；[10 ns日志](../../verif_mshr/sim/work/log/wbb_capacity_cycles_10ns.log) / [4 ns日志](../../verif_mshr/sim/work/log/wbb_capacity_cycles_4ns.log) | 两种时钟下均5笔写回通过；实际响应间隔均32拍；4槽全覆盖，第5笔满槽等待23拍，首个响应后次拍成功；full_cycles=27、c_full_release=2，UVM_ERROR/FATAL=0；其他状态组合继续补齐 |
 | WBR-003、010、011、012；WBR-015；WBS-004、006、007、008、010、011、012；WBR-013、014（本轮已执行子场景） | 默认4槽 / 10 ns及4 ns / WBB IP | query、reuse、arbitration、response_order、event_collision | IO场景计数、C++逐拍比较、查询/归属/公平SVA、最终内存回读 | [本轮汇总](../../verif_mshr/sim/work/regression/reports/run_20261119_080300_487790/summary.md) | 两种时钟下对应case均通过；具体命中数量见[case记录](WBB_case规划_note.md)，不据此关闭其他参数或集成子项 |

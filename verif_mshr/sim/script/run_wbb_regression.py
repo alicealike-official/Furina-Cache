@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""按验证计划顺序运行 WBB case，保留所有失败；不运行 pipeline case，也不修改 DUT。"""
+"""按验证计划顺序运行 WBB case，保留所有失败；流水使用严格下一拍配置，不修改 DUT。"""
 
 import argparse
 from collections import Counter
@@ -31,8 +31,16 @@ TEST_ORDER = (
     "wbb_response_order_test",
     "wbb_event_collision_test",
     "wbb_delayed_push_test",
+    "wbb_pipeline_test",
     "wbb_random_test",
 )
+DUAL_MODE_TESTS = frozenset({
+    "wbb_random_test",
+    "wbb_reuse_test",
+    "wbb_data_pattern_test",
+    "wbb_query_test",
+    "wbb_event_collision_test",
+})
 COUNTER_PATTERN = re.compile(
     r"\bcycles=(\d+) reserve=(\d+) push=(\d+) send=(\d+) "
     r"response=(\d+) full_cycles=(\d+) stalled_cycles=(\d+)"
@@ -82,7 +90,7 @@ class TerminalReport:
 
     def table(self, results):
         """按普通文本计算列宽后再着色；较窄终端省略事件数和profile列。"""
-        columns = [("result", "Result"), ("test", "Test"), ("profile", "Mode"),
+        columns = [("result", "Result"), ("test", "Test"), ("input", "Input"), ("profile", "Mode"),
                    ("period", "ns"), ("seed", "Seed"), ("events", "R/P/S/A"), ("uvm", "W/E/F")]
         rows = []
         styles = []
@@ -91,6 +99,7 @@ class TerminalReport:
             severity = result.get("severity_counts", {})
             status = result_status(result)
             rows.append({"result": status, "test": str(result.get("test", "-")),
+                         "input": str(result.get("input_mode") or "-"),
                          "profile": str(result.get("profile", "-")),
                          "period": period_text(result["period_ns"]) if "period_ns" in result else "-",
                          "seed": str(result.get("seed", "-")),
@@ -164,7 +173,8 @@ class TerminalReport:
             self.emit()
             self.emit(self.paint("  FAILURE DETAILS", "FAIL"))
             for row in failures:
-                label = f"{row.get('test', '-')}  ns={row.get('period_ns', '-')}  seed={row.get('seed', '-')}"
+                label = (f"{row.get('test', '-')}  input={row.get('input_mode') or '-'}  "
+                         f"ns={row.get('period_ns', '-')}  seed={row.get('seed', '-')}")
                 self.emit("  " + self.paint(result_status(row), result_status(row)) + "  " + label)
                 errors = ", ".join(f"{name} x{count}" for name, count in row.get("error_ids", {}).items())
                 reason = errors or "; ".join(row.get("failure_reasons", [])) or "No failure details recorded"
@@ -200,14 +210,18 @@ def seed_value(value):
 
 
 def parse_args(argv=None):
-    """选择 case、时钟和随机种子；不接受 pipeline，执行顺序始终以计划清单为准。"""
+    """选择 case、时钟和随机种子，执行顺序始终以计划清单为准。"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tests", nargs="+", choices=TEST_ORDER, default=list(TEST_ORDER),
-                        help="待运行的 test；省略时运行全部11个，顺序按验证计划排列")
+                        help="待运行的 test；省略时运行全部12个，顺序按验证计划排列")
     parser.add_argument("--periods", nargs="+", type=positive_period, default=[10.0, 4.0],
                         help="时钟周期，单位ns，默认10和4")
     parser.add_argument("--random-seeds", nargs="+", type=seed_value, default=[1, 2, 3],
                         help="仅用于 wbb_random_test；其他 case 固定使用 seed=1")
+    parser.add_argument("--input-modes", nargs="+", choices=("serial", "pipeline"),
+                        default=["serial", "pipeline"],
+                        help="仅选择random/reuse/data_pattern/query/event_collision的输入模式；默认两种。"
+                             "pipeline专用case固定流水，其余case固定串行")
     parser.add_argument("--skip-compile", action="store_true",
                         help="复用两个 profile 目录下已有的 simv，由调用方保证与当前源码一致")
     parser.add_argument("--color", choices=("auto", "always", "never"), default="auto",
@@ -218,7 +232,15 @@ def parse_args(argv=None):
     args.tests = [name for name in TEST_ORDER if name in set(args.tests)]
     args.periods = list(dict.fromkeys(args.periods))
     args.random_seeds = list(dict.fromkeys(args.random_seeds))
+    args.input_modes = list(dict.fromkeys(args.input_modes))
     return args
+
+
+def input_modes_for(test, requested_modes):
+    """可切换case按所选模式执行；专用流水case固定流水，其余case保持串行输入。"""
+    if test in DUAL_MODE_TESTS:
+        return requested_modes
+    return ["pipeline"] if test == "wbb_pipeline_test" else ["serial"]
 
 
 def profile_for(test):
@@ -306,25 +328,31 @@ def parse_log(text):
     counts = COUNTER_PATTERN.findall(text)
     coverage = [{"id": match.group(1), "text": match.group(2).strip()}
                 for match in re.finditer(r"^UVM_INFO .*?\[(WBB_[^]]*COVERAGE)\]\s*(.*)$", text, re.MULTILINE)]
+    input_mode_markers = re.findall(
+        r"^UVM_INFO .*?\[WBB_INPUT_MODE\]\s*input_mode=(serial|pipeline)\b", text, re.MULTILINE
+    )
     return {
         "severity_counts": severity_counts,
         "error_ids": dict(Counter(identifier for _, identifier in error_events)),
         "error_events": len(error_events),
         "counts": dict(zip(COUNTER_NAMES, map(int, counts[-1]))) if counts else {},
         "coverage": coverage,
+        "input_mode_markers": input_mode_markers,
+        "observed_input_mode": input_mode_markers[0] if len(input_mode_markers) == 1 else None,
         "pass_marker": bool(re.search(r"^UVM_INFO .*?\[WBB_TEST_PASS\]", text, re.MULTILINE)),
         "fail_marker": bool(re.search(r"^UVM_INFO .*?\[WBB_TEST_FAIL\]", text, re.MULTILINE)),
         "simulator_errors": re.findall(r"^\s*(?:Error|Fatal)-\[.*$", text, re.MULTILINE),
     }
 
 
-def run_case(test, period, seed, build, run_id, dut_sha256):
+def run_case(test, input_mode, period, seed, build, run_id, dut_sha256):
     """单独运行一项组合，任何真实 DUT/SVA/UVM 失败都保留为 FAIL，不设置错误白名单。"""
     profile = profile_for(test)
     folder = REGRESSION_DIR / profile
     label = period_text(period).replace(".", "p").replace("+", "p").replace("-", "m")
-    tag = f"{test}_p{label}_s{seed}"
-    result = {"test": test, "profile": profile, "period_ns": period, "seed": seed,
+    tag = f"{test}_i{input_mode}_p{label}_s{seed}"
+    result = {"test": test, "input_mode": input_mode, "observed_input_mode": None,
+              "profile": profile, "period_ns": period, "seed": seed,
               "pass": False, "exit_code": None, "dut_sha256": dut_sha256,
               "failure_reasons": [], "error_ids": {}, "counts": {}, "coverage": []}
     if not build["pass"]:
@@ -339,7 +367,8 @@ def run_case(test, period, seed, build, run_id, dut_sha256):
     for directory in (log.parent, wave.parent, tcl.parent):
         directory.mkdir(parents=True, exist_ok=True)
     tcl.write_text(f"fsdbDumpfile {tcl_string(wave)}\nfsdbDumpvars 0 \"tb_top\"\nrun\n")
-    command = [build["binary"], f"+UVM_TESTNAME={test}", f"+CLOCK_PERIOD_NS={period_text(period)}",
+    command = [build["binary"], f"+UVM_TESTNAME={test}", f"+WBB_INPUT_MODE={input_mode}",
+               f"+CLOCK_PERIOD_NS={period_text(period)}",
                f"+ntb_random_seed={seed}", "+fsdb+autoflush", f"+wave={wave}",
                "-cm", COVERAGE, "-cm_dir", str(folder / "simv.vdb"),
                "-cm_name", f"{run_id}_{tag}", "-ucli", "-do", str(tcl), "-l", str(log)]
@@ -361,6 +390,12 @@ def run_case(test, period, seed, build, run_id, dut_sha256):
         result["failure_reasons"].append("WBB_TEST_PASS missing or WBB_TEST_FAIL present")
     if not data["counts"]:
         result["failure_reasons"].append("scoreboard count summary missing")
+    if data["observed_input_mode"] is None:
+        result["failure_reasons"].append("WBB_INPUT_MODE marker missing or ambiguous")
+    elif data["observed_input_mode"] != input_mode:
+        result["failure_reasons"].append(
+            f"requested input mode {input_mode}, observed {data['observed_input_mode']}"
+        )
     if not wave.is_file():
         result["failure_reasons"].append("requested FSDB waveform missing")
     if file_hash(DUT_FILE) != dut_sha256:
@@ -373,8 +408,8 @@ def markdown_summary(summary):
     """输出便于查阅的结果表，日志和波形链接指向本轮独立目录。"""
     rows = ["# WBB regression", "", f"Run: `{summary['run_id']}`", "",
             f"DUT SHA-256: `{summary['dut_sha256']}`", "",
-            "| Test | Profile | Period (ns) | Seed | Result | Error IDs / reason | Events | Log | Wave |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+            "| Test | Input | Profile | Period (ns) | Seed | Result | Error IDs / reason | Events | Log | Wave |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for result in summary["results"]:
         errors = ", ".join(f"{name}:{count}" for name, count in result["error_ids"].items())
         if not errors and not result["pass"]:
@@ -384,7 +419,8 @@ def markdown_summary(summary):
         events = "/".join(str(counts.get(name, "-")) for name in ("reserve", "push", "send", "response"))
         log_link = f"[log](<{result['log']}>)"
         wave_link = f"[fsdb](<{result['waveform']}>)" if result["waveform"] else "-"
-        rows.append(f"| {result['test']} | {result['profile']} | {period_text(result['period_ns'])} | "
+        rows.append(f"| {result['test']} | {result.get('input_mode') or '-'} | {result['profile']} | "
+                    f"{period_text(result['period_ns'])} | "
                     f"{result['seed']} | {'PASS' if result['pass'] else 'FAIL'} | {errors or '-'} | "
                     f"{events} | {log_link} | {wave_link} |")
     passed = sum(result["pass"] for result in summary["results"])
@@ -423,22 +459,24 @@ def main(argv=None):
     started = time.monotonic()
     run_id = datetime.now(timezone.utc).strftime("run_%Y%m%d_%H%M%S_%f")
     dut_sha256 = file_hash(DUT_FILE)
-    planned = [(test, period, seed) for test in args.tests for period in args.periods
+    planned = [(test, input_mode, period, seed) for test in args.tests
+               for input_mode in input_modes_for(test, args.input_modes) for period in args.periods
                for seed in (args.random_seeds if test == "wbb_random_test" else [1])]
     summary = {"run_id": run_id, "dut_file": str(DUT_FILE), "dut_sha256": dut_sha256,
                "tests": args.tests, "periods_ns": args.periods, "random_seeds": args.random_seeds,
+               "input_modes": args.input_modes,
                "skip_compile": args.skip_compile, "planned_runs": len(planned),
                "builds": {}, "results": [], "complete": False, "pass": False}
     profiles = list(dict.fromkeys(profile_for(test) for test in args.tests))
     for profile in profiles:
         summary["builds"][profile] = compile_profile(profile, run_id, args.skip_compile, console)
         save_summary(summary)
-    for test, period, seed in planned:
-        result = run_case(test, period, seed, summary["builds"][profile_for(test)], run_id, dut_sha256)
+    for test, input_mode, period, seed in planned:
+        result = run_case(test, input_mode, period, seed, summary["builds"][profile_for(test)], run_id, dut_sha256)
         summary["results"].append(result)
         save_summary(summary)
         console.progress(result_status(result), f"[{len(summary['results']):02d}/{len(planned):02d}] "
-                         f"{test}  {period_text(period)}ns  seed={seed}  mode={result['profile']}")
+                         f"{test}  input={input_mode}  {period_text(period)}ns  seed={seed}  mode={result['profile']}")
     summary["complete"] = True
     summary["pass"] = all(result["pass"] for result in summary["results"])
     summary["elapsed_seconds"] = time.monotonic() - started

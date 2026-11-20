@@ -11,6 +11,8 @@ class wbb_base_test extends uvm_test;
     wbb_config cfg;
     // TB 顶层传入的时钟配置；派生 test 读取它计算等待时间，不另建时钟配置。
     protected clk_rst_config clk_cfg;
+    protected bit supports_input_modes = 0;
+    protected wbb_input_mode_t fixed_input_mode = WBB_INPUT_SERIAL;
 
     `uvm_component_utils(wbb_base_test)
 
@@ -35,6 +37,10 @@ class wbb_base_test extends uvm_test;
         string label = "writeback", bit fatal_on_mismatch = 0);
     extern task run_scenario(wbb_scenario_sequence seq, int expected_count);
     extern function void check_scenario_data(wbb_scenario_sequence seq);
+    extern function void configure_input_mode();
+    extern function string input_mode_name();
+    extern function void check_input_mode_coverage(int overlap_before);
+    extern function void check_scenario_inputs(wbb_scenario_sequence seq, writeback_counts_t before_counts);
 
 endclass
 
@@ -49,19 +55,24 @@ function void wbb_base_test::build_phase(uvm_phase phase);
     if (!uvm_config_db #(wbb_config)::get(this, "", "wbb_config", cfg)) begin
         cfg = wbb_config::type_id::create("cfg");
     end
+    configure_input_mode();
     uvm_config_db #(wbb_config)::set(this, "env", "wbb_config", cfg);
     uvm_config_db #(clk_rst_config)::set(this, "env", "clk_rst_config", clk_cfg);
     env = wbb_environment::type_id::create("env", this);
 endfunction
 
 task wbb_base_test::run_phase(uvm_phase phase);
+    int overlap_before;
+
     phase.raise_objection(this);
     fork
         begin
             wait (vif.rst_n === 1'b1);
             repeat (2) @(negedge vif.clk);
+            overlap_before = env.activity.overlap_count;
             run_sequence();
             wait_for_drain();
+            check_input_mode_coverage(overlap_before);
         end
         begin
             repeat (cfg.timeout_cycles) @(negedge vif.clk);
@@ -71,6 +82,61 @@ task wbb_base_test::run_phase(uvm_phase phase);
     disable fork;
     phase.drop_objection(this);
 endtask
+
+// 从case声明或命令行选择上游提交方式。可切换case复用同一套检查；固定模式case拒绝不支持的请求。
+// 流水必须使用strict编译配置，不能因为关闭下一拍断言而让流水错误通过。
+function void wbb_base_test::configure_input_mode();
+    string requested;
+    wbb_input_mode_t mode;
+
+    if (cfg == null) begin
+        `fatal("wbb_config cannot be null", "WBB_INPUT_MODE")
+    end
+    mode = supports_input_modes ? cfg.input_mode : fixed_input_mode;
+    if ($value$plusargs("WBB_INPUT_MODE=%s", requested)) begin
+        requested = requested.tolower();
+        case (requested)
+            "serial": mode = WBB_INPUT_SERIAL;
+            "pipeline": mode = WBB_INPUT_PIPELINE;
+            default: begin
+                `fatal("WBB_INPUT_MODE must be serial or pipeline", "WBB_INPUT_MODE")
+            end
+        endcase
+    end
+    if ($isunknown(mode) || !(mode inside {WBB_INPUT_SERIAL, WBB_INPUT_PIPELINE}) ||
+        (!supports_input_modes && mode != fixed_input_mode)) begin
+        `fatal("Requested input mode is not supported by this test", "WBB_INPUT_MODE")
+    end
+    cfg.input_mode = mode;
+    if (mode == WBB_INPUT_PIPELINE) begin
+        if (WBB_ENTRIES < 2) begin
+            `fatal("Pipelined input requires at least two WBB entries", "WBB_INPUT_MODE")
+        end
+`ifdef WBB_ALLOW_DELAYED_PUSH
+        `fatal("Pipelined input requires the strict next-cycle-push build", "WBB_INPUT_MODE")
+`endif
+    end
+    `info($sformatf("input_mode=%s", input_mode_name()), "WBB_INPUT_MODE")
+endfunction
+
+// 返回便于日志和报告使用的输入模式名称，不改变配置。
+function string wbb_base_test::input_mode_name();
+    return cfg.input_mode == WBB_INPUT_PIPELINE ? "pipeline" : "serial";
+endfunction
+
+// 用实际握手验证模式已经生效：串行不应重叠，流水至少出现一次，并且不允许延迟push。
+function void wbb_base_test::check_input_mode_coverage(int overlap_before);
+    int overlaps;
+
+    overlaps = env.activity.overlap_count - overlap_before;
+    if (cfg.input_mode == WBB_INPUT_PIPELINE) begin
+        check_count("pipelined input overlap", overlaps, 1, 1);
+        check_count("pipelined input delayed pushes", env.activity.delayed_push_count, 0);
+    end else begin
+        check_count("serial input overlap", overlaps, 0);
+    end
+    `info($sformatf("input_mode=%s overlaps=%0d", input_mode_name(), overlaps), "WBB_INPUT_MODE_COVERAGE")
+endfunction
 
 // 启动基础sequence的两笔写回，再用公共工具等待响应和检查计数；地址/数据由sequence生成。
 // 等待过程由 run_phase 的总 watchdog 保护，派生 test 可以覆盖本 task 组织其他场景。
@@ -174,8 +240,41 @@ task wbb_base_test::run_scenario(wbb_scenario_sequence seq, int expected_count);
     wait_for_drain();
     check_count("scenario generated writebacks", seq.get_record_count(), expected_count);
     check_writeback_counts(expected_count, before_counts);
+    check_scenario_inputs(seq, before_counts);
     check_scenario_data(seq);
 endtask
+
+// 逐笔比较实际reserve/push输入与sequence保存的原始数据，检查driver没有串错地址、槽号或数据。
+// 即使旧地址后来被覆盖，这个检查也保留每一次写回的输入版本；DUT行为仍由C++模型和SVA检查。
+function void wbb_base_test::check_scenario_inputs(wbb_scenario_sequence seq, writeback_counts_t before_counts);
+    wbb_scenario_sequence::writeback_record_t record;
+    wbb_sample reserved;
+    wbb_sample pushed;
+    int reserve_index;
+    int push_index;
+
+    if (env.activity.reserve_samples.size() < before_counts.reserve_count + seq.get_record_count() ||
+        env.activity.push_samples.size() < before_counts.push_count + seq.get_record_count()) begin
+        `error("Original writebacks do not have complete reserve/push input records", "WBB_STIMULUS_RECORDS")
+        return;
+    end
+    for (int index = 0; index < seq.get_record_count(); index++) begin
+        reserve_index = before_counts.reserve_count + index;
+        push_index = before_counts.push_count + index;
+        reserved = env.activity.reserve_samples[reserve_index];
+        pushed = env.activity.push_samples[push_index];
+        record = seq.get_record(index);
+        if (reserved.reserve_addr !== record.addr || pushed.push_slot !== reserved.reserveSlot ||
+            pushed.push_line !== record.line_data) begin
+            `error($sformatf("Writeback %0d input address/slot/data differs from the original item", index),
+                "WBB_STIMULUS_DATA")
+        end
+        if (cfg.input_mode == WBB_INPUT_PIPELINE) begin
+            check_count($sformatf("writeback %0d reserve-to-push cycles", index),
+                int'(env.activity.push_cycles[push_index] - env.activity.reserve_cycles[reserve_index]), 1);
+        end
+    end
+endfunction
 
 // 同一地址可在响应完成后再次写入；最终内存比较使用该地址最后一次准备的数据。
 // 更早版本在每次send时仍由C++ WBB模型和IO断言检查，不能用最后一版替代逐次比较。

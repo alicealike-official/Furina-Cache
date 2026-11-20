@@ -14,6 +14,7 @@ class wbb_base_sequence extends uvm_sequence #(wbb_transaction);
     extern task query(bit [ADDR_WIDTH-1:0] q0Addr, bit [ADDR_WIDTH-1:0] q1Addr,
         int unsigned cycles = 1);
     extern task idle_cycles(int unsigned cycles);
+    extern task submit_writebacks(wbb_transaction items[$], wbb_input_mode_t mode);
 
 endclass
 
@@ -25,6 +26,37 @@ task wbb_base_sequence::step(wbb_transaction tr);
     end
     start_item(tr);
     finish_item(tr);
+endtask
+
+// 统一提交已经生成的一组完整写回：串行逐项完成，流水则交给driver按批次逐拍调度。
+// 此处只选择提交方式，不生成地址、数据或查询值；整组push完成后才返回，不等待内存响应。
+task wbb_base_sequence::submit_writebacks(wbb_transaction items[$], wbb_input_mode_t mode);
+    wbb_batch_transaction batch;
+    wbb_batch_transaction nested;
+
+    if (items.size() == 0 || $isunknown(mode) ||
+        !(mode inside {WBB_INPUT_SERIAL, WBB_INPUT_PIPELINE})) begin
+        `fatal("Writeback group requires entries and a valid input mode", "WBB_INPUT_MODE")
+    end
+    foreach (items[index]) begin
+        if (items[index] == null) begin
+            `fatal("Writeback group contains a null entry", "WBB_SEQUENCE_GROUP")
+        end
+        if ($cast(nested, items[index]) || items[index].operation != WBB_WRITEBACK) begin
+            `fatal("Writeback group entries must be ordinary complete writebacks", "WBB_SEQUENCE_GROUP")
+        end
+    end
+    if (mode == WBB_INPUT_PIPELINE) begin
+        batch = wbb_batch_transaction::type_id::create("pipeline_group");
+        batch.mode = WBB_BATCH_PIPELINED;
+        batch.hold_cycles = 0;
+        batch.entries = items;
+        step(batch);
+    end else begin
+        foreach (items[index]) begin
+            step(items[index]);
+        end
+    end
 endtask
 
 // 使用指定块地址、完整行数据和两个独立查询地址创建写回事务，等待 reserve/push 完成。

@@ -17,5 +17,6 @@ package wbb_test_pkg;
     `include "wbb_response_order_test.sv"
     `include "wbb_event_collision_test.sv"
     `include "wbb_delayed_push_test.sv"
+    `include "wbb_pipeline_test.sv"
     `include "wbb_random_test.sv"
 endpackage

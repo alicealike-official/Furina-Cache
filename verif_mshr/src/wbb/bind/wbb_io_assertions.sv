@@ -285,6 +285,13 @@ module wbb_io_assertions #(
         seen_reset && history_valid && push_en |-> push_has_reservation)
         else report_failure(1, "PUSH_OWNER", "Push requires an earlier reservation, not a same-edge reserve");
 
+    // 【DUT】同拍进行合法的旧槽push和新reserve时，返回的reserveSlot必须与push_slot不同。
+    // push目标必须已经属于沿前的预留槽；若push本身无合法归属，由上面的环境断言报错。
+    a_dut_overlap_slot: assert property (@(posedge clk) disable iff (!rst_n)
+        seen_reset && history_valid && reserve_fire && push_en && push_has_reservation
+        |-> !$isunknown(reserveSlot) && reserveSlot != push_slot)
+        else report_failure(0, "OVERLAP_SLOT", "Concurrent reserve must select a different slot from a legal push");
+
     // 【DUT】呈现 send_valid 时，对应 ID 必须属于此前已装载且尚未发送的占用槽。
     // 禁止未 push 就发送、同拍 push 直通发送，以及同槽已握手后再次发送。
     a_dut_send_owner: assert property (@(posedge clk) disable iff (!rst_n)

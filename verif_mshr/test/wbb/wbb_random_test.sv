@@ -5,6 +5,7 @@ class wbb_random_test extends wbb_base_test;
     function new(string name = "wbb_random_test",
         uvm_component parent = null);
         super.new(name, parent);
+        supports_input_modes = 1;
     endfunction
 
     extern virtual function void build_phase(uvm_phase phase);
@@ -47,7 +48,15 @@ task wbb_random_test::run_sequence();
     check_count("random case send stalls", env.activity.send_stall_cycles, 3, 1);
     check_count("random case reordered responses", env.activity.response_reorders, 1, 1);
     check_count("random case final occupied slots", $countones(env.activity.occupied), 0);
-    `info($sformatf("batches=%0d lines=%0d stalled_cycles=%0d reordered_responses=%0d",
+    if (cfg.input_mode == WBB_INPUT_PIPELINE) begin
+        // 排除保证背压/乱序的受控第一批，后续31个随机批次也必须真正出现流水。
+        check_count("random-phase batches with overlap", seq.overlapping_random_batches,
+            wbb_random_sequence::BATCH_COUNT - 1);
+        check_count("random-phase reserve/push overlap", seq.random_phase_overlaps,
+            wbb_random_sequence::BATCH_COUNT - 1, 1);
+    end
+    `info($sformatf("batches=%0d lines=%0d stalled_cycles=%0d reordered_responses=%0d random_phase_overlaps=%0d overlapping_random_batches=%0d",
         seq.completed_batches, seq.randomized_lines, env.activity.send_stall_cycles,
-        env.activity.response_reorders), "WBB_RANDOM_COVERAGE")
+        env.activity.response_reorders, seq.random_phase_overlaps,
+        seq.overlapping_random_batches), "WBB_RANDOM_COVERAGE")
 endtask

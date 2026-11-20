@@ -1,6 +1,7 @@
-// 分别安排响应释放与另一槽的 reserve、push、send 同拍，不制造 reserve/push 流水。
+// 串行模式分别安排两事件同拍；流水模式安排三个、四个不同槽的事件同拍。
 class wbb_event_collision_sequence extends wbb_scenario_sequence;
     localparam int WRITEBACK_COUNT = 6;
+    localparam int PIPELINE_WRITEBACK_COUNT = 7;
 
     `uvm_object_utils(wbb_event_collision_sequence)
 
@@ -15,17 +16,58 @@ class wbb_event_collision_sequence extends wbb_scenario_sequence;
     extern task collide_with_reserve();
     extern task collide_with_push();
     extern task collide_with_send();
+    extern task collide_pipeline(bit include_send, int first_index);
 endclass
 
 task wbb_event_collision_sequence::body();
     if (WBB_ENTRIES < 2) begin
         `fatal("Different-slot collisions require at least two slots", "WBB_CASE_CONFIG")
     end
-    collide_with_reserve();
-    collide_with_push();
-    collide_with_send();
+    if (cfg.input_mode == WBB_INPUT_PIPELINE) begin
+        if (WBB_ENTRIES < 4) begin
+            `fatal("Four simultaneous events require at least four WBB slots", "WBB_CASE_CONFIG")
+        end
+        collide_pipeline(0, 0);
+        collide_pipeline(1, 3);
+    end else begin
+        collide_with_reserve();
+        collide_with_push();
+        collide_with_send();
+    end
     cfg.mem_response_order = WBB_MEM_FIFO;
     cfg.mem_response_enable = 1;
+endtask
+
+// 先准备一笔已发送但未响应的A，再提交两笔流水写回C/D；在C预留后放行A响应。
+// include_send=1时另留一笔待发送的B，同拍放开ready，得到response(A)+send(B)+push(C)+reserve(D)。
+// 四个事件分别使用沿前处于issued、pending、reserved、free的槽，不借用本拍刚释放的槽。
+task wbb_event_collision_sequence::collide_pipeline(bit include_send, int first_index);
+    int old_id;
+    int pipeline_first;
+    int reserve_target;
+    int response_target;
+
+    prepare_old_write(first_index, old_id);
+    pipeline_first = first_index + 1;
+    if (include_send) begin
+        cfg.mem_send_enable = 0;
+        send_line(pipeline_first);
+        pipeline_first++;
+        obs.wait_cycles(1);
+    end
+    reserve_target = obs.reserve_count + 1;
+    response_target = obs.response_count + 1;
+    fork
+        send_pipeline_batch(pipeline_first, 2);
+        begin
+            obs.wait_for_reserves(reserve_target);
+            select_response(old_id);
+            cfg.mem_send_enable = 1;
+            obs.wait_for_responses(response_target);
+            cfg.mem_response_enable = 0;
+        end
+    join
+    drain_stage();
 endtask
 
 // 先提交旧写回并等其发送，再留出到期时间；返回时位于采样沿，可安排下一拍的交叉事件。
@@ -46,7 +88,7 @@ function void wbb_event_collision_sequence::select_response(int id);
     cfg.mem_response_enable = 1;
 endfunction
 
-// 完成当前两笔写回的剩余响应，再暂停新响应选择，供下一个独立子场景使用。
+// 完成当前子场景的全部剩余响应，再暂停新响应选择，供下一个独立子场景使用。
 task wbb_event_collision_sequence::drain_stage();
     obs.wait_cycles(1);
     cfg.mem_send_enable = 1;

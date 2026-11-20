@@ -37,5 +37,6 @@ package wbb_pkg;
     `include "sequence/wbb_response_order_sequence.sv"
     `include "sequence/wbb_event_collision_sequence.sv"
     `include "sequence/wbb_delayed_push_sequence.sv"
+    `include "sequence/wbb_pipeline_sequence.sv"
     `include "sequence/wbb_random_sequence.sv"
 endpackage

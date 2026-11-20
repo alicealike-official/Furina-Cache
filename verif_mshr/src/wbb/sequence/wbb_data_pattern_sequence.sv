@@ -28,7 +28,9 @@ class wbb_data_pattern_sequence extends wbb_base_sequence;
 
     // 为1时只执行最开始的全1准备写回；为0时执行全部九种数据模式。
     bit preload_only = 0;
+    wbb_input_mode_t input_mode = WBB_INPUT_SERIAL;
     protected pattern_record_t records[$];
+    protected wbb_transaction pending_items[$];
 
     `uvm_object_utils(wbb_data_pattern_sequence)
 
@@ -42,6 +44,7 @@ class wbb_data_pattern_sequence extends wbb_base_sequence;
     extern task send_fixed_patterns();
     extern task send_walking_patterns();
     extern task send_random_patterns();
+    extern task flush_patterns();
     extern function int get_record_count();
     extern function pattern_record_t get_record(int index);
 
@@ -52,7 +55,14 @@ task wbb_data_pattern_sequence::body();
         LINE_WIDTH != BLOCK_SIZE * 8) begin
         `fatal("Data patterns require consistent byte, word and line widths", "WBB_PATTERN_CONFIG")
     end
+    if ($isunknown(input_mode) || !(input_mode inside {WBB_INPUT_SERIAL, WBB_INPUT_PIPELINE})) begin
+        `fatal("Unknown data-pattern input mode", "WBB_PATTERN_CONFIG")
+    end
+    if (input_mode == WBB_INPUT_PIPELINE && WBB_ENTRIES < 2) begin
+        `fatal("Pipelined data patterns require at least two WBB entries", "WBB_PATTERN_CONFIG")
+    end
     records.delete();
+    pending_items.delete();
 
     // test 先启动一次全1准备写回，等响应并读取内存确认成功后，再启动全部数据模式。
     if (preload_only) begin
@@ -61,6 +71,7 @@ task wbb_data_pattern_sequence::body();
         send_fixed_patterns();
         send_walking_patterns();
         send_random_patterns();
+        flush_patterns();
     end
 endtask
 
@@ -71,12 +82,13 @@ task wbb_data_pattern_sequence::send_preload();
     writeback_line(ADDR_WIDTH'(BLOCK_SIZE), '1, ADDR_WIDTH'(BLOCK_SIZE), '0);
 endtask
 
-// 为当前数据选择一个按块大小对齐的地址，保存地址和数据，再提交一笔完整写回事务。
+// 为当前数据选择块对齐地址并保存原始数据；串行时直接提交，流水时先加入最多N笔的队列。
 // 测试地址依次为 BLOCK_SIZE、2*BLOCK_SIZE 等，避免后面的测试数据覆盖前面的结果。
 // 地址0只用于查询，不写入；计算出的地址若超过地址位宽后变成0或小于等于前一个地址，就报错。
 // 保存的是地址和数据本身，driver 后续修改 transaction 对象不会改变这里的记录。
 task wbb_data_pattern_sequence::send_pattern(pattern_kind_t kind, bit [LINE_WIDTH-1:0] line_data);
     pattern_record_t record;
+    wbb_transaction tr;
 
     record.kind = kind;
     record.addr = ADDR_WIDTH'((records.size() + 1) * BLOCK_SIZE);
@@ -88,7 +100,29 @@ task wbb_data_pattern_sequence::send_pattern(pattern_kind_t kind, bit [LINE_WIDT
         `fatal("Data pattern addresses wrap or repeat", "WBB_PATTERN_ADDR")
     end
     records.push_back(record);
-    writeback_line(record.addr, line_data, record.addr, '0);
+    if (input_mode == WBB_INPUT_SERIAL) begin
+        writeback_line(record.addr, line_data, record.addr, '0);
+    end else begin
+        tr = wbb_transaction::type_id::create("pattern_writeback");
+        tr.addr = record.addr;
+        tr.line_data = line_data;
+        tr.q0Addr = record.addr;
+        tr.q1Addr = '0;
+        pending_items.push_back(tr);
+        if (pending_items.size() == WBB_ENTRIES) begin
+            flush_patterns();
+        end
+    end
+endtask
+
+// 将已经准备的数据交给公共提交接口，等待整组push完成后清空队列。
+// 最后一组不足N笔也要提交，不能因未凑满一组而漏掉最后的数据。
+task wbb_data_pattern_sequence::flush_patterns();
+    if (pending_items.size() == 0) begin
+        return;
+    end
+    submit_writebacks(pending_items, input_mode);
+    pending_items.delete();
 endtask
 
 // 发送六笔固定数据：全0、全1、各字依次为1/2/3、各字节依次为1/2/3，以及每字节为AA和55。

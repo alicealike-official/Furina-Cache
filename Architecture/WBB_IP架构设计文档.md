@@ -208,7 +208,7 @@ push使用的槽必须在沿前处于RESERVED。不能同沿reserve并push新槽
 
 一次上游事务在合法push采样后完成交接。driver可在撤销push后调用item_done，不需要等待内存ack。同一逻辑事务的reserve/push保持关联，monitor仍逐拍观察两个阶段。
 
-允许 `push(A)` 与 `reserve(B)` 同拍，但必须是不同槽，且B满足沿前资源约束。当前串行driver不制造这种重叠，不表示IP可以不支持这种并发。
+允许 `push(A)` 与 `reserve(B)` 同拍，但必须是不同槽，且B满足沿前资源约束。验证环境的默认单笔driver仍串行；显式流水批次可制造该重叠，并保持每笔成功预留后严格下一拍push。批次在最后一笔push完成交接后才结束，不提前把预留成功当作整批完成。
 
 ## 8. 内存发送与响应协议
 
@@ -386,6 +386,7 @@ E0 到来前所有槽都被占用。虽然该沿接受了槽 k 的写响应，re
 | a_dut_capacity / a_dut_reserve_slot | DUT | 沿前full/reserveOk、候选槽确实空闲 | §7.1、§9.1 |
 | a_env_unique_address | 上游 | 成功预留不得与现有占用同址 | §7.2 |
 | a_env_push_owner | 上游 | push只能装载先前预留且未装载的槽 | §7.3 |
+| a_dut_overlap_slot | DUT | 旧push合法时，同拍成功reserve必须返回另一个空槽 | §7.5、§9.1 |
 | a_env_push_next | 上游 | 默认严格下一拍push且槽号匹配 | §7.3/7.4 |
 | a_dut_send_owner / a_dut_send_content | DUT | 先push再send、无重复发送、地址/数据/ID归属正确 | §8.1 |
 | a_env_response_owner | 内存 | 响应只能对应先前已发送槽，禁止同拍零延迟/重复响应 | §8.3 |
@@ -420,6 +421,8 @@ make -C verif_mshr/sim check_sva
 严格模式与延迟模式各27个场景，逐场景验证错误归属，负例还验证指定断言标签确实触发。
 另用原挂接文件在接口桩上验证UVM报告路径和bind连接。
 2026-11-17在VCS O-2018.09-SP2上三组均通过。
+
+2026-11-20加入同拍不同槽的明确检查及合法/非法流水轨迹后，strict/delayed各29个场景和bind在10 ns、4 ns两种时钟下通过。完整UVM流水case继续开启严格下一拍断言，默认4槽的连续、满槽恢复、尾部场景也通过。
 日志位于 `verif_mshr/sim/work/assertions/{strict,delayed,bind}/`。
 负例故意产生assertion error；脚本通过场景检查和成功标记判定自测结果，不能要求负例日志零错误。
 

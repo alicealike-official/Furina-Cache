@@ -9,17 +9,17 @@
 | Case | 主要验证内容 | 对应验证点 | 实施状态与条件 |
 | --- | --- | --- | --- |
 | `wbb_base_test` | 基础 reserve → push → send → response 全流程，检查地址、数据、ID及释放 | WBR-002、003、005、007、008；WBS-001、003、005、006 | 已有两笔基础写回运行结果，作为这些验证点的基础场景证据 |
-| `wbb_data_pattern_test` | 全0、全1、逐字/逐字节递增、交替位、walking-1/0、随机整行数据，检查字序和数据完整性 | WBR-007；WBS-001；CFG-005 | 已实现，默认配置固定 seed 运行通过；具体场景、数量与证据见下文 |
+| `wbb_data_pattern_test` | 全0、全1、逐字/逐字节递增、交替位、walking-1/0、随机整行数据，检查字序和数据完整性 | WBR-007；WBS-001；CFG-005 | serial/pipeline均通过，各1063笔；流水796次重叠，九类数据检查保持 |
 | `wbb_capacity_test` | 填满 N 个槽后提交第 N+1 笔，检查满时预留失败、各笔数据正确、响应释放后恢复 | WBR-001、002、004、005、006；WBS-005、009 | 已实现，默认4槽配置运行通过；场景命中次数与覆盖范围见下文 |
-| `wbb_query_test` | 两查询口同址、异址、单边命中、双边命中、均不命中，覆盖不同槽阶段 | WBR-003、010、011、012；WBS-006 | 已实现并通过，2轮共8笔写回，覆盖reserved/pending/issued与释放后查询 |
-| `wbb_reuse_test` | 释放后用新地址、新数据复用槽，检查旧地址匹配解除、旧状态和数据清理 | WBR-015；WBS-006、012 | 已实现并通过，3轮共12笔写回，每槽使用3次 |
+| `wbb_query_test` | 两查询口同址、异址、单边命中、双边命中、均不命中，覆盖不同槽阶段 | WBR-003、010、011、012；WBS-006 | serial/pipeline均通过，各8笔；流水还检查重叠期间的reserved及异址查询 |
+| `wbb_reuse_test` | 释放后用新地址、新数据复用槽，检查旧地址匹配解除、旧状态和数据清理 | WBR-015；WBS-006、012 | serial/pipeline均通过，各12笔、每槽使用3次；流水每轮重叠3次 |
 | `wbb_send_backpressure_test` | send 被反压期间新增候选，检查 valid、地址、数据、ID 保持及恢复后的发送 | WBS-002、003、005；IF-002、004 | 用户修复WBB-DUT-001后冷编译回归通过，仍命中10拍背压和1次候选插入 |
 | `wbb_arbitration_test` | 多槽同时待发，检查轮询顺序、回绕、公平性和连续发送 | WBS-007、008、011 | 已实现并通过，4候选连续4拍发送，全槽及回绕命中 |
 | `wbb_response_order_test` | 从实际已发送的 ID 中选择响应，按逆序或指定排列返回，检查对应槽释放 | WBS-004、005、006、009 | 已实现并通过，实际ID逆序响应，逐次查询已释放与仍占用地址 |
-| `wbb_event_collision_test` | 不同槽的响应释放分别与 reserve、push、send 同拍发生 | WBR-013、014；WBS-010 | 已实现并通过，三类交叉各命中1次，无reserve/push同拍 |
+| `wbb_event_collision_test` | 不同槽的响应释放分别与 reserve、push、send 同拍发生 | WBR-013、014；WBS-010 | serial的6笔两事件场景通过；pipeline的7笔场景命中三事件及四事件同拍 |
 | `wbb_delayed_push_test` | 预留后延迟 push，检查 reserved 持续占用、查询命中及禁止提前发送 | WBR-004、006、008 的延迟模式子项 | 用户修复后回归通过，5笔延迟push、全reserved保持7拍等目标仍命中 |
-| `wbb_pipeline_test` | 构造 `push(A)` 与 `reserve(B)` 同拍，检查不同事务的槽号和数据归属 | WBR-009 | 按当前决定暂缓，保留为待覆盖项 |
-| `wbb_random_test` | 合法地址、数据、查询、反压和响应顺序组合随机，多轮复用后排空 | WBS-012；RND-001、008、010 | 用户修复后seed1/2/3在两种时钟下全部通过，各32批128笔 |
+| `wbb_pipeline_test` | 构造 `push(A)` 与 `reserve(B)` 同拍，检查不同事务的槽号和数据归属 | WBR-009 | 已实现并通过，默认严格模式13笔写回、8次重叠，含满槽恢复和尾部再次启动 |
+| `wbb_random_test` | 合法地址、数据、查询、反压和响应顺序组合随机，多轮复用后排空 | WBS-012；RND-001、008、010 | serial/pipeline及seed1/2/3在两种时钟下全部通过，各32批128笔；流水后续31批均有重叠 |
 
 ## 数据图样 case 实现与结果（2026-11-19）
 
@@ -208,13 +208,77 @@ python3 verif_mshr/sim/script/run_wbb_regression.py --tests wbb_send_backpressur
 
 [本轮汇总与每组日志/波形](../../verif_mshr/sim/work/regression/reports/run_20261119_092126_919356/summary.md) · [JSON结果](../../verif_mshr/sim/work/regression/reports/run_20261119_092126_919356/summary.json) · [输入文件哈希](../../verif_mshr/sim/work/regression/reports/run_20261119_092126_919356/inputs.json)。修复过程说明见[用户的DebugNote](../../Architecture/DebugNote/WBB-DUT-001_发送背压保持问题.md)。
 
+## 流水 case 实现与回归（2026-11-20）
+
+用户确认后新增 [wbb_pipeline_sequence.sv](../../verif_mshr/src/wbb/sequence/wbb_pipeline_sequence.sv) 和 [wbb_pipeline_test.sv](../../verif_mshr/test/wbb/wbb_pipeline_test.sv)，使用默认严格下一拍模式，未关闭 `a_env_push_next`。
+
+批次新增两种明确模式：原 `WBB_BATCH_DEFERRED` 保持最多N笔、先全预留再延迟push；新 `WBB_BATCH_PIPELINED` 允许超过N笔，要求hold_cycles=0和每笔push_delay_cycles=1。
+driver先复制每笔地址/数据/查询值，再由单个逐拍循环同时驱动旧push与新reserve；成功预留时保存返回槽号，下一拍使用该值，失败不生成push也不重复旧push。
+整批最后一笔push采样并撤销输出后才item_done。流水时q0/q1整对跟随当前reserve项，没有reserve时才使用尾部push项。
+
+| 阶段 | 事务数（默认4槽） | 验证要求及实际命中 |
+| --- | --- | --- |
+| 连续流水 | 4 | reserve连续4拍、push连续4拍；3次成功重叠；尾部push 1次 |
+| 满槽停顿恢复 | 6 | 满槽等待7拍；新reserve失败但旧push仍发生1次；满槽响应当拍仍阻塞1次；次拍恢复1次；恢复后再次重叠1次，本段共4次重叠 |
+| 空闲后单笔 | 1 | 前置3拍空闲中四类事件均为0；单笔严格下一拍push，尾部正确，没有重叠 |
+| 再次启动双笔 | 2 | 再插入3拍无事务空闲；reserve/push各连续2拍，重叠1次，尾部正确 |
+
+每笔均从实际reserve/push采样记录核对时间差1拍、槽号、原始数据和查询地址来源，包括reserve失败时的查询来源。
+通用等待、完整事务计数、内存回读继续复用base工具。activity新增可复制计数快照和只读输入记录；不读取DUT内部，不新增WBB行为参考模型。
+
+新增 `a_dut_overlap_slot`：仅当旧push沿前归属合法时，检查同拍成功reserve返回不同槽。错误记为DUT的 `WBB_DUT_OVERLAP_SLOT`；非法push仍由环境归属检查报告。
+SVA自测新增合法反向槽序流水和同槽返回负例，在10 ns/4 ns下strict/delayed各29个场景、bind均通过。
+
+完整回归已包含12个case，共28组：10 ns/4 ns，random使用seed1/2/3，其余seed1，**28/28 PASS，全部UVM_WARNING/ERROR/FATAL为0**。
+pipeline的reserve/push/send/response均为13，`c_reserve_push`命中13次、`c_overlap`命中8次、`c_full_release`命中2次；运行时长分别610 ns/244 ns。
+其他case仍为零reserve/push重叠，原串行和延迟批次行为保持。DUT和C++参考模型未修改，仍使用修复后的 `7e55ed10a7f44bdc...` RTL。
+
+- [本轮完整汇总](../../verif_mshr/sim/work/regression/reports/run_20261120_010402_307499/summary.md)
+- [10 ns流水日志](../../verif_mshr/sim/work/regression/strict/log/run_20261120_010402_307499/wbb_pipeline_test_p10_s1.log) / [4 ns日志](../../verif_mshr/sim/work/regression/strict/log/run_20261120_010402_307499/wbb_pipeline_test_p4_s1.log)
+- [10 ns流水波形](../../verif_mshr/sim/work/regression/strict/wave/run_20261120_010402_307499/wbb_pipeline_test_p10_s1.fsdb) / [4 ns波形](../../verif_mshr/sim/work/regression/strict/wave/run_20261120_010402_307499/wbb_pipeline_test_p4_s1.fsdb)
+
+## 适用 case 的双输入模式（2026-11-20）
+
+保留原串行基线，为 random、reuse、data_pattern、query、event_collision 增加流水变体，共用数据生成和通用检查，不复制两份test。pipeline专用case固定流水，其余case保持原有非流水方式。
+
+`wbb_config.input_mode` 配合 `+WBB_INPUT_MODE=serial|pipeline` 选择可切换case的模式。固定case使用自身声明的模式，显式请求不支持的模式会报错。
+base统一检查模式是否实际生效：serial要求零reserve/push重叠，pipeline要求确实发生重叠且所有push严格晚于成功reserve一拍。
+`submit_writebacks()` 和 `send_group()` 统一提交方式；`check_scenario_inputs()` 逐笔对照sequence原始数据与实际reserve/push，防止地址后来被覆盖后漏掉旧版本的输入错误。
+
+| 流水变体 | 保留的检查 | 新增并实际命中的证据（默认4槽） |
+| --- | --- | --- |
+| random | 32批128笔、合法地址、数据/查询、背压/乱序和排空 | 总重叠96次；不含受控首批的31个随机批次各重叠3次，共93次；seed1/2/3分别观察到37/32/42次乱序响应 |
+| reuse | A/B/A三轮换数据、每槽3次、旧地址解除、最终内存 | 每轮3次重叠，共9次；旧地址不命中而新地址issued命中12拍 |
+| data_pattern | 全一预置独立完成后再测全零、九类数据及1063笔总数 | 正式数据按最多N笔提交，尾部不足N笔也提交；总重叠796次 |
+| query | reserved/pending/issued及释放后双口组合，各8笔 | 只看实际reserve/push重叠采样：reserved双命中2次、左/右单命中各1次、不同占用地址双命中2次 |
+| event_collision | 原serial三个两事件场景独立保留 | pipeline共7笔；reserve+push+response条件命中2次，其中1次还同时send，构成四事件同拍 |
+
+四事件交叉的沿前角色分别是：A已发送等响应、B有数据待发送、C已预留等push、D为空槽。
+在C预留成功后同时允许A的响应及B的发送，下一拍得到response(A)+send(B)+push(C)+reserve(D)，四个槽各自满足沿前条件，不使用本拍刚释放的槽。
+
+随机模式的serial保留逐笔随机空闲，pipeline把空闲安排在批次之间；每批内部连续提交，批间等全部响应后再复用地址。
+query流水变体为了覆盖全部重叠查询组合要求至少4槽，原serial仍要求至少2槽；本轮只验证默认4槽参数。
+
+回归新增Input维度，区别于strict/delayed编译配置。脚本默认跑五个case的两种模式，固定模式case不受 `--input-modes` 切换，所有日志/波形/覆盖名称均带输入模式，并核对日志标记确实与请求一致。
+
+本轮编号 `run_20261120_013657_184228`：12个case、10 ns/4 ns，random用seed1/2/3，其余seed1，共 **42/42 PASS**，全部UVM_WARNING/ERROR/FATAL为0。DUT与C++参考模型未修改。
+
+[完整回归汇总](../../verif_mshr/sim/work/regression/reports/run_20261120_013657_184228/summary.md) · [JSON结果](../../verif_mshr/sim/work/regression/reports/run_20261120_013657_184228/summary.json) · [输入文件哈希](../../verif_mshr/sim/work/regression/reports/run_20261120_013657_184228/inputs.json)。
+
+```sh
+# 全部模式与case
+python3 verif_mshr/sim/script/run_wbb_regression.py
+# 只选择随机case的流水变体
+python3 verif_mshr/sim/script/run_wbb_regression.py --tests wbb_random_test --input-modes pipeline
+```
+
 ## 执行口径
 
 - 默认严格要求 reserve 成功后的下一拍 push。N>1 时的全 reserved 状态，以及长时间仅预留不 push 的轨迹，归入 `wbb_delayed_push_test` 的显式延迟模式。
 - WBR-001 的空槽选择与 WBS-007 的仲裁顺序，分别记录 IP 契约检查和当前 C++ 模型的精确一致性检查，沿用 WBB IP 验证文件中的范围说明。
 - 新写回事务的地址应排除当前已占用块，旧响应完成并释放后可以复用。两个查询地址允许命中已占用块。
 - 乱序响应从已发送且尚未完成的 ID 集合中选择，每个请求对应一次响应。
-- WBR-013、014 和 WBS-010 的释放交叉可单独安排，上游 reserve/push 流水场景继续按 WBR-009 暂缓。
+- WBR-013、014 和 WBS-010 的释放交叉由event_collision case安排；WBR-009的reserve/push流水由strict配置下的pipeline case验证。
 
 ## 配套通用检查
 
