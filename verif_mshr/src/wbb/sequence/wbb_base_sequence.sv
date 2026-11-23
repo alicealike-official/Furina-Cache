@@ -21,6 +21,7 @@ endclass
 // 提交一项上游操作并等待 driver 完成：写回等到 push，批量操作等到全部 push，查询/空闲等到指定拍数。
 // 返回不代表内存响应已完成；内存写请求和写响应由 DUT 与 memory agent 继续处理。
 task wbb_base_sequence::step(wbb_transaction item);
+    // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
     if (item == null) begin
         `fatal("Writeback transaction can not be null")
     end
@@ -34,18 +35,24 @@ task wbb_base_sequence::submit_writebacks(wbb_transaction items[$], wbb_input_mo
     wbb_batch_transaction batch;
     wbb_batch_transaction nested;
 
+    // 【防御性检查】校验批次非空及提交模式合法，检查的是调用参数，不是DUT行为。
     if (items.size() == 0 || $isunknown(mode) ||
         !(mode inside {WBB_INPUT_SERIAL, WBB_INPUT_PIPELINE})) begin
         `fatal("Writeback group requires entries and a valid input mode", "WBB_INPUT_MODE")
     end
+
     foreach (items[index]) begin
+        // 【防御性检查】批次中的每项都必须是已创建的事务对象。
         if (items[index] == null) begin
             `fatal("Writeback group contains a null entry", "WBB_SEQUENCE_GROUP")
         end
+        // 【防御性检查】此接口只接收普通写回事务，防止传入嵌套批次或查询/空闲操作。
         if ($cast(nested, items[index]) || items[index].operation != WBB_WRITEBACK) begin
             `fatal("Writeback group entries must be ordinary complete writebacks", "WBB_SEQUENCE_GROUP")
         end
     end
+
+    // 参数检查结束，按指定模式正式提交激励。
     if (mode == WBB_INPUT_PIPELINE) begin
         batch = wbb_batch_transaction::type_id::create("pipeline_group");
         batch.mode = WBB_BATCH_PIPELINED;

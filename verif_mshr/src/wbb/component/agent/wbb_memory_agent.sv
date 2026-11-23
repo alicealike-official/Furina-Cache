@@ -5,6 +5,7 @@ class wbb_memory_agent extends uvm_agent;
     function new(string name = "wbb_memory_agent",
         uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end

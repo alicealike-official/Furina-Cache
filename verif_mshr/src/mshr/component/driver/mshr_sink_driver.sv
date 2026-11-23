@@ -7,6 +7,7 @@ class mshr_sink_driver extends uvm_component;
     function new(string name = "mshr_sink_driver",
         uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end
@@ -21,9 +22,11 @@ endclass
 
 function void mshr_sink_driver::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(virtual mshr_interface)::get(this, "", "mshr_vif", vif) || vif == null) begin
         `fatal("mshr_interface not found", "MSHR_CONFIG")
     end
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(mshr_config)::get(this, "", "mshr_config", cfg) || cfg == null) begin
         `fatal("Parent environment must provide a non-null mshr_config", "MSHR_CONFIG")
     end
@@ -49,6 +52,7 @@ endtask
 
 // 在下降沿应用当前接收开关，分别控制下一上升沿的 fill 和 replay 接受。
 task mshr_sink_driver::drive_acceptance();
+    // 【防御性检查】接收端的运行配置必须已知，避免TB把X/Z驱动到ready。
     if ($isunknown({cfg.fill_enable, cfg.replay_enable})) begin
         `fatal("Fill/replay acceptance configuration contains X/Z", "MSHR_CONFIG")
     end

@@ -18,6 +18,7 @@ endclass
 task wbb_send_backpressure_sequence::body();
     int send_start;
 
+    // 【防御性检查】确认当前容量足以构造本场景，不代表DUT功能结果检查。
     if (WBB_ENTRIES < 2) begin
         `fatal("Backpressure insertion requires at least two slots", "WBB_CASE_CONFIG")
     end

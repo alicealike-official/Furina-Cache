@@ -25,6 +25,7 @@ endclass
 
 // 创建实际和期望两份 C++ 稀疏内存，并保存各自句柄供后续读写。
 function void wbb_memory_store::initialize(int page_size);
+    // 【防御性检查】检查C++内存封装的初始化顺序，避免未创建就使用或重复创建。
     if (actual_handle != null || expected_handle != null) begin
         `fatal("Memory store already initialized")
     end

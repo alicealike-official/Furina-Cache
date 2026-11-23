@@ -31,6 +31,7 @@ class mshr_scoreboard extends uvm_scoreboard;
 
     function new(string name = "mshr_scoreboard", uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (parent == null) begin
             `fatal("This component's parent cannot be null")
         end
@@ -51,6 +52,7 @@ endclass
 
 // 接收C++预测与同一拍的实际快照，先检查沿前状态，再登记本沿接受的事件。
 function void mshr_scoreboard::write(mshr_compare_item item);
+    // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
     if (item == null || item.actual_sample == null) begin
         `fatal("Null MSHR comparison item", "MSHR_COMPARE")
     end

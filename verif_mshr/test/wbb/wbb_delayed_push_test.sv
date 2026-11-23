@@ -13,6 +13,7 @@ endclass
 
 function void wbb_delayed_push_test::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    // 【防御性检查】核对编译模式是否支持本操作，避免环境模式与协议检查配置不一致。
 `ifndef WBB_ALLOW_DELAYED_PUSH
     `fatal("Compile wbb_delayed_push_test with WBB_ALLOW_DELAYED_PUSH", "WBB_DELAYED_MODE")
 `endif

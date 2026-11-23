@@ -6,6 +6,7 @@ class wbb_monitor extends uvm_monitor;
     function new(string name = "wbb_monitor",
         uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end
@@ -18,6 +19,7 @@ endclass
 
 function void wbb_monitor::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(virtual wbb_interface)::get(this, "", "wbb_vif", vif)) begin
         `fatal("wbb_interface not found")
     end

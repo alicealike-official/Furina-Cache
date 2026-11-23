@@ -51,6 +51,7 @@ class wbb_data_pattern_sequence extends wbb_base_sequence;
 endclass
 
 task wbb_data_pattern_sequence::body();
+    // 【防御性检查】确认数据生成器所需的宽度关系和输入模式成立，下面才生成实际激励。
     if (DATA_WIDTH % 8 != 0 || LINE_WIDTH != WORDS_PER_BLOCK * DATA_WIDTH ||
         LINE_WIDTH != BLOCK_SIZE * 8) begin
         `fatal("Data patterns require consistent byte, word and line widths", "WBB_PATTERN_CONFIG")
@@ -93,6 +94,7 @@ task wbb_data_pattern_sequence::send_pattern(pattern_kind_t kind, bit [LINE_WIDT
     record.kind = kind;
     record.addr = ADDR_WIDTH'((records.size() + 1) * BLOCK_SIZE);
     record.line_data = line_data;
+    // 【防御性检查】生成地址不能溢出、回绕或重复，防止测试数据相互覆盖。
     if (record.addr == '0) begin
         `fatal("Data pattern addresses exceed the available address space", "WBB_PATTERN_ADDR")
     end
@@ -172,6 +174,7 @@ task wbb_data_pattern_sequence::send_random_patterns();
     bit [LINE_WIDTH-1:0] line_data;
 
     repeat (RANDOM_LINE_COUNT) begin
+        // 【防御性检查】确认随机化成功，避免把未成功生成的数据当作有效激励提交。
         if (!std::randomize(line_data)) begin
             `fatal("Failed to randomize a complete cache line", "WBB_PATTERN_RANDOM")
         end
@@ -188,6 +191,7 @@ endfunction
 // 取出第 index 笔测试数据的类型、地址和整行内容，供 test 与内存中读到的结果比较。
 // 返回一份数据副本；test 修改副本不会改变这里保存的记录。index 超出范围时报错。
 function wbb_data_pattern_sequence::pattern_record_t wbb_data_pattern_sequence::get_record(int index);
+    // 【防御性检查】检查调用方索引是否落在已保存的激励记录范围内。
     if (index < 0 || index >= records.size()) begin
         `fatal($sformatf("Invalid pattern record index %0d (size=%0d)",
             index, records.size()), "WBB_PATTERN_RECORD")

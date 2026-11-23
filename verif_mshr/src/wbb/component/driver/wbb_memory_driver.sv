@@ -31,6 +31,7 @@ class wbb_memory_driver extends uvm_component;
     function new(string name = "wbb_memory_driver",
         uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end
@@ -58,9 +59,11 @@ endclass
 
 function void wbb_memory_driver::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(virtual wbb_interface)::get(this, "", "wbb_vif", vif)) begin
         `fatal("wbb_interface not found")
     end
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(wbb_config)::get(this, "", "wbb_config", cfg) ||
         !uvm_config_db #(wbb_memory_store)::get(this, "", "memory", memory)) begin
         `fatal("Memory configuration/store not found")
@@ -70,6 +73,7 @@ endfunction
 
 // 检查内存调度参数；运行时控制也会经过这里，防止非法概率、延迟范围或响应ID被静默使用。
 function void wbb_memory_driver::check_configuration();
+    // 【防御性检查】以下整段校验内存代理的延迟、容量、随机范围和响应策略配置。
     if (cfg.mem_write_latency_cycles == 0 || $isunknown(cfg.mem_write_latency_cycles)) begin
         `fatal("mem_write_latency_cycles must be at least one cycle", "MEM_CONFIG")
     end

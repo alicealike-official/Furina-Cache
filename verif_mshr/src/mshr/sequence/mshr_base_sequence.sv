@@ -17,6 +17,7 @@ endclass
 // 提交一项上游操作，等待driver完成该次alloc/merge或指定拍数的查询/空闲。
 // 不等待内存响应、fill或replay，后续请求可以继续进入其他Entry或同Entry的下一个Slot。
 task mshr_base_sequence::step(mshr_transaction item);
+    // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
     if (item == null) begin
         `fatal("MSHR transaction can not be null", "MSHR_SEQUENCE")
     end

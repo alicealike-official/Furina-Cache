@@ -8,6 +8,7 @@ class mshr_base_test extends uvm_test;
 
     function new(string name = "mshr_base_test", uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (get_parent() == null) begin
             `fatal("This component's parent cannot be null")
         end
@@ -25,15 +26,18 @@ endclass
 
 function void mshr_base_test::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(virtual mshr_interface)::get(this, "", "mshr_vif", vif)) begin
         `fatal("MSHR interface missing", "MSHR_CONFIG")
     end
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(clk_rst_config)::get(this, "", "clk_rst_config", clk_cfg) || clk_cfg == null) begin
         `fatal("TB top must provide clk_rst_config", "CLK_CONFIG")
     end
     if (!uvm_config_db #(mshr_config)::get(this, "", "mshr_config", cfg)) begin
         cfg = mshr_config::type_id::create("cfg");
     end
+    // 【防御性检查】配置对象及总等待预算必须有效。
     if (cfg == null || cfg.timeout_cycles == 0) begin
         `fatal("Invalid MSHR config or watchdog", "MSHR_CONFIG")
     end
@@ -68,6 +72,7 @@ endtask
 
 // 确认上游是active配置，再允许子test启动sequence。
 function void mshr_base_test::require_active_agent();
+    // 【防御性检查】有激励的test需要active agent及sequencer，避免在passive配置下启动。
     if (env.agent.sequencer == null) begin
         `fatal("Stimulus requires an active MSHR agent", "MSHR_NO_SEQUENCER")
     end

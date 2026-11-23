@@ -37,6 +37,7 @@ task wbb_scenario_sequence::pre_body();
     wbb_sequencer sequencer;
 
     super.pre_body();
+    // 【防御性检查】确认sequence运行在配套sequencer上，才能取得配置和观测接口。
     if (!$cast(sequencer, get_sequencer())) begin
         `fatal("Scenario sequence requires wbb_sequencer", "WBB_SEQUENCE_CONFIG")
     end
@@ -50,6 +51,7 @@ function bit [ADDR_WIDTH-1:0] wbb_scenario_sequence::block_addr(int index);
     longint unsigned block_address;
 
     block_address = (64'(index) + 1) * BLOCK_SIZE;
+    // 【防御性检查】防止调用方编号非法或地址计算溢出，避免生成错误激励。
     if (index < 0 || block_address == 0 || 64'(ADDR_WIDTH'(block_address)) != block_address) begin
         `fatal("Scenario block address is out of range", "WBB_SEQUENCE_ADDRESS")
     end
@@ -91,6 +93,7 @@ task wbb_scenario_sequence::send_group(wbb_transaction items[$]);
 
     // 保存原始激励，供test在提交结束后逐笔检查地址、数据及最终内存内容。
     foreach (items[index]) begin
+        // 【防御性检查】批次中的每项都必须是已创建的事务对象。
         if (items[index] == null) begin
             `fatal("Scenario group contains a null writeback", "WBB_SEQUENCE_GROUP")
         end
@@ -122,6 +125,7 @@ function wbb_batch_transaction wbb_scenario_sequence::make_batch(int first_index
     writeback_record_t record;
 
     // 检查批次数量，再设置整批的调度方式与查询参数。
+    // 【防御性检查】批次生成接口需要正的事务数量。
     if (count <= 0) begin
         `fatal("A writeback batch must contain at least one entry", "WBB_SEQUENCE_BATCH")
     end
@@ -211,6 +215,7 @@ endfunction
 
 // 返回原始地址/数据的副本，供base test统一执行C++内存回读比较。
 function wbb_scenario_sequence::writeback_record_t wbb_scenario_sequence::get_record(int index);
+    // 【防御性检查】检查调用方索引是否落在已保存的激励记录范围内。
     if (index < 0 || index >= records.size()) begin
         `fatal("Scenario record index is out of range", "WBB_SEQUENCE_RECORD")
     end

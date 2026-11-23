@@ -12,6 +12,7 @@ endclass
 
 function void wbb_sequencer::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(wbb_config)::get(this, "", "wbb_config", cfg) || cfg == null ||
         !uvm_config_db #(wbb_activity_monitor)::get(this, "", "observations", observations) || observations == null) begin
         `fatal("Scenario sequencer requires configuration and IO observations", "WBB_SEQUENCE_CONFIG")

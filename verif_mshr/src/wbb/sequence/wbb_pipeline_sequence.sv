@@ -24,6 +24,7 @@ class wbb_pipeline_sequence extends wbb_scenario_sequence;
 endclass
 
 task wbb_pipeline_sequence::body();
+    // 【防御性检查】确认当前容量足以构造本场景，不代表DUT功能结果检查。
     if (WBB_ENTRIES < 2) begin
         `fatal("Pipeline overlap requires at least two WBB entries", "WBB_PIPELINE_CONFIG")
     end

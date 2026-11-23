@@ -12,6 +12,7 @@ class mshr_predictor extends uvm_component;
     function new(string name = "mshr_predictor",
         uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end
@@ -45,6 +46,7 @@ endfunction
 function void mshr_predictor::write(mshr_sample sample);
     mshr_compare_item item;
 
+    // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
     if (sample == null) begin
         `fatal("MSHR predictor received a null sample", "MSHR_SAMPLE")
     end

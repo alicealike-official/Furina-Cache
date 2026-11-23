@@ -116,6 +116,7 @@ module mshr_dpi_check;
         fill_ready = '0;
         replay_ready = '0;
 
+        // 【防御性检查】此自检需要足够的Slot、set和字数以构造其固定场景。
         if (MSHR_MAX_PENDING < 3 || NUM_SETS < 2 || WORDS_PER_BLOCK < 2) begin
             $fatal(1, "This adapter self-check requires at least three slots, two sets and two words");
         end

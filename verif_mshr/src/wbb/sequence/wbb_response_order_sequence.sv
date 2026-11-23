@@ -19,6 +19,7 @@ task wbb_response_order_sequence::body();
     bit [ADDR_WIDTH-1:0] released_addr;
     bit [ADDR_WIDTH-1:0] remaining_addr;
 
+    // 【防御性检查】确认当前容量足以构造本场景，不代表DUT功能结果检查。
     if (WBB_ENTRIES < 2) begin
         `fatal("Response reordering requires at least two slots", "WBB_CASE_CONFIG")
     end

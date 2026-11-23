@@ -20,6 +20,7 @@ endclass
 
 // 创建外部内存的 C++ 实例并核对 SV/C++ 配置；重复初始化会明确报错。
 function void mshr_memory_store::initialize(int page_size);
+    // 【防御性检查】检查C++内存封装的初始化顺序，避免未创建就使用或重复创建。
     if (memory_handle != null) begin
         `fatal("MSHR memory store is already initialized", "MSHR_MEM_DPI")
     end
@@ -31,6 +32,7 @@ endfunction
 
 // 在读写前确认 C++ 实例已经创建，避免把空句柄传给 DPI 后才暴露调用顺序问题。
 function void mshr_memory_store::require_initialized();
+    // 【防御性检查】检查C++内存封装的初始化顺序，避免未创建就使用或重复创建。
     if (memory_handle == null) begin
         `fatal("MSHR memory store must be initialized before use", "MSHR_MEM_DPI")
     end

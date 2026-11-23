@@ -19,6 +19,7 @@ class wbb_driver extends uvm_driver #(wbb_transaction);
     function new(string name = "wbb_driver",
         uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end
@@ -49,12 +50,15 @@ endclass
 
 function void wbb_driver::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(virtual wbb_interface)::get(this, "", "wbb_vif", vif)) begin
         `fatal("wbb_interface not found")
     end
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(wbb_config)::get(this, "", "wbb_config", cfg)) begin
         `fatal("wbb_config not found")
     end
+    // 【防御性检查】等待预算必须为正，避免环境配置导致无效等待或立即超时。
     if (cfg.reserve_timeout_cycles == 0) begin
         `fatal("reserve_timeout_cycles must be positive")
     end
@@ -106,12 +110,15 @@ endtask
 
 // 检查操作类型、地址对齐和等待拍数；普通写回延迟超过1拍时，必须显式允许延迟 push。
 function void wbb_driver::check_transaction(wbb_transaction item);
+    // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
     if (item == null) begin
         `fatal("Writeback transaction can not be null")
     end
+    // 【防御性检查】transaction操作码必须属于driver支持的类型。
     if ($isunknown(item.operation) || !(item.operation inside {WBB_WRITEBACK, WBB_QUERY, WBB_IDLE})) begin
         `fatal("Unknown WBB operation", "WBB_OPERATION")
     end
+    // 【激励合法性检查】写回及查询地址必须块对齐，保证提交的输入满足WBB协议。
     if ((item.operation == WBB_WRITEBACK && (item.addr % BLOCK_SIZE) != 0) || (item.q0Addr % BLOCK_SIZE) != 0 ||
         (item.q1Addr % BLOCK_SIZE) != 0) begin
         `fatal("Writeback and query addresses must be block aligned", "WBB_ALIGNMENT")
@@ -130,6 +137,7 @@ endfunction
 
 // 延迟 push 必须同时启用编译模式和运行配置，避免上游驱动与严格下一拍断言使用不同契约。
 function void wbb_driver::require_delayed_mode();
+    // 【防御性检查】核对编译模式是否支持本操作，避免环境模式与协议检查配置不一致。
 `ifndef WBB_ALLOW_DELAYED_PUSH
     `fatal("Compile with WBB_ALLOW_DELAYED_PUSH before delaying push", "WBB_DELAY_MODE")
 `endif
@@ -144,6 +152,7 @@ function void wbb_driver::check_batch(wbb_batch_transaction batch);
     wbb_batch_transaction nested;
 
     // 先检查批次模式、条目数量与等待设置。
+    // 【防御性检查】以下检查批次模式、数量和等待参数，属于批次接口的使用约束。
     if ($isunknown(batch.mode) || !(batch.mode inside {WBB_BATCH_DEFERRED, WBB_BATCH_PIPELINED})) begin
         `fatal("Unknown WBB batch mode", "WBB_BATCH")
     end
@@ -163,10 +172,12 @@ function void wbb_driver::check_batch(wbb_batch_transaction batch);
     // 逐笔检查事务类型和地址唯一性，防止嵌套批次或重复预留同一块。
     foreach (batch.entries[item_index]) begin
         check_transaction(batch.entries[item_index]);
+        // 【防御性检查】批次成员必须是普通写回，不能嵌套批次或混入其他操作。
         if ($cast(nested, batch.entries[item_index]) || batch.entries[item_index].operation != WBB_WRITEBACK ||
             batch.entries[item_index].push_delay_cycles != 1) begin
             `fatal("Batch entries must be ordinary writebacks with the default push delay", "WBB_BATCH")
         end
+        // 【激励合法性检查】同批预留地址必须互异，避免重复占用同一块。
         for (int prior_index = 0; prior_index < item_index; prior_index++) begin
             if (batch.entries[item_index].addr == batch.entries[prior_index].addr) begin
                 `fatal("Batch writeback addresses must be distinct", "WBB_BATCH")

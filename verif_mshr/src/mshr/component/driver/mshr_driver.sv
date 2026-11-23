@@ -7,6 +7,7 @@ class mshr_driver extends uvm_driver #(mshr_transaction);
     function new(string name = "mshr_driver",
         uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end
@@ -28,12 +29,15 @@ endclass
 
 function void mshr_driver::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(virtual mshr_interface)::get(this, "", "mshr_vif", vif) || vif == null) begin
         `fatal("mshr_interface not found", "MSHR_CONFIG")
     end
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(mshr_config)::get(this, "", "mshr_config", cfg) || cfg == null) begin
         `fatal("Parent agent must provide mshr_config", "MSHR_CONFIG")
     end
+    // 【防御性检查】等待预算必须为正，避免环境配置导致无效等待或立即超时。
     if (cfg.request_timeout_cycles == 0) begin
         `fatal("request_timeout_cycles must be positive", "MSHR_CONFIG")
     end
@@ -83,12 +87,15 @@ endtask
 
 // 检查操作类型、索引范围和控制拍数；实际资源资格在提交前另行检查。
 function void mshr_driver::check_transaction(mshr_transaction item);
+    // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
     if (item == null) begin
         `fatal("MSHR transaction can not be null", "MSHR_REQUEST")
     end
+    // 【防御性检查】transaction操作码必须属于driver支持的类型。
     if ($isunknown(item.operation) || !(item.operation inside {MSHR_ALLOC, MSHR_MERGE, MSHR_QUERY, MSHR_IDLE})) begin
         `fatal("Unknown MSHR operation", "MSHR_REQUEST")
     end
+    // 【激励合法性检查】查询与请求的set/way/word等字段不能超出接口范围。
     if ($unsigned(item.q0Index) >= NUM_SETS || $unsigned(item.q1Index) >= NUM_SETS) begin
         `fatal("Query set index is out of range", "MSHR_REQUEST")
     end

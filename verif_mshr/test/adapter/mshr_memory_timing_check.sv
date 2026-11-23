@@ -40,6 +40,7 @@ package mshr_memory_timing_pkg;
 
         function new(string name = "mshr_memory_timing_test", uvm_component parent = null);
             super.new(name, parent);
+            // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
             if (get_parent() == null) begin
                 `fatal("This component's parent can not be null!!")
             end
@@ -64,11 +65,13 @@ package mshr_memory_timing_pkg;
 
     function void mshr_memory_timing_test::build_phase(uvm_phase phase);
         super.build_phase(phase);
+        // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
         if (!uvm_config_db #(virtual mshr_interface)::get(this, "", "mshr_vif", vif) ||
             !uvm_config_db #(mshr_config)::get(this, "", "mshr_config", cfg) || cfg == null ||
             !uvm_config_db #(clk_rst_config)::get(this, "", "clk_rst_config", clock_cfg) || clock_cfg == null) begin
             `fatal("Timing harness configuration must come from the top module", "MEM_TIMING_CONFIG")
         end
+        // 【防御性检查】确认当前容量足以构造本场景，不代表DUT功能结果检查。
         if (MSHR_ENTRIES < EXACT_REQUESTS) begin
             `fatal("Timing harness requires at least three available read IDs", "MEM_TIMING_CONFIG")
         end
@@ -389,6 +392,7 @@ module mshr_memory_timing_check;
         if ($value$plusargs("MEM_TIMING_LATENCY_CYCLES=%d", latency_cycles)) begin
             cfg.mem_read_latency_cycles = latency_cycles;
         end
+        // 【防御性检查】仿真时钟参数必须有效，防止错误配置使测试无法推进。
         if (clock_cfg.clock_period <= 0) begin
             $fatal(1, "Timing harness clock period must be positive");
         end

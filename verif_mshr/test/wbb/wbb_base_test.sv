@@ -19,6 +19,7 @@ class wbb_base_test extends uvm_test;
     function new(string name = "wbb_base_test",
         uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (get_parent() == null) begin
             `fatal("This component's parent can not be null!!")
         end
@@ -46,9 +47,11 @@ endclass
 
 function void wbb_base_test::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(virtual wbb_interface)::get(this, "", "wbb_vif", vif)) begin
         `fatal("wbb_interface not found")
     end
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(clk_rst_config)::get(this, "", "clk_rst_config", clk_cfg) || clk_cfg == null) begin
         `fatal("TB top must provide a non-null clk_rst_config to the test", "CLK_CONFIG")
     end
@@ -89,12 +92,14 @@ function void wbb_base_test::configure_input_mode();
     string requested;
     wbb_input_mode_t mode;
 
+    // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
     if (cfg == null) begin
         `fatal("wbb_config cannot be null", "WBB_INPUT_MODE")
     end
 
     // 先取test支持的默认模式，再处理命令行覆盖。
     mode = supports_input_modes ? cfg.input_mode : fixed_input_mode;
+    // 【防御性检查】解析并校验外部指定的模式，非法选项属于环境调用错误。
     if ($value$plusargs("WBB_INPUT_MODE=%s", requested)) begin
         requested = requested.tolower();
         case (requested)
@@ -107,12 +112,14 @@ function void wbb_base_test::configure_input_mode();
     end
 
     // 拒绝不支持的模式；流水还需要足够槽位及严格下一拍编译配置。
+    // 【防御性检查】所选模式必须在当前test声明的支持范围内。
     if ($isunknown(mode) || !(mode inside {WBB_INPUT_SERIAL, WBB_INPUT_PIPELINE}) ||
         (!supports_input_modes && mode != fixed_input_mode)) begin
         `fatal("Requested input mode is not supported by this test", "WBB_INPUT_MODE")
     end
     cfg.input_mode = mode;
     if (mode == WBB_INPUT_PIPELINE) begin
+        // 【防御性检查】确认当前容量足以构造本场景，不代表DUT功能结果检查。
         if (WBB_ENTRIES < 2) begin
             `fatal("Pipelined input requires at least two WBB entries", "WBB_INPUT_MODE")
         end
@@ -162,6 +169,7 @@ endtask
 
 // 在启动激励前确认上游 agent 有 sequencer，配置成 passive 时给出明确错误。
 function void wbb_base_test::require_active_agent();
+    // 【防御性检查】有激励的test需要active agent及sequencer，避免在passive配置下启动。
     if (env.agent.sequencer == null) begin
         `fatal("Writeback stimulus requires an active WBB agent", "WBB_NO_SEQUENCER")
     end
@@ -238,6 +246,7 @@ task wbb_base_test::run_scenario(wbb_scenario_sequence seq, int expected_count);
     writeback_counts_t before_counts;
 
     require_active_agent();
+    // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
     if (seq == null) begin
         `fatal("Scenario sequence cannot be null", "WBB_SEQUENCE_CONFIG")
     end

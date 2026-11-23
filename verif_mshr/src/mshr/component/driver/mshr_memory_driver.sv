@@ -34,6 +34,7 @@ class mshr_memory_driver extends uvm_component;
     function new(string name = "mshr_memory_driver",
         uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end
@@ -59,9 +60,11 @@ endclass
 
 function void mshr_memory_driver::build_phase(uvm_phase phase);
     super.build_phase(phase);
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(virtual mshr_interface)::get(this, "", "mshr_vif", vif) || vif == null) begin
         `fatal("mshr_interface not found", "MSHR_MEM_CONFIG")
     end
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(mshr_config)::get(this, "", "mshr_config", cfg) || cfg == null ||
         !uvm_config_db #(mshr_memory_store)::get(this, "", "memory", memory) || memory == null) begin
         `fatal("Parent environment must provide memory configuration and C++ memory store", "MSHR_MEM_CONFIG")
@@ -71,6 +74,7 @@ endfunction
 
 // 检查响应延迟、队列容量和控制开关；配置运行中改变时也会再次检查。
 function void mshr_memory_driver::check_configuration();
+    // 【防御性检查】以下整段校验内存代理配置，避免零拍响应、非法容量或未知开关。
     if ($isunknown(cfg.mem_read_latency_cycles) || cfg.mem_read_latency_cycles == 0) begin
         `fatal("mem_read_latency_cycles must be at least one cycle", "MSHR_MEM_CONFIG")
     end
@@ -95,6 +99,7 @@ endfunction
 
 // 复位时清理空闲调度状态；正常工作每个采样沿只增加一次周期计数，并检查握手控制。
 function bit mshr_memory_driver::prepare_sample(mshr_sample sample);
+    // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
     if (sample == null) begin
         `fatal("Memory driver received a null monitor sample", "MSHR_MEM_PROTOCOL")
     end

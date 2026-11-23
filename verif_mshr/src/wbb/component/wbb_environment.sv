@@ -17,6 +17,7 @@ class wbb_environment extends uvm_env;
     function new(string name = "wbb_environment",
         uvm_component parent = null);
         super.new(name, parent);
+        // 【防御性检查】组件必须接入UVM层级，避免空父组件造成环境构建错误。
         if (parent == null) begin
             `fatal("This component's parent can not be null!!")
         end
@@ -33,9 +34,11 @@ function void wbb_environment::build_phase(uvm_phase phase);
     if (!uvm_config_db #(wbb_config)::get(this, "", "wbb_config", cfg)) begin
         cfg = wbb_config::type_id::create("cfg");
     end
+    // 【防御性检查】确认上层传入所需配置、接口或模型封装；这是环境依赖检查。
     if (!uvm_config_db #(clk_rst_config)::get(this, "", "clk_rst_config", clk_cfg) || clk_cfg == null) begin
         `fatal("Parent test must provide a non-null clk_rst_config", "CLK_CONFIG")
     end
+    // 【防御性检查】检查页大小、响应延迟、容量及watchdog，避免环境配置错误。
     if (cfg.mem_page_size == 0 || (cfg.mem_page_size & (cfg.mem_page_size - 1)) != 0 ||
         cfg.mem_write_latency_cycles == 0 || cfg.mem_max_pending == 0 || cfg.timeout_cycles == 0) begin
         `fatal("Invalid memory page size, latency, capacity or watchdog")

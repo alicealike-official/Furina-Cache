@@ -28,6 +28,7 @@ endfunction
 
 // 返回该笔请求的块地址；默认配置使用不同set，避免两个Entry争同一set/way。
 function bit [ADDR_WIDTH-1:0] mshr_smoke_sequence::block_address(int index);
+    // 【防御性检查】检查基础激励是否已准备，以及调用方使用的行索引是否合法。
     if (index < 0 || index >= 2) begin
         `fatal("Smoke line index out of range", "MSHR_SMOKE")
     end
@@ -36,6 +37,7 @@ endfunction
 
 // 返回外部MEM的原始行副本，调用者不能通过它修改sequence中的期望记录。
 function bit [LINE_WIDTH-1:0] mshr_smoke_sequence::initial_line(int index);
+    // 【防御性检查】检查基础激励是否已准备，以及调用方使用的行索引是否合法。
     if (!prepared || index < 0 || index >= 2) begin
         `fatal("Smoke data is not prepared or index invalid", "MSHR_SMOKE")
     end
@@ -74,6 +76,7 @@ task mshr_smoke_sequence::submit_request(int index);
 endtask
 
 task mshr_smoke_sequence::body();
+    // 【防御性检查】检查基础激励是否已准备，以及调用方使用的行索引是否合法。
     if (!prepared) begin
         `fatal("Test must prepare and preload smoke memory before starting", "MSHR_SMOKE")
     end

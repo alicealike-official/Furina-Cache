@@ -28,9 +28,11 @@ function void wbb_pipeline_test::build_phase(uvm_phase phase);
     int total_budget;
 
     super.build_phase(phase);
+    // 【防御性检查】核对编译模式是否支持本操作，避免环境模式与协议检查配置不一致。
 `ifdef WBB_ALLOW_DELAYED_PUSH
     `fatal("wbb_pipeline_test requires the strict next-cycle-push build", "WBB_PIPELINE_CONFIG")
 `endif
+    // 【防御性检查】确认当前容量足以构造本场景，不代表DUT功能结果检查。
     if (WBB_ENTRIES < 2) begin
         `fatal("Pipeline overlap requires at least two WBB entries", "WBB_PIPELINE_CONFIG")
     end

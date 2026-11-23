@@ -69,6 +69,7 @@ endfunction
 
 // 返回第 index 笔的地址和数据副本，供 test 检查请求地址及最终内存数据；越界时报错。
 function wbb_capacity_sequence::writeback_record_t wbb_capacity_sequence::get_record(int index);
+    // 【防御性检查】检查调用方索引是否落在已保存的激励记录范围内。
     if (index < 0 || index >= records.size()) begin
         `fatal($sformatf("Invalid capacity record index %0d (size=%0d)",
             index, records.size()), "WBB_CAPACITY_RECORD")

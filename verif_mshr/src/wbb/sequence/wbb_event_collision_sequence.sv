@@ -20,10 +20,12 @@ class wbb_event_collision_sequence extends wbb_scenario_sequence;
 endclass
 
 task wbb_event_collision_sequence::body();
+    // 【防御性检查】确认当前容量足以构造本场景，不代表DUT功能结果检查。
     if (WBB_ENTRIES < 2) begin
         `fatal("Different-slot collisions require at least two slots", "WBB_CASE_CONFIG")
     end
     if (cfg.input_mode == WBB_INPUT_PIPELINE) begin
+        // 【防御性检查】确认当前容量足以构造本场景，不代表DUT功能结果检查。
         if (WBB_ENTRIES < 4) begin
             `fatal("Four simultaneous events require at least four WBB slots", "WBB_CASE_CONFIG")
         end

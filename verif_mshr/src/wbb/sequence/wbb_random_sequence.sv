@@ -22,6 +22,7 @@ endclass
 task wbb_random_sequence::body();
     int overlap_before;
 
+    // 【防御性检查】确认当前容量足以构造本场景，不代表DUT功能结果检查。
     if (WBB_ENTRIES < 2) begin
         `fatal("Random reordering case requires at least two slots", "WBB_CASE_CONFIG")
     end
@@ -64,6 +65,7 @@ task wbb_random_sequence::send_random_batch();
 
     // 为每笔生成数据、查询地址和空闲拍数；随机调用顺序保持一致。
     foreach (order[index]) begin
+        // 【防御性检查】随机化必须成功，失败属于激励生成错误。
         if (!std::randomize(line_data, gap, q0_index, q1_index) with {
             gap inside {[0:3]};
             q0_index inside {[0:WBB_ENTRIES+1]};

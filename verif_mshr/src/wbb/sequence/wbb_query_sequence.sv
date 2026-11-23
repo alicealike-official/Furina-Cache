@@ -14,9 +14,11 @@ class wbb_query_sequence extends wbb_scenario_sequence;
 endclass
 
 task wbb_query_sequence::body();
+    // 【防御性检查】确认当前容量足以构造本场景，不代表DUT功能结果检查。
     if (WBB_ENTRIES < 2) begin
         `fatal("Dual-slot query scenarios require at least two WBB entries", "WBB_QUERY_CONFIG")
     end
+    // 【防御性检查】流水查询组合需要足够槽位，先确认本配置能构造该场景。
     if (cfg.input_mode == WBB_INPUT_PIPELINE && WBB_ENTRIES < 4) begin
         `fatal("Pipelined query combinations require at least four WBB entries", "WBB_QUERY_CONFIG")
     end
