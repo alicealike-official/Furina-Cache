@@ -11,6 +11,9 @@ class wbb_transaction extends uvm_sequence_item;
     int unsigned push_delay_cycles = 1;
     // QUERY/IDLE 操作保持的采样拍数；这些控制字段不随机化，避免改变已有数据随机激励。
     int unsigned cycles = 1;
+    // 仅在QUERY/IDLE时扰动无效载荷，使能保持为0。
+    bit idle_payload_enable = 0;
+    bit [SLOT_WIDTH-1:0] idle_push_slot = 0;
     rand bit [ADDR_WIDTH-1:0] addr;
     rand bit [LINE_WIDTH-1:0] line_data;
     rand bit [ADDR_WIDTH-1:0] q0Addr;
@@ -26,6 +29,8 @@ class wbb_transaction extends uvm_sequence_item;
         `uvm_field_enum(wbb_operation_t, operation, UVM_DEFAULT)
         `uvm_field_int(push_delay_cycles, UVM_DEFAULT)
         `uvm_field_int(cycles, UVM_DEFAULT)
+        `uvm_field_int(idle_payload_enable, UVM_DEFAULT)
+        `uvm_field_int(idle_push_slot, UVM_DEFAULT)
         `uvm_field_int(addr, UVM_DEFAULT)
         `uvm_field_int(line_data, UVM_DEFAULT)
         `uvm_field_int(q0Addr, UVM_DEFAULT)

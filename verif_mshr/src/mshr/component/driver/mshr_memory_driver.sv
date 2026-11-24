@@ -55,6 +55,7 @@ class mshr_memory_driver extends uvm_component;
     extern task drive_request_ready();
     extern task drive_response();
     extern function bit is_idle();
+    extern function int choose_response();
 
 endclass
 
@@ -74,6 +75,12 @@ endfunction
 
 // 检查响应延迟、队列容量和控制开关；配置运行中改变时也会再次检查。
 function void mshr_memory_driver::check_configuration();
+    // 【防御性检查】随机范围和选择策略必须有效，避免错误的响应调度。
+    if (cfg.request_ready_percent > 100 || cfg.min_latency_cycles == 0 ||
+        cfg.max_latency_cycles < cfg.min_latency_cycles ||
+        !(cfg.mem_order inside {MSHR_MEM_FIFO, MSHR_MEM_REVERSE, MSHR_MEM_RANDOM, MSHR_MEM_SELECTED})) begin
+        `fatal("Invalid random memory configuration", "MSHR_MEM_CONFIG")
+    end
     // 【防御性检查】以下整段校验内存代理配置，避免零拍响应、非法容量或未知开关。
     if ($isunknown(cfg.mem_read_latency_cycles) || cfg.mem_read_latency_cycles == 0) begin
         `fatal("mem_read_latency_cycles must be at least one cycle", "MSHR_MEM_CONFIG")
@@ -131,10 +138,11 @@ function void mshr_memory_driver::reset_bookkeeping();
     cycle = 0;
 endfunction
 
-// 核对当前已呈现响应的ID、整行快照和最早响应拍；只有实际握手才从FIFO删除。
+// 核对当前已呈现响应的ID、整行快照和最早响应拍；只有实际握手才从待响应队列删除。
 function void mshr_memory_driver::process_response(mshr_sample sample);
     mshr_pending_read response;
     int unsigned id;
+    int response_index;
 
     // 先检查已呈现响应是否被非法撤回，以及其ID/数据/到期拍是否正确。
     if (!sample.memReadResp_valid) begin
@@ -148,7 +156,11 @@ function void mshr_memory_driver::process_response(mshr_sample sample);
         `fatal("Read response has unknown payload or no pending request", "MSHR_MEM_PROTOCOL")
     end
     id = sample.memReadResp_payload_id;
-    if (id != active_response.id || pending[0] != active_response || !outstanding.exists(id) ||
+    response_index = -1;
+    foreach (pending[index]) begin
+        if (pending[index] == active_response) response_index = index;
+    end
+    if (id != active_response.id || response_index < 0 || !outstanding.exists(id) ||
         sample.memReadResp_payload_rData !== active_response.data ||
         cycle < active_response.due_cycle || cycle <= active_response.accepted_cycle) begin
         `fatal("Read response ID/data or response cycle does not match its request snapshot", "MSHR_MEM_PROTOCOL")
@@ -158,7 +170,8 @@ function void mshr_memory_driver::process_response(mshr_sample sample);
     if (!sample.memReadResp_ready) begin
         return;
     end
-    response = pending.pop_front();
+    response = active_response;
+    pending.delete(response_index);
     outstanding.delete(id);
     active_response = null;
     response_count++;
@@ -195,7 +208,8 @@ function void mshr_memory_driver::process_request(mshr_sample sample);
     response.id = id;
     response.addr = sample.memReadReq_payload_addr;
     response.accepted_cycle = cycle;
-    response.due_cycle = cycle + cfg.mem_read_latency_cycles;
+    response.due_cycle = cycle + (cfg.random_latency ?
+        $urandom_range(cfg.max_latency_cycles, cfg.min_latency_cycles) : cfg.mem_read_latency_cycles);
     // read_line() 是 model/mshr_memory_store.sv 的 SV 方法，内部调用 mshr_mem_read_line DPI，
     // 从 RefModel/MEM/SparseMemory.hpp 读取本请求的原始行；之后只使用保存的快照。
     memory.read_line(response.addr, response.data);
@@ -236,16 +250,18 @@ endtask
 
 // 接收开关有效且待响应队列有空位时拉高ready；满队列不继续接受新请求。
 task mshr_memory_driver::drive_request_ready();
-    vif.memReadReq_ready <= cfg.mem_request_enable && pending.size() < cfg.mem_max_pending;
+    vif.memReadReq_ready <= cfg.mem_request_enable && cycle + 1 >= cfg.request_not_before_cycle && pending.size() < cfg.mem_max_pending &&
+        (!cfg.random_request_ready || $urandom_range(99, 0) < cfg.request_ready_percent);
 endtask
 
-// 队首到期后才呈现响应；已经呈现的对象锁定到握手，不受后续响应开关变化影响。
+// 按配置选择到期请求后才呈现响应；已经呈现的对象锁定到握手，不受后续响应开关变化影响。
 // cycle是刚采样结束的上升沿，使用cycle+1判断下一沿到期，保证L拍延迟没有多等一拍。
 task mshr_memory_driver::drive_response();
-    if (active_response == null && cfg.mem_response_enable && pending.size() > 0) begin
-        if (cycle + 1 >= pending[0].due_cycle) begin
-            active_response = pending[0];
-        end
+    int selected;
+
+    if (active_response == null && cfg.mem_response_enable && cycle + 1 >= cfg.response_not_before_cycle) begin
+        selected = choose_response();
+        if (selected >= 0) active_response = pending[selected];
     end
 
     // 把锁定记录驱动到下一采样沿；没有响应时才撤销valid。
@@ -255,8 +271,8 @@ task mshr_memory_driver::drive_response();
         vif.memReadResp_payload_rData <= active_response.data;
     end else begin
         vif.memReadResp_valid <= 0;
-        vif.memReadResp_payload_id <= '0;
-        vif.memReadResp_payload_rData <= '0;
+        vif.memReadResp_payload_id <= cfg.idle_response_id;
+        vif.memReadResp_payload_rData <= cfg.idle_response_data;
     end
 endtask
 
@@ -271,4 +287,23 @@ function void mshr_memory_driver::check_phase(uvm_phase phase);
         `error($sformatf("Memory reads did not drain: requests=%0d responses=%0d pending=%0d",
             request_count, response_count, pending.size()), "MSHR_MEM_DRAIN")
     end
+endfunction
+
+// 从下一沿已到期的请求中选择响应；FIFO只允许队首，指定ID模式不回退到其他请求。
+function int mshr_memory_driver::choose_response();
+    int candidates[$];
+
+    foreach (pending[index]) begin
+        if (cycle + 1 >= pending[index].due_cycle &&
+            (cfg.mem_order != MSHR_MEM_SELECTED || pending[index].id == cfg.selected_response_id)) begin
+            candidates.push_back(index);
+        end
+    end
+    if (candidates.size() == 0) return -1;
+    case (cfg.mem_order)
+        MSHR_MEM_FIFO: return candidates[0] == 0 ? 0 : -1;
+        MSHR_MEM_REVERSE: return candidates[$];
+        MSHR_MEM_RANDOM: return candidates[$urandom_range(candidates.size() - 1, 0)];
+        default: return candidates[0];
+    endcase
 endfunction

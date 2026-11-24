@@ -112,6 +112,12 @@ module mshr_io_assertions(mshr_interface vif);
             $unsigned(vif.fill_index) < NUM_SETS && $unsigned(vif.fill_way) < NUM_WAYS))
         else report_failure("MSHR_DUT_FILL_PAYLOAD", "Fill payload invalid");
 
+    // 【DUT】fill_en即valid；被反压后en和全部载荷保持到接受沿，新候选不得抢占。
+    a_fill_stable: assert property (@(posedge vif.clk) disable iff (!vif.rst_n)
+        vif.fill_en && !vif.fillReady |=> vif.fill_en &&
+        $stable({vif.fill_tag, vif.fill_index, vif.fill_way, vif.fill_dirty, vif.fill_line}))
+        else report_failure("MSHR_DUT_FILL_STABLE", "Fill changed while stalled");
+
     // 【DUT】replay的类型和ID已知；读Slot的数据也必须已知，写Slot的数据不作功能值要求。
     a_replay_payload: assert property (@(posedge vif.clk) disable iff (!vif.rst_n)
         vif.replay_valid |-> (!$isunknown({vif.replay_payload_isWrite, vif.replay_payload_id}) &&

@@ -23,6 +23,8 @@ class wbb_config extends uvm_object;
     // sequence 修改控制字段后，memory driver 在下一个下降沿准备下一拍的输出。
     bit mem_send_enable = 1;
     bit mem_response_enable = 1;
+    // 响应valid为0时使用的无效载荷，供隔离检查；不影响已呈现响应。
+    bit [BUS_ID_WIDTH-1:0] idle_response_id = 0;
     bit mem_random_ready = 0;
     int unsigned mem_ready_percent = 70;
     wbb_mem_order_t mem_response_order = WBB_MEM_FIFO;

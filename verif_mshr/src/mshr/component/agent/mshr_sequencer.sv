@@ -1,5 +1,8 @@
 class mshr_sequencer extends uvm_sequencer #(mshr_transaction);
     mshr_config cfg;
+    mshr_activity_monitor observations;
+    // C++ SparseMemory的SV封装，仅用于sequence预置外部内存，不访问DUT。
+    mshr_memory_store memory;
 
     `uvm_component_utils(mshr_sequencer)
 

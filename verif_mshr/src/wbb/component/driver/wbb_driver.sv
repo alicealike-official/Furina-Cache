@@ -16,6 +16,7 @@ class wbb_driver extends uvm_driver #(wbb_transaction);
     wbb_config cfg;
     `uvm_component_utils(wbb_driver)
 
+    // ==================== 共有方法 ====================
     function new(string name = "wbb_driver",
         uvm_component parent = null);
         super.new(name, parent);
@@ -27,26 +28,34 @@ class wbb_driver extends uvm_driver #(wbb_transaction);
 
     extern virtual function void build_phase(uvm_phase phase);
     extern virtual task run_phase(uvm_phase phase);
-    extern task drive_idle();
     extern task drive_transaction(wbb_transaction item);
-    extern function void check_transaction(wbb_transaction item);
-    extern function void require_delayed_mode();
-    extern function void check_batch(wbb_batch_transaction batch);
+    extern task drive_idle();
     extern task drive_nonwriteback(wbb_transaction item);
-    extern task drive_batch(wbb_batch_transaction batch);
-    extern task hold_batch(wbb_batch_transaction batch);
-    extern function void snapshot_pipeline_entries(wbb_batch_transaction batch,
-        output pipeline_entry_t entries[$]);
-    extern task drive_pipeline_batch(wbb_batch_transaction batch);
-    extern task drive_pipeline_cycle(bit reserve_valid, pipeline_entry_t reserve_entry,
-        pipeline_push_t pending_push);
-    extern function bit sample_pipeline_reserve(pipeline_entry_t entry,
-        output pipeline_push_t next_push);
+    extern function void check_transaction(wbb_transaction item);
+    extern function void check_batch(wbb_batch_transaction batch);
+    extern function void require_delayed_mode();
+
+    // ==================== serial专用方法 ====================
     extern task drive_reserve(wbb_transaction item, output logic [SLOT_WIDTH-1:0] slot);
     extern task wait_reserve_success(wbb_transaction item, output logic [SLOT_WIDTH-1:0] slot);
     extern task wait_before_push(wbb_transaction item);
     extern task drive_push(wbb_transaction item, logic [SLOT_WIDTH-1:0] slot);
+    extern task drive_batch(wbb_batch_transaction batch);
+    extern task hold_batch(wbb_batch_transaction batch);
+
+    // ==================== pipeline专用方法 ====================
+    extern task drive_pipeline_batch(wbb_batch_transaction batch);
+    extern function void snapshot_pipeline_entries(wbb_batch_transaction batch,
+        output pipeline_entry_t entries[$]);
+    extern task drive_pipeline_cycle(bit reserve_valid, pipeline_entry_t reserve_entry,
+        pipeline_push_t pending_push);
+    extern function bit sample_pipeline_reserve(pipeline_entry_t entry,
+        output pipeline_push_t next_push);
 endclass
+
+// ==================== 共有方法 ====================
+// 生命周期、事务分派、空闲/查询以及两种路径复用的校验。
+// require_delayed_mode由共有校验调用，统一检查延迟模式的编译与运行配置。
 
 function void wbb_driver::build_phase(uvm_phase phase);
     super.build_phase(phase);
@@ -63,18 +72,6 @@ function void wbb_driver::build_phase(uvm_phase phase);
         `fatal("reserve_timeout_cycles must be positive")
     end
 endfunction
-
-// 撤销上游 reserve/push，使载荷和查询口恢复空闲值；不等待时钟沿。
-// 内存侧 ready 和响应由 memory driver 独立驱动。
-task wbb_driver::drive_idle();
-    vif.reserve_en <= '0;
-    vif.reserve_addr <= '0;
-    vif.push_en <= '0;
-    vif.push_slot <= '0;
-    vif.push_line <= '0;
-    vif.q0Addr <= '0;
-    vif.q1Addr <= '0;
-endtask
 
 task wbb_driver::run_phase(uvm_phase phase);
     drive_idle();
@@ -108,6 +105,43 @@ task wbb_driver::drive_transaction(wbb_transaction item);
     end
 endtask
 
+// 撤销上游 reserve/push，使载荷和查询口恢复空闲值；不等待时钟沿。
+// 内存侧 ready 和响应由 memory driver 独立驱动。
+task wbb_driver::drive_idle();
+    vif.reserve_en <= '0;
+    vif.reserve_addr <= '0;
+    vif.push_en <= '0;
+    vif.push_slot <= '0;
+    vif.push_line <= '0;
+    vif.q0Addr <= '0;
+    vif.q1Addr <= '0;
+endtask
+
+// 保持独立查询或空闲状态指定数量的上升沿；整个操作期间 reserve/push 均为0。
+// 查询地址由 transaction 给出，driver 不生成测试数据或预测查询结果。
+task wbb_driver::drive_nonwriteback(wbb_transaction item);
+    @(negedge vif.clk);
+    drive_idle();
+    if (item.operation == WBB_QUERY) begin
+        vif.q0Addr <= item.q0Addr;
+        vif.q1Addr <= item.q1Addr;
+    end
+    // 隔离场景主动改变无效载荷，reserve/push仍由drive_idle保持关闭。
+    if (item.idle_payload_enable) begin
+        vif.reserve_addr <= item.addr;
+        vif.push_slot <= item.idle_push_slot;
+        vif.push_line <= item.line_data;
+    end
+    repeat (item.cycles) begin
+        @(vif.mon_cb);
+        if (vif.mon_cb.rst_n !== 1'b1) begin
+            `fatal("Reset during query/idle operation", "WBB_RESET")
+        end
+    end
+    @(negedge vif.clk);
+    drive_idle();
+endtask
+
 // 检查操作类型、地址对齐和等待拍数；普通写回延迟超过1拍时，必须显式允许延迟 push。
 function void wbb_driver::check_transaction(wbb_transaction item);
     // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
@@ -132,17 +166,6 @@ function void wbb_driver::check_transaction(wbb_transaction item);
         end
     end else if ($isunknown(item.cycles) || item.cycles == 0) begin
         `fatal("Query/idle operations require at least one sampled cycle", "WBB_OPERATION_CYCLES")
-    end
-endfunction
-
-// 延迟 push 必须同时启用编译模式和运行配置，避免上游驱动与严格下一拍断言使用不同契约。
-function void wbb_driver::require_delayed_mode();
-    // 【防御性检查】核对编译模式是否支持本操作，避免环境模式与协议检查配置不一致。
-`ifndef WBB_ALLOW_DELAYED_PUSH
-    `fatal("Compile with WBB_ALLOW_DELAYED_PUSH before delaying push", "WBB_DELAY_MODE")
-`endif
-    if (!cfg.allow_delayed_push) begin
-        `fatal("allow_delayed_push must be enabled for this operation", "WBB_DELAY_MODE")
     end
 endfunction
 
@@ -186,171 +209,20 @@ function void wbb_driver::check_batch(wbb_batch_transaction batch);
     end
 endfunction
 
-// 保持独立查询或空闲状态指定数量的上升沿；整个操作期间 reserve/push 均为0。
-// 查询地址由 transaction 给出，driver 不生成测试数据或预测查询结果。
-task wbb_driver::drive_nonwriteback(wbb_transaction item);
-    @(negedge vif.clk);
-    drive_idle();
-    if (item.operation == WBB_QUERY) begin
-        vif.q0Addr <= item.q0Addr;
-        vif.q1Addr <= item.q1Addr;
-    end
-    repeat (item.cycles) begin
-        @(vif.mon_cb);
-        if (vif.mon_cb.rst_n !== 1'b1) begin
-            `fatal("Reset during query/idle operation", "WBB_RESET")
-        end
-    end
-    @(negedge vif.clk);
-    drive_idle();
-endtask
-
-// 先为全部完整事务预留槽，再等待，最后按原顺序逐笔 push；不出现 reserve/push 同拍。
-// 所有槽号都使用真实 reserve 成功时的返回值，整批 push 完成后才返回给 run_phase。
-task wbb_driver::drive_batch(wbb_batch_transaction batch);
-    logic [SLOT_WIDTH-1:0] slots[$];
-    logic [SLOT_WIDTH-1:0] slot;
-
-    // 先为全部条目取得真实槽号，保存给后面的逐笔push。
-    foreach (batch.entries[item_index]) begin
-        drive_reserve(batch.entries[item_index], slot);
-        slots.push_back(slot);
-    end
-
-    // 预留完成后统一保持，再按原顺序向各自保存的槽push。
-    hold_batch(batch);
-    foreach (batch.entries[item_index]) begin
-        drive_push(batch.entries[item_index], slots[item_index]);
-    end
-endtask
-
-// 在开始流水批次时复制每笔的地址、数据和查询地址，后续不再依赖sequence对象中的可变字段。
-function void wbb_driver::snapshot_pipeline_entries(wbb_batch_transaction batch,
-    output pipeline_entry_t entries[$]);
-    pipeline_entry_t entry;
-
-    entries.delete();
-    foreach (batch.entries[index]) begin
-        entry.addr = batch.entries[index].addr;
-        entry.line_data = batch.entries[index].line_data;
-        entry.q0Addr = batch.entries[index].q0Addr;
-        entry.q1Addr = batch.entries[index].q1Addr;
-        entries.push_back(entry);
+// 延迟 push 必须同时启用编译模式和运行配置，避免上游驱动与严格下一拍断言使用不同契约。
+function void wbb_driver::require_delayed_mode();
+    // 【防御性检查】核对编译模式是否支持本操作，避免环境模式与协议检查配置不一致。
+`ifndef WBB_ALLOW_DELAYED_PUSH
+    `fatal("Compile with WBB_ALLOW_DELAYED_PUSH before delaying push", "WBB_DELAY_MODE")
+`endif
+    if (!cfg.allow_delayed_push) begin
+        `fatal("allow_delayed_push must be enabled for this operation", "WBB_DELAY_MODE")
     end
 endfunction
 
-// 每拍同时处理旧push和新reserve；新reserve失败时，旧push仍在本拍完成。
-// 每次成功预留都生成且只生成一份下一拍push记录；全部push采样后撤销输出，再结束整个item。
-task wbb_driver::drive_pipeline_batch(wbb_batch_transaction batch);
-    pipeline_entry_t entries[$];
-    pipeline_entry_t reserve_entry;
-    pipeline_push_t pending_push;
-    int next_index;
-    int unsigned reserve_wait_cycles;
-    bit reserve_valid;
-
-    // 复制批次输入并清空本批流水状态，避免依赖后续可能变化的事务句柄。
-    snapshot_pipeline_entries(batch, entries);
-    next_index = 0;
-    reserve_wait_cycles = 0;
-    pending_push = '0;
-
-    // 还有未预留项或尾部push时，每拍同时安排旧push与新reserve。
-    while (next_index < entries.size() || pending_push.valid) begin
-        @(negedge vif.clk);
-        if (vif.rst_n !== 1'b1) begin
-            `fatal("Reset during a pipelined batch", "WBB_RESET")
-        end
-
-        // 下降沿决定本拍新预留来源，并与上一拍留下的push一次性驱动。
-        reserve_valid = next_index < entries.size();
-        reserve_entry = '0;
-
-        if (reserve_valid) begin
-            reserve_entry = entries[next_index];
-        end
-        drive_pipeline_cycle(reserve_valid, reserve_entry, pending_push);
-
-        // 上升沿采样已驱动动作；旧push无ready，不能因新reserve失败而重发。
-        @(vif.mon_cb);
-        if (vif.mon_cb.rst_n !== 1'b1) begin
-            `fatal("Reset while sampling a pipelined batch", "WBB_RESET")
-        end
-        // 本拍的push没有ready；采样完成即消费，不能因新reserve失败而重复发送。
-        pending_push = '0;
-        // 只将成功reserve转成下一拍push；失败继续等待原地址并累计超时。
-        if (reserve_valid) begin
-            reserve_wait_cycles++;
-            if (sample_pipeline_reserve(reserve_entry, pending_push)) begin
-                next_index++;
-                reserve_wait_cycles = 0;
-            end else if (reserve_wait_cycles >= cfg.reserve_timeout_cycles) begin
-                `fatal($sformatf("Pipeline reservation timed out after %0d cycles at address 0x%h",
-                    cfg.reserve_timeout_cycles, reserve_entry.addr), "WBB_RESERVE_TIMEOUT")
-            end
-        end
-    end
-
-    // 最后一笔push完成后撤销接口输出，才允许上层结束该批次。
-    @(negedge vif.clk);
-    drive_idle();
-endtask
-
-// 在一个下降沿一次性准备两组信号，禁止两个并发task分别覆盖reserve/push或查询口。
-// 查询地址整对跟随当前reserve项；没有reserve时才使用尾部push项的查询地址。
-task wbb_driver::drive_pipeline_cycle(bit reserve_valid, pipeline_entry_t reserve_entry,
-    pipeline_push_t pending_push);
-    vif.reserve_en <= reserve_valid;
-    vif.reserve_addr <= reserve_valid ? reserve_entry.addr : '0;
-    vif.push_en <= pending_push.valid;
-    vif.push_slot <= pending_push.valid ? pending_push.slot : '0;
-    vif.push_line <= pending_push.valid ? pending_push.entry.line_data : '0;
-    if (reserve_valid) begin
-        vif.q0Addr <= reserve_entry.q0Addr;
-        vif.q1Addr <= reserve_entry.q1Addr;
-    end else if (pending_push.valid) begin
-        vif.q0Addr <= pending_push.entry.q0Addr;
-        vif.q1Addr <= pending_push.entry.q1Addr;
-    end else begin
-        vif.q0Addr <= '0;
-        vif.q1Addr <= '0;
-    end
-endtask
-
-// 只在本拍reserve真实成功时保存返回槽号和该笔数据，供紧接的下一拍push使用。
-// 失败时返回空记录；槽号始终取成功采样沿的值，不能在下一拍重新读取reserveSlot。
-function bit wbb_driver::sample_pipeline_reserve(pipeline_entry_t entry,
-    output pipeline_push_t next_push);
-    next_push = '0;
-    if (vif.mon_cb.reserve_en !== 1'b1 || $isunknown(vif.mon_cb.reserveOk)) begin
-        `fatal("Pipeline reserve enable/feedback is invalid or unknown", "WBB_RESERVE")
-    end
-    if (vif.mon_cb.reserveOk !== 1'b1) begin
-        return 0;
-    end
-    if ($isunknown(vif.mon_cb.reserveSlot) || $unsigned(vif.mon_cb.reserveSlot) >= WBB_ENTRIES) begin
-        `fatal("Invalid reserved slot in pipelined batch", "WBB_RESERVE")
-    end
-    next_push.valid = 1;
-    next_push.slot = vif.mon_cb.reserveSlot;
-    next_push.entry = entry;
-    return 1;
-endfunction
-
-// 最后一笔 reserve 成功后撤销请求，使用 batch 的查询地址等待 hold_cycles 个采样拍。
-// 首个 push 在最后一次 reserve 后的第 hold_cycles+1 拍采样；等待时不会多发 reserve。
-task wbb_driver::hold_batch(wbb_batch_transaction batch);
-    @(negedge vif.clk);
-    drive_idle();
-    vif.q0Addr <= batch.q0Addr;
-    vif.q1Addr <= batch.q1Addr;
-    repeat (batch.hold_cycles) begin
-        @(vif.mon_cb);
-        if (vif.mon_cb.rst_n !== 1'b1) begin
-            `fatal("Reset while holding batch reservations", "WBB_RESET")
-        end
-    end
-endtask
+// ==================== serial专用方法 ====================
+// 普通写回使用逐笔reserve/push；DEFERRED延迟批次也复用这些串行驱动方法。
+// 此组不会让新reserve与旧push在同一拍重叠。
 
 // 在下降沿驱动预留请求及两个查询地址，再等待成功并返回实际槽号。
 // 成功后仍保持 reserve_en，交由紧随的 drive_push 在下一下降沿撤销。
@@ -433,3 +305,153 @@ task wbb_driver::drive_push(wbb_transaction item, logic [SLOT_WIDTH-1:0] slot);
     @(negedge vif.clk);
     drive_idle();
 endtask
+
+// 先为全部完整事务预留槽，再等待，最后按原顺序逐笔 push；不出现 reserve/push 同拍。
+// 所有槽号都使用真实 reserve 成功时的返回值，整批 push 完成后才返回给 run_phase。
+task wbb_driver::drive_batch(wbb_batch_transaction batch);
+    logic [SLOT_WIDTH-1:0] slots[$];
+    logic [SLOT_WIDTH-1:0] slot;
+
+    // 先为全部条目取得真实槽号，保存给后面的逐笔push。
+    foreach (batch.entries[item_index]) begin
+        drive_reserve(batch.entries[item_index], slot);
+        slots.push_back(slot);
+    end
+
+    // 预留完成后统一保持，再按原顺序向各自保存的槽push。
+    hold_batch(batch);
+    foreach (batch.entries[item_index]) begin
+        drive_push(batch.entries[item_index], slots[item_index]);
+    end
+endtask
+
+// 最后一笔 reserve 成功后撤销请求，使用 batch 的查询地址等待 hold_cycles 个采样拍。
+// 首个 push 在最后一次 reserve 后的第 hold_cycles+1 拍采样；等待时不会多发 reserve。
+task wbb_driver::hold_batch(wbb_batch_transaction batch);
+    @(negedge vif.clk);
+    drive_idle();
+    vif.q0Addr <= batch.q0Addr;
+    vif.q1Addr <= batch.q1Addr;
+    repeat (batch.hold_cycles) begin
+        @(vif.mon_cb);
+        if (vif.mon_cb.rst_n !== 1'b1) begin
+            `fatal("Reset while holding batch reservations", "WBB_RESET")
+        end
+    end
+endtask
+
+// ==================== pipeline专用方法 ====================
+// 流水批次由逐拍调度器同时驱动新reserve和旧push，不调用serial组的驱动方法。
+
+// 每拍同时处理旧push和新reserve；新reserve失败时，旧push仍在本拍完成。
+// 每次成功预留都生成且只生成一份下一拍push记录；全部push采样后撤销输出，再结束整个item。
+task wbb_driver::drive_pipeline_batch(wbb_batch_transaction batch);
+    pipeline_entry_t entries[$];
+    pipeline_entry_t reserve_entry;
+    pipeline_push_t pending_push;
+    int next_index;
+    int unsigned reserve_wait_cycles;
+    bit reserve_valid;
+
+    // 复制批次输入并清空本批流水状态，避免依赖后续可能变化的事务句柄。
+    snapshot_pipeline_entries(batch, entries);
+    next_index = 0;
+    reserve_wait_cycles = 0;
+    pending_push = '0;
+
+    // 还有未预留项或尾部push时，每拍同时安排旧push与新reserve。
+    while (next_index < entries.size() || pending_push.valid) begin
+        @(negedge vif.clk);
+        if (vif.rst_n !== 1'b1) begin
+            `fatal("Reset during a pipelined batch", "WBB_RESET")
+        end
+
+        // 下降沿决定本拍新预留来源，并与上一拍留下的push一次性驱动。
+        reserve_valid = next_index < entries.size();
+        reserve_entry = '0;
+
+        if (reserve_valid) begin
+            reserve_entry = entries[next_index];
+        end
+        drive_pipeline_cycle(reserve_valid, reserve_entry, pending_push);
+
+        // 上升沿采样已驱动动作；旧push无ready，不能因新reserve失败而重发。
+        @(vif.mon_cb);
+        if (vif.mon_cb.rst_n !== 1'b1) begin
+            `fatal("Reset while sampling a pipelined batch", "WBB_RESET")
+        end
+        // 本拍的push没有ready；采样完成即消费，不能因新reserve失败而重复发送。
+        pending_push = '0;
+        // 只将成功reserve转成下一拍push；失败继续等待原地址并累计超时。
+        if (reserve_valid) begin
+            reserve_wait_cycles++;
+            if (sample_pipeline_reserve(reserve_entry, pending_push)) begin
+                next_index++;
+                reserve_wait_cycles = 0;
+            end else if (reserve_wait_cycles >= cfg.reserve_timeout_cycles) begin
+                `fatal($sformatf("Pipeline reservation timed out after %0d cycles at address 0x%h",
+                    cfg.reserve_timeout_cycles, reserve_entry.addr), "WBB_RESERVE_TIMEOUT")
+            end
+        end
+    end
+
+    // 最后一笔push完成后撤销接口输出，才允许上层结束该批次。
+    @(negedge vif.clk);
+    drive_idle();
+endtask
+
+// 在开始流水批次时复制每笔的地址、数据和查询地址，后续不再依赖sequence对象中的可变字段。
+function void wbb_driver::snapshot_pipeline_entries(wbb_batch_transaction batch,
+    output pipeline_entry_t entries[$]);
+    pipeline_entry_t entry;
+
+    entries.delete();
+    foreach (batch.entries[index]) begin
+        entry.addr = batch.entries[index].addr;
+        entry.line_data = batch.entries[index].line_data;
+        entry.q0Addr = batch.entries[index].q0Addr;
+        entry.q1Addr = batch.entries[index].q1Addr;
+        entries.push_back(entry);
+    end
+endfunction
+
+// 在一个下降沿一次性准备两组信号，禁止两个并发task分别覆盖reserve/push或查询口。
+// 查询地址整对跟随当前reserve项；没有reserve时才使用尾部push项的查询地址。
+task wbb_driver::drive_pipeline_cycle(bit reserve_valid, pipeline_entry_t reserve_entry,
+    pipeline_push_t pending_push);
+    vif.reserve_en <= reserve_valid;
+    vif.reserve_addr <= reserve_valid ? reserve_entry.addr : '0;
+    vif.push_en <= pending_push.valid;
+    vif.push_slot <= pending_push.valid ? pending_push.slot : '0;
+    vif.push_line <= pending_push.valid ? pending_push.entry.line_data : '0;
+    if (reserve_valid) begin
+        vif.q0Addr <= reserve_entry.q0Addr;
+        vif.q1Addr <= reserve_entry.q1Addr;
+    end else if (pending_push.valid) begin
+        vif.q0Addr <= pending_push.entry.q0Addr;
+        vif.q1Addr <= pending_push.entry.q1Addr;
+    end else begin
+        vif.q0Addr <= '0;
+        vif.q1Addr <= '0;
+    end
+endtask
+
+// 只在本拍reserve真实成功时保存返回槽号和该笔数据，供紧接的下一拍push使用。
+// 失败时返回空记录；槽号始终取成功采样沿的值，不能在下一拍重新读取reserveSlot。
+function bit wbb_driver::sample_pipeline_reserve(pipeline_entry_t entry,
+    output pipeline_push_t next_push);
+    next_push = '0;
+    if (vif.mon_cb.reserve_en !== 1'b1 || $isunknown(vif.mon_cb.reserveOk)) begin
+        `fatal("Pipeline reserve enable/feedback is invalid or unknown", "WBB_RESERVE")
+    end
+    if (vif.mon_cb.reserveOk !== 1'b1) begin
+        return 0;
+    end
+    if ($isunknown(vif.mon_cb.reserveSlot) || $unsigned(vif.mon_cb.reserveSlot) >= WBB_ENTRIES) begin
+        `fatal("Invalid reserved slot in pipelined batch", "WBB_RESERVE")
+    end
+    next_push.valid = 1;
+    next_push.slot = vif.mon_cb.reserveSlot;
+    next_push.entry = entry;
+    return 1;
+endfunction

@@ -1,10 +1,12 @@
 # WBB IP 验证 case 规划
 
-本 note 将 WBB IP 验证组织为 12 组 case，列出各组的主要场景、对应验证点和实施状态，供后续编写 sequence、配置内存响应和登记覆盖结果时使用。
+本note只针对固定规格WBB DUT组织验证，不要求单槽、跨参数组合或Scala非法参数生成测试，也不把验证环境自身的正确性列为DUT验证点。
+
+本 note 将 WBB IP 验证组织为 15 组 case，列出各组的主要场景、对应验证点和实施状态，供后续编写 sequence、配置内存响应和登记覆盖结果时使用。
 
 验证点编号对应 [WBB IP验证](WBB_IP验证.md)，接口时序依据 [WBB IP架构设计文档](../../Architecture/WBB_IP架构设计文档.md)。各 case 可以覆盖多个验证点，同一验证点也可能需要多个 case 才能完整闭合。
 
-2026-11-20已依据42组回归及已有环境自检，逐项同步主表75个验证点的状态、证据与剩余项，见[当前状态口径](WBB_IP验证.md#status)和[证据登记](WBB_IP验证.md#r42)。本note保留各次实现及运行历史；当前是否闭合以主表为准，早期运行的“待补场景”不代表最新状态。此次仅更新文档，没有重跑仿真。
+2026-11-20已依据42组DUT回归，逐项同步主表验证点的状态、证据与剩余项，见[当前状态口径](WBB_IP验证.md#status)和[证据登记](WBB_IP验证.md#r42)。本note保留各次实现及运行历史；当前是否闭合以主表为准，早期运行的“待补场景”不代表最新状态。此次仅更新文档，没有重跑仿真。
 
 WBB目录现为`sim_wbb`和`generated/wbb`，环境使用说明见[WBB_README](../../verif_mshr/WBB_README.md)。下方命令和证据链接已按现位置更新；历史回归的`summary.relocated.md`仅重定位链接，原始JSON、日志、命令和哈希保持不变。
 
@@ -14,10 +16,12 @@ WBB目录现为`sim_wbb`和`generated/wbb`，环境使用说明见[WBB_README](.
 
 | Case | 主要验证内容 | 对应验证点 | 实施状态与条件 |
 | --- | --- | --- | --- |
+| `wbb_idle_payload_test` | 空态/pending两阶段改变无效reserve、push及内存响应载荷，检查无副作用 | IF-008 | 已实现，四类字段变化在两个阶段均命中；10 ns/4 ns通过 |
+| `wbb_response_latency_test` | 真实DUT按发送/响应ID及采样沿检查1/2/7/32拍精确响应 | IF-009 | 已实现，每种延迟独立排空、精确命中；10 ns/4 ns通过 |
 | `wbb_base_test` | 基础 reserve → push → send → response 全流程，检查地址、数据、ID及释放 | WBR-002、003、005、007、008；WBS-001、003、005、006 | 已有两笔基础写回运行结果，作为这些验证点的基础场景证据 |
 | `wbb_data_pattern_test` | 全0、全1、逐字/逐字节递增、交替位、walking-1/0、随机整行数据，检查字序和数据完整性 | WBR-007；WBS-001；CFG-005 | serial/pipeline均通过，各1063笔；流水796次重叠，九类数据检查保持 |
 | `wbb_capacity_test` | 填满 N 个槽后提交第 N+1 笔，检查满时预留失败、各笔数据正确、响应释放后恢复 | WBR-001、002、004、005、006；WBS-005、009 | 已实现，默认4槽配置运行通过；场景命中次数与覆盖范围见下文 |
-| `wbb_query_test` | 两查询口同址、异址、单边命中、双边命中、均不命中，覆盖不同槽阶段 | WBR-003、010、011、012；WBS-006 | serial/pipeline均通过，各8笔；流水还检查重叠期间的reserved及异址查询 |
+| `wbb_query_test` | 两查询口同址、异址、单边命中、双边命中、均不命中，覆盖不同槽阶段 | WBR-003、010、011；WBS-006 | serial/pipeline均通过，各8笔；流水还检查重叠期间的reserved及异址查询 |
 | `wbb_reuse_test` | 释放后用新地址、新数据复用槽，检查旧地址匹配解除、旧状态和数据清理 | WBR-015；WBS-006、012 | serial/pipeline均通过，各12笔、每槽使用3次；流水每轮重叠3次 |
 | `wbb_send_backpressure_test` | send 被反压期间新增候选，检查 valid、地址、数据、ID 保持及恢复后的发送 | WBS-002、003、005；IF-002、004 | 用户修复WBB-DUT-001后冷编译回归通过，仍命中10拍背压和1次候选插入 |
 | `wbb_arbitration_test` | 多槽同时待发，检查轮询顺序、回绕、公平性和连续发送 | WBS-007、008、011 | 已实现并通过，4候选连续4拍发送，全槽及回绕命中 |
@@ -26,6 +30,7 @@ WBB目录现为`sim_wbb`和`generated/wbb`，环境使用说明见[WBB_README](.
 | `wbb_delayed_push_test` | 预留后延迟 push，检查 reserved 持续占用、查询命中及禁止提前发送 | WBR-004、006、008 的延迟模式子项 | 用户修复后回归通过，5笔延迟push、全reserved保持7拍等目标仍命中 |
 | `wbb_pipeline_test` | 构造 `push(A)` 与 `reserve(B)` 同拍，检查不同事务的槽号和数据归属 | WBR-009 | 已实现并通过，默认严格模式13笔写回、8次重叠，含满槽恢复和尾部再次启动 |
 | `wbb_random_test` | 合法地址、数据、查询、反压和响应顺序组合随机，多轮复用后排空 | WBS-012；RND-001、008、010 | serial/pipeline及seed1/2/3在两种时钟下全部通过，各32批128笔；流水后续31批均有重叠 |
+| `wbb_long_run_test` | 三轮持续写回、同址换数据及各槽重复使用，轮末核对数据并排空 | RND-010；WBS-012；INV-005、006、007 | 每轮4096笔，共12288笔；串行/流水共用场景，执行结果见文末 |
 
 ## 数据图样 case 实现与结果（2026-11-19）
 
@@ -55,7 +60,7 @@ test负责配置watchdog、调用 `seq.start(env.agent.sequencer)`、等待排�
 
 该次编译使用的当时路径是`verif_mshr/generated/WriteBackBuffer.v`（现生成文件位置为`verif_mshr/generated/wbb/WriteBackBuffer.v`），当时RTL的SHA-256为 `ac3e5cd84054c7cb32d1f1d628a88003533a96cbc760e60af234ae882642960e`。日志和波形位于可清理的 `sim_wbb/work` 下，执行 `make clean` 前应按需归档。
 
-这些早期结果提供 WBR-007、WBS-001、CFG-005 的数据通路证据；该次运行实际使用槽0/1，单独不能证明全槽隔离和全部候选状态。C++存储的字节地址端序由 `RefModel/test/test_sparse_memory.cpp` 的原始字节读取检查补充，当时 `make -C RefModel run-memory` 通过。随后新增的全槽、复用、候选状态和流水case补齐了当前配置的必要场景，这三项现已按主表登记为本配置已闭合；其他硬件配置仍单独待验。
+这些早期结果提供 WBR-007、WBS-001、CFG-005 的数据通路证据；该次运行实际使用槽0/1，单独不能证明全槽隔离和全部候选状态。C++存储的字节地址端序由 `RefModel/test/test_sparse_memory.cpp` 的原始字节读取检查补充，当时 `make -C RefModel run-memory` 通过。随后新增的全槽、复用、候选状态和流水case补齐了当前配置的必要场景，这三项现已按主表登记为本配置已闭合；当前验证范围限定为既定DUT规格。
 
 ## 容量 case 实现与结果（2026-11-19）
 
@@ -196,7 +201,7 @@ python3 verif_mshr/sim_wbb/script/run_wbb_regression.py
 python3 verif_mshr/sim_wbb/script/run_wbb_regression.py --tests wbb_send_backpressure_test --periods 10
 ```
 
-首次回归时WBS-002记为DUT失败，保留上述历史证据。最新修复已通过下面的复核；参数组合、热复位及暂缓的流水场景仍按各自验证点单独安排。
+首次回归时WBS-002记为DUT失败，保留上述历史证据。最新修复已通过下面的复核；当时尚未完成的热复位及流水场景按各自验证点单独安排，最新进展见后续记录。
 
 ## 用户修复后的复核回归（2026-11-19）
 
@@ -286,17 +291,15 @@ python3 verif_mshr/sim_wbb/script/run_wbb_regression.py --tests wbb_random_test 
 - 乱序响应从已发送且尚未完成的 ID 集合中选择，每个请求对应一次响应。
 - WBR-013、014 和 WBS-010 的释放交叉由event_collision case安排；WBR-009的reserve/push流水由strict配置下的pipeline case验证。
 
-## 配套通用检查
+## 配套复位场景
 
-复位、参数配置及验证环境负例也需要独立安排，并在 [WBB IP验证](WBB_IP验证.md) 的相应条目中登记。
+启动空态、复位后首次请求、重复空闲复位及运行中事务取消按 [WBB IP验证](WBB_IP验证.md) 的RST条目登记。采用确认的异步低有效契约；运行中复位先确定旧响应隔离与取消语义。
 
-| 类别 | 主要内容 | 执行条件 |
-| --- | --- | --- |
-| 复位 | 启动空态、复位后首次请求、重复空闲复位、运行中事务取消 | 采用确认的异步低有效契约；运行中复位先确定旧响应隔离与取消语义 |
-| 参数配置 | 槽数、行宽、地址宽、槽ID/总线ID宽及合法配置边界 | 同步 RTL、SV 和 C++ 模型配置，并重新生成、编译 |
-| 环境负例 | 非法push、错误ID、重复/提前响应、数据错误、遗漏响应和超时 | 记录预期触发的checker/SVA错误，验证检查器能发现问题 |
+当前配置一致性、非法输入报错、模型/检查器自检和回归工具检查属于环境维护，不列为DUT验证点，也不计入DUT闭合数量。本文已有环境自检记录仅作开发历史保留。
 
 ## 覆盖登记要求
+
+验证点只对应DUT要求。环境正确性在实际验证、交叉检查和缺陷定位中持续检查，不设另一套闭合清单。等待/水位分布仅作辅助分析，DUT满空边界、释放恢复和进展由现有功能case验证。
 
 每个正常功能 case 同时检查功能结果与场景命中情况。基础 case 通过后，相关验证点仍需补齐其他边界和组合场景。
 
@@ -307,3 +310,38 @@ python3 verif_mshr/sim_wbb/script/run_wbb_regression.py --tests wbb_random_test 
 - 每次闭合保存验证点编号、case、配置、seed、检查器/覆盖点和日志。
 
 当前基础 case 入口见 [wbb_base_test.sv](../../verif_mshr/test/wbb/wbb_base_test.sv)。
+
+
+## 新增无效载荷与响应延迟case（2026-11-24）
+
+`wbb_idle_payload_sequence`先在空态发8组QUERY操作，再提交一笔真实写回并暂停内存接收/响应，在pending状态重复8组扰动。每组只改变无效reserve地址、push槽号/数据和valid=0的响应ID，使能保持0；随后放行并排空，最终只能有原来的一笔正确写回。test从实际reserve/响应事件独立记录占用，检查空态和占用态的四类字段都真的变化，两个掩码均须为1111。
+
+配套新增transaction的`idle_payload_enable/idle_push_slot`以及配置`idle_response_id`，均默认关闭或0。上游字段仍由原driver独占驱动，响应ID仍由memory driver驱动；已呈现的有效响应不受无效ID设置影响。
+
+`wbb_response_latency_sequence`依次配置1、2、7、32拍响应，每笔结束后排空再开始下一笔，排除队首阻塞。test检查4笔完整写回、实际发送ID与响应ID对应，以及两次握手采样沿之差严格等于该笔配置值；不能只依据配置值或内存代理自检证明最快响应已覆盖。
+
+本轮[完整回归](../../verif_mshr/sim_wbb/work/regression/reports/run_20261124_052027_970562/summary.md)为46/46 PASS；保留原42组并增加两个case各两种时钟。首轮覆盖统计的DV问题及修正见验证点表，本次未修改DUT/C++模型。
+
+
+## RND-010 长时间运行 case（2026-11-24）
+
+新增 [wbb_long_run_sequence](../../verif_mshr/src/wbb/sequence/wbb_long_run_sequence.sv) 和 [wbb_long_run_test](../../verif_mshr/test/wbb/wbb_long_run_test.sv)。本配置的长跑验收规模明确为：每次3轮，每轮4096笔，总计12288笔；seed=1/2/3、serial/pipeline、10 ns/4 ns共12组。该规模是本次验证范围，不代表无限时长保证。
+
+每轮先暂停发送和响应，用前4笔填满WBB，保持4拍。随后放行内存，持续提交剩余4092笔，不按槽数分批等待排空；满时由driver等待资源恢复。内存ready按60%概率允许接收，响应延迟随机1～32拍，并随机选择到期响应。串行与流水均使用现有driver，不另写驱动逻辑。
+
+轮内4096个块地址互不相同；下一轮排空后复用同一地址集合。sequence随机生成整行和查询地址，首字编码轮次与地址编号，确保同址的新旧版本不同。每轮结束查询首尾旧地址并通过base工具检查4096笔reserve/push/send/response计数、实际输入与原始记录，以及全部地址的最终数据。内存回读使用原C++ SparseMemory的DPI封装，逐次发送仍由原C++ WBB模型和IO SVA检查。
+
+test逐轮要求：各槽至少使用两次，满槽及发送背压各至少4拍，至少一次乱序响应，流水模式至少一次reserve/push重叠，最终占用为零。三轮分别回读，避免仅检查最后一轮掩盖前两轮的数据错误。全程不重新复位。
+
+运行命令（在项目根目录）：
+
+```bash
+python3 verif_mshr/sim_wbb/script/run_wbb_regression.py --tests wbb_long_run_test --color always
+```
+
+长跑显式选择，不增加默认14个常规case的回归时间；`--random-seeds`、`--input-modes`和`--periods`同样适用。终端沿用彩色汇总，日志及波形按每个组合独立保存。
+
+
+执行结果：[本轮报告](../../verif_mshr/sim_wbb/work/regression/reports/run_20261124_054804_914530/summary.md)，**12/12 PASS**，累计147456笔写回，所有UVM_WARNING/ERROR/FATAL均为0。每组四事件计数均为12288，三轮`WBB_LONG_ROUND_COVERAGE`均完成，最终占用为0000；RND-010据此登记为本配置已闭合。串行seed1的三轮乱序响应分别为1956/1919/1947次，满槽周期分别为14724/14744/14712拍，说明各轮持续经历资源压力，而非只有开头填满一次。
+
+[源码哈希](../../verif_mshr/sim_wbb/work/regression/reports/run_20261124_054804_914530/source_hashes.json)保存本轮DUT、C++模型及WBB验证源码版本；具体命令、时钟、种子、逐轮场景计数和日志/FSDB见报告。首次许可证连接失败的未运行记录单独保留，没有覆盖或计为PASS。未修改DUT与C++模型，未开展复位场景。

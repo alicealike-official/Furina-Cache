@@ -39,4 +39,7 @@ package wbb_pkg;
     `include "sequence/wbb_delayed_push_sequence.sv"
     `include "sequence/wbb_pipeline_sequence.sv"
     `include "sequence/wbb_random_sequence.sv"
+    `include "sequence/wbb_long_run_sequence.sv"
+    `include "sequence/wbb_response_latency_sequence.sv"
+    `include "sequence/wbb_idle_payload_sequence.sv"
 endpackage

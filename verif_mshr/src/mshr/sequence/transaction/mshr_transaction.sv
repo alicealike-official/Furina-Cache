@@ -9,6 +9,7 @@ class mshr_transaction extends uvm_sequence_item;
     // ALLOC/MERGE各表示一个Slot请求；返回只代表上游提交，不代表内存或replay完成。
     mshr_operation_t operation = MSHR_ALLOC;
     int unsigned cycles = 1;
+    bit idle_payload_enable = 0;
     rand bit [TAG_WIDTH-1:0] tag;
     rand bit [INDEX_WIDTH-1:0] index;
     rand bit [WAY_WIDTH-1:0] way;
@@ -42,6 +43,7 @@ class mshr_transaction extends uvm_sequence_item;
     `uvm_object_utils_begin(mshr_transaction)
         `uvm_field_enum(mshr_operation_t, operation, UVM_DEFAULT)
         `uvm_field_int(cycles, UVM_DEFAULT)
+        `uvm_field_int(idle_payload_enable, UVM_DEFAULT)
         `uvm_field_int(tag, UVM_DEFAULT)
         `uvm_field_int(index, UVM_DEFAULT)
         `uvm_field_int(way, UVM_DEFAULT)

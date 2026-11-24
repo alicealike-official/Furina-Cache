@@ -22,6 +22,8 @@ REGRESSION_DIR = SIM_DIR / "work" / "regression"
 DUT_FILE = SIM_DIR.parent / "generated" / "wbb" / "WriteBackBuffer.v"
 COVERAGE = "line+cond+fsm+branch+tgl+assert"
 TEST_ORDER = (
+    "wbb_idle_payload_test",
+    "wbb_response_latency_test",
     "wbb_base_test",
     "wbb_data_pattern_test",
     "wbb_capacity_test",
@@ -34,9 +36,11 @@ TEST_ORDER = (
     "wbb_delayed_push_test",
     "wbb_pipeline_test",
     "wbb_random_test",
+    "wbb_long_run_test",
 )
 DUAL_MODE_TESTS = frozenset({
     "wbb_random_test",
+    "wbb_long_run_test",
     "wbb_reuse_test",
     "wbb_data_pattern_test",
     "wbb_query_test",
@@ -277,15 +281,15 @@ def seed_value(value):
 def parse_args(argv=None):
     """选择 case、时钟和随机种子，执行顺序始终以计划清单为准。"""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tests", nargs="+", choices=TEST_ORDER, default=list(TEST_ORDER),
-                        help="待运行的 test；省略时运行全部12个，顺序按验证计划排列")
+    parser.add_argument("--tests", nargs="+", choices=TEST_ORDER, default=[test for test in TEST_ORDER if test != "wbb_long_run_test"],
+                        help="待运行的 test；省略时运行14个常规case；长跑需显式选择，顺序按验证计划排列")
     parser.add_argument("--periods", nargs="+", type=positive_period, default=[10.0, 4.0],
                         help="时钟周期，单位ns，默认10和4")
     parser.add_argument("--random-seeds", nargs="+", type=seed_value, default=[1, 2, 3],
-                        help="仅用于 wbb_random_test；其他 case 固定使用 seed=1")
+                        help="用于 wbb_random_test 和 wbb_long_run_test；其他 case 固定使用 seed=1")
     parser.add_argument("--input-modes", nargs="+", choices=("serial", "pipeline"),
                         default=["serial", "pipeline"],
-                        help="仅选择random/reuse/data_pattern/query/event_collision的输入模式；默认两种。"
+                        help="仅选择random/long_run/reuse/data_pattern/query/event_collision的输入模式；默认两种。"
                              "pipeline专用case固定流水，其余case固定串行")
     parser.add_argument("--skip-compile", action="store_true",
                         help="复用两个 profile 目录下已有的 simv，由调用方保证与当前源码一致")
@@ -538,7 +542,7 @@ def main(argv=None):
     dut_sha256 = file_hash(DUT_FILE)
     planned = [(test, input_mode, period, seed) for test in args.tests
                for input_mode in input_modes_for(test, args.input_modes) for period in args.periods
-               for seed in (args.random_seeds if test == "wbb_random_test" else [1])]
+               for seed in (args.random_seeds if test in {"wbb_random_test", "wbb_long_run_test"} else [1])]
     summary = {"run_id": run_id, "dut_file": str(DUT_FILE), "dut_sha256": dut_sha256,
                "tests": args.tests, "periods_ns": args.periods, "random_seeds": args.random_seeds,
                "input_modes": args.input_modes,

@@ -260,8 +260,14 @@ class Mshr(cfg: CacheConfig) extends Component {
     private val fillCand = Vec((0 until N).map { e =>
         entryValid(e) && entryState(e) === U(ST_FILL, 2 bits) && !entryFillDone(e)
     })
-    private val fillEn = fillCand.orR
-    private val fillIdx = priorityLowest(fillCand, mshrIdWidth)
+    private val fillCandValid = fillCand.orR
+    private val fillCandIdx = priorityLowest(fillCand, mshrIdWidth)
+    // 已呈现的 fill 保持到接受；新到的低位响应不能抢占。
+    // 待填充 Entry 不再合并或释放，保持索引即可保持目标及合成整行。
+    private val fillHold = Reg(Bool()) init False
+    private val fillHoldIdx = Reg(UInt(mshrIdWidth bits)) init 0
+    private val fillEn = fillHold || fillCandValid
+    private val fillIdx = Mux(fillHold, fillHoldIdx, fillCandIdx)
 
     io.fill.en := fillEn
     io.fill.index := entryIndex(fillIdx)
@@ -270,7 +276,12 @@ class Mshr(cfg: CacheConfig) extends Component {
     io.fill.dirty := entryHasWrite(fillIdx)
     io.fill.line := mergedLines(fillIdx)
 
+    when(fillEn && !io.fillReady) {
+        fillHold := True
+        fillHoldIdx := fillIdx
+    }
     when(fillEn && io.fillReady) {
+        fillHold := False
         entryFillDone(fillIdx) := True
     }
 
@@ -287,9 +298,17 @@ class Mshr(cfg: CacheConfig) extends Component {
         val idx = (rrPtr + U(k, mshrIdWidth bits)).resize(mshrIdWidth)
         rotCand(k) := replayCand(idx)
     }
-    private val replayValid = rotCand.orR
+    private val replayCandValid = rotCand.orR
     private val rotK = priorityLowest(rotCand, mshrIdWidth)
-    private val replayIdx = (rrPtr + rotK).resize(mshrIdWidth)
+    private val replayCandIdx = (rrPtr + rotK).resize(mshrIdWidth)
+
+    // 新 Entry 完成 fill 后不能抢占已呈现的 replay。
+    // 合法协议下 FILL 条目不再合并，Slot 计数仅在握手时推进，
+    // 因此锁住 Entry 即可保持当前 Slot 的类型、CPU ID 和数据。
+    private val replayHold = Reg(Bool()) init False
+    private val replayHoldIdx = Reg(UInt(mshrIdWidth bits)) init 0
+    private val replayIdx = Mux(replayHold, replayHoldIdx, replayCandIdx)
+    private val replayValid = replayHold || replayCandValid
 
     private val replaySlotCnt = entryReplayCnt(replayIdx)
     private val replaySlotAddr = slotIdxDyn(replayIdx, replaySlotCnt.resize(slotSelWidth))
@@ -319,7 +338,12 @@ class Mshr(cfg: CacheConfig) extends Component {
     io.replay.payload.id := slotRespId(replaySlotAddr)
     io.replay.payload.isWrite := slotIsWrite(replaySlotAddr)
 
+    when(replayValid && !io.replay.ready) {
+        replayHold := True
+        replayHoldIdx := replayIdx
+    }
     when(replayValid && io.replay.ready) {
+        replayHold := False
         val isLast = (replaySlotCnt.resize(pendingCntWidth) + 1) === entryValidCnt(replayIdx)
         when(isLast) {
             entryValid(replayIdx) := False

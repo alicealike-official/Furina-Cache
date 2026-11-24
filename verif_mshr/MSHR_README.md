@@ -2,7 +2,7 @@
 
 MSHR环境位于`src/mshr`，有独立的TB、生成目录和仿真入口。它复用现有C++ MSHR和稀疏内存，用端口采样检查分配、合并、内存读、fill、replay及锁；WBB使用独立的`sim_wbb`入口，两者的生成文件分别位于`generated/mshr`与`generated/wbb`。
 
-目前提供默认空态启动和两笔基础读写smoke，用来检查框架连接。后续21组功能case及配套验证见 [MSHR case规划](../验证计划/DCacheWithMshr/MSHR_case规划_note.md)，不能用基础smoke代替这些场景的闭合。
+目前已实现21个功能case及独立长跑case，默认空态启动入口保留。完整功能回归曾发现replay背压保持违约；设计修复后52/52复核通过。场景、执行结果和剩余项见 [MSHR case规划](../验证计划/DCacheWithMshr/MSHR_case规划_note.md)。
 
 接口语义、关键采样沿、fill与replay数据视图及corner定义见 [MSHR IP架构文档](../Architecture/MSHR_IP架构设计文档.md)，配有可打开的WaveDrom时序图；未确定的扩展契约在文档中单列。
 
@@ -16,17 +16,17 @@ verif_mshr/
 ├── src/mshr/
 │   ├── interface/              # 参数化IO及沿前clocking block
 │   ├── config/                 # 周期超时、内存延迟/容量、接收开关
-│   ├── sequence/               # 公共提交方法和两笔smoke激励
+│   ├── sequence/               # 公共场景工具、定向/随机/长跑激励
 │   │   └── transaction/        # 上游请求、采样快照、比较项
 │   ├── component/
 │   │   ├── agent/             # 上游agent/sequencer和内存agent
 │   │   ├── driver/            # 上游提交、内存响应、fill/replay接收
-│   │   ├── monitor/           # 每拍全IO采样
+│   │   ├── monitor/           # 每拍全IO采样、事件计数及保持失败诊断
 │   │   └── scoreboard/        # 预测比较、IO归属、锁及计数
 │   ├── model/                 # C++ MSHR predictor及稀疏内存SV封装
 │   ├── bind/                  # 基础IO协议SVA
 │   └── pkg/                   # 类包含顺序和DPI声明
-├── test/mshr/                 # mshr_base_test、mshr_smoke_test
+├── test/mshr/                 # base/scenario公共检查及各功能test
 ├── test/adapter/              # MSHR DPI及内存代理独立自检
 ├── tb/mshr_tb_top.sv
 └── sim_mshr/                  # 独立Makefile、filelist、work和脚本
@@ -121,7 +121,7 @@ flowchart LR
 
 [mshr_memory_store](src/mshr/model/mshr_memory_store.sv)通过`mshr_mem_*` DPI封装已有[RefModel/MEM/SparseMemory.hpp](../RefModel/MEM/SparseMemory.hpp)。`write_line()`预置外部内存，`read_line()`读取整行，二者都不访问DUT内部。内存driver在实际读请求握手时读取一次并保存数据快照，此后等待响应期间不重新读内存。
 
-[memory driver](src/mshr/component/driver/mshr_memory_driver.sv)负责请求ready、FIFO待响应队列、周期延迟和响应握手。第k拍接受请求，延迟L拍且无队列/接收阻塞时，在第k+L拍响应。已呈现的响应对象锁定到握手，即使`mem_response_enable`后来关闭也不会撤回。当前支持FIFO响应；乱序及随机时序留给后续case扩展。
+[memory driver](src/mshr/component/driver/mshr_memory_driver.sv)负责请求ready、待响应队列、周期延迟和响应握手。第k拍接受请求，延迟L拍且无队列/接收阻塞时，在第k+L拍响应。已呈现的响应对象锁定到握手，即使`mem_response_enable`后来关闭也不会撤回。支持FIFO、逆序、随机及指定ID响应，随机ready、随机响应延迟和按采样周期放行。任一响应呈现后仍锁定到握手，不因后续排序或开关变化而撤回。
 
 [sink driver](src/mshr/component/driver/mshr_sink_driver.sv)独立驱动fillReady和replay.ready。它只控制接受，不改fill/replay数据。[scoreboard](src/mshr/component/scoreboard/mshr_scoreboard.sv)逐拍比较C++预测，并使用实际alloc、读发送/响应、fill和replay事件记录Entry/Slot归属、CPU ID及全lockMask；这份IO历史用于协议检查，不是第二个完整MSHR参考模型。
 
@@ -161,6 +161,65 @@ alloc + merge = replay接受
 
 后续test继承`mshr_base_test`，复用周期watchdog、排空和计数检查。各自的地址/数据随机化、请求排列和场景调度放进sequence，`mshr_config`负责控制参数。MEM响应策略可在内存driver中扩展，fill/replay接收策略可在sink driver中扩展，扩展后仍保留实际握手采样与独立协议检查。
 
-目前尚未展开规划中的容量、合并、数据历史、候选插入、仲裁、乱序、复用和随机case。alloc/merge仍按现有C++模型的互斥契约运行；在途Entry复位取消与旧响应隔离尚未定义。空态再次复位不清外部内存，但还需要独立case验证完整复位过程。
+容量、合并、数据历史、候选插入、仲裁、乱序、复用及随机case均已实现；replay动态候选、随机和长跑在设计修复后均已复核通过。alloc/merge仍按现有C++模型的互斥契约运行；在途Entry复位取消与旧响应隔离尚未定义。空态再次复位不清外部内存，但还需要独立case验证完整复位过程。
 
-fill.en&&fillReady才计一次接受；Q-02未确认前，没有把fill反压期间选择/payload保持强加为Stream断言。MSHR读请求和replay已经是Stream，仍必须遵守背压保持。`hasWb/wbSlot`在当前MSHR IO中没有对应可观察输出，不能用C++字段保存代替DUT内部保存证据。跨参数回归也尚未由默认四Entry框架运行结果证明。
+fill.en即valid，fillReady即ready；反压时必须保持en及全部载荷至握手。现有环境尚需补充fill保持SVA和动态候选定向证据。MSHR读请求和replay已经是Stream，仍必须遵守背压保持。`hasWb/wbSlot`不做内部保存检查，MSA-002按黑盒IO行为验收；未来确有性能或扩展需求再增加内部探测。跨参数回归也尚未由默认四Entry框架运行结果证明。
+
+
+## 完整功能case与回归（2026-11-24）
+
+本轮以MSHR规格和公开IO为依据，未读取DUT内部逻辑，未修改DUT或原C++模型；不开展复位及尚未确认的扩展协议。
+
+- `mshr_scenario_sequence`复用请求提交、双查询、外部MEM预置、按ID响应及排空调度；随机数据和场景均在各sequence中。
+- `mshr_scenario_test`统一检查生命周期计数、每次fill的原始数据/dirty/way、各CPU ID的读历史与写响应、最终外部MEM未改写，以及case必须命中的实际事件。
+- `mshr_activity_monitor`只记录公开IO，统计Entry/Slot位置、请求/响应延迟、同拍事件、反压、乱序和轮询服务上界；保持失败时打印前后拍`MSHR_STALL_TRACE`。
+- 内存代理支持四种响应选择、随机ready和延迟；sink独立控制fill/replay接收；新增无效载荷扰动支持。原有C++ predictor、scoreboard和IO SVA保持启用。
+
+现有C++封装及DPI来源在声明/调用处注明。自定义task/function用途注释放在实现前，长方法按功能拆分；不把环境自检另列为DUT验证点。
+
+```bash
+# 在仓库根目录运行常规21个功能case；random含3个种子，默认两种时钟。
+python3 verif_mshr/sim_mshr/script/run_mshr_regression.py --color always
+
+# 独立长跑，每组1024轮、4096 Entry、16384 Slot。
+python3 verif_mshr/sim_mshr/script/run_mshr_regression.py \
+    --tests mshr_long_run_test --max-errors 0 --color always
+
+# 最小范围复现replay保持错误。
+python3 verif_mshr/sim_mshr/script/run_mshr_regression.py \
+    --tests mshr_replay_backpressure_test --periods 10 4 --color always
+```
+
+`--seeds`用于random/long_run；`--max-errors`默认10，0表示保留全部错误并运行到case结束，绝不把错误改判PASS。每轮保存独立编译日志、源码哈希、命令、JSON/Markdown、log和FSDB；终端给出彩色汇总及每个失败组合的首错。默认不含长跑，避免拉长常规回归。
+
+当前完整矩阵为52组：38 PASS、14 FAIL。错误均为replay在`valid=1 && ready=0`后改变输出，详见[MSHR-DUT-001](../Architecture/DebugNote/MSHR-DUT-001_replay背压保持问题.md)。长跑虽完成16384笔请求，仍因协议违约失败，不关闭RND-010。
+
+本轮[52组报告](sim_mshr/work/regression/run_20261124_141613_912476/summary.md)保存逐组日志与波形；[输入哈希](sim_mshr/work/regression/run_20261124_141613_912476/inputs.json)对应最终验证源码。
+
+
+## replay修复后回归
+
+[最新52组报告](sim_mshr/work/regression/run_20261124_152738_869276/summary.md)：重新生成RTL并冷编译，52/52 PASS，UVM warning/error/fatal均为0。原激励与SVA未修改；定向、随机及6组长跑均通过，每组长跑完成16384笔Slot请求。旧失败记录为修复前历史，当前缺陷状态见MSHR-DUT-001。
+
+
+## 最小读响应延迟
+
+当前接口明确不支持零拍：对应响应最早在请求握手后下一拍有效并接受，由内存侧保证。零拍driver扩展及独立IO探测case已回退，正常代理保持至少一拍延迟。边界验证方法保存在[零拍验证思路](../Architecture/DebugNote/MSHR_零拍内存响应验证思路.md)。
+
+当前上游契约：每周期只提交一笔CPU请求，alloc与merge互斥；MSA-013双提交验证点已删除。
+
+fill不要求独立仲裁器、低下标优先或轮询。C++模型的低下标选择及当前scoreboard的精确比较是模型实现限制，不是spec要求；顺序不同须按IO契约判断，不能直接视为DUT错误。MSC-005保持验证仍待补，MSC-006按归属/数据/一次性接受证据闭合。
+
+
+MSC-005最新进展：fill保持SVA及反压中新候选定向场景已实现。定向、多候选及随机共10组出现fill保持违约，详见[MSHR-DUT-002](../Architecture/DebugNote/MSHR-DUT-002_fill背压保持问题.md)。之前52/52通过未包含这条新增断言，不能代表当前检查集全部通过。
+
+
+## fill保持修复后复核
+
+[最新52组报告](sim_mshr/work/regression/run_20261124_172220_492146/summary.md)全部通过，UVM warning/error/fatal均为0。重新生成RTL并冷编译，保留现有fill保持SVA和动态候选激励；两种时钟均实际命中新候选1次、反压32拍、恢复2次。三种子随机和六组长跑通过，每组长跑16384笔请求。MSHR-DUT-002按当前配置关闭，MSC-005闭合；原失败记录保留为修复前历史。
+
+
+MSB-010多事件扩展：现有event_collision case增加三个alloc四事件组合和两个merge五事件组合，实际同沿计数为必过条件。[两时钟回归](sim_mshr/work/regression/run_20261124_172737_613004/summary.md)均通过，每组33 Entry/46 Slot；组合及默认四Entry下不可达条件见case规划。MSB-010闭合，资源临界交叉RND-008仍保留。
+
+
+RND-008已补齐明确的资源临界矩阵：复用entry_capacity、slot_capacity、event_collision，新增沿前资源交叉计数和满表释放后下一拍hasFree检查。[最新完整52组回归](sim_mshr/work/regression/run_20261124_173257_750855/summary.md)全部通过；当前MSHR除7项复位外，其余验证点在当前配置及登记范围内闭合。

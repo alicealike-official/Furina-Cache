@@ -16,6 +16,7 @@ class mshr_driver extends uvm_driver #(mshr_transaction);
     extern virtual function void build_phase(uvm_phase phase);
     extern virtual task run_phase(uvm_phase phase);
     extern task drive_idle();
+    extern task drive_invalid_payload(mshr_transaction item);
     extern task drive_queries(mshr_transaction item);
     extern function void check_transaction(mshr_transaction item);
     extern task drive_transaction(mshr_transaction item);
@@ -276,6 +277,7 @@ endfunction
 task mshr_driver::drive_nonrequest(mshr_transaction item);
     @(negedge vif.clk);
     drive_idle();
+    if (item.idle_payload_enable) drive_invalid_payload(item);
     if (item.operation == MSHR_QUERY) begin
         drive_queries(item);
     end
@@ -287,4 +289,22 @@ task mshr_driver::drive_nonrequest(mshr_transaction item);
     end
     @(negedge vif.clk);
     drive_idle();
+endtask
+
+// 在alloc/merge使能保持0时扰动载荷，验证无效字段不会改变DUT状态。
+task mshr_driver::drive_invalid_payload(mshr_transaction item);
+    vif.alloc_tag <= item.tag;
+    vif.alloc_index <= item.index;
+    vif.alloc_way <= item.way;
+    vif.alloc_isWrite <= item.isWrite;
+    vif.alloc_wordOff <= item.wordOff;
+    vif.alloc_wData <= item.wData;
+    vif.alloc_respId <= item.respId;
+    vif.alloc_hasWb <= item.hasWb;
+    vif.alloc_wbSlot <= item.wbSlot;
+    vif.merge_entry <= item.entry;
+    vif.merge_isWrite <= item.isWrite;
+    vif.merge_wordOff <= item.wordOff;
+    vif.merge_wData <= item.wData;
+    vif.merge_respId <= item.respId;
 endtask

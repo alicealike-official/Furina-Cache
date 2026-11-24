@@ -56,6 +56,10 @@ task mshr_sink_driver::drive_acceptance();
     if ($isunknown({cfg.fill_enable, cfg.replay_enable})) begin
         `fatal("Fill/replay acceptance configuration contains X/Z", "MSHR_CONFIG")
     end
-    vif.fillReady <= cfg.fill_enable;
-    vif.replay_ready <= cfg.replay_enable;
+    // 【防御性检查】概率必须位于0到100之间。
+    if (cfg.sink_ready_percent > 100) begin
+        `fatal("Invalid sink ready percentage", "MSHR_CONFIG")
+    end
+    vif.fillReady <= cfg.fill_enable && (!cfg.random_sinks || $urandom_range(99, 0) < cfg.sink_ready_percent);
+    vif.replay_ready <= cfg.replay_enable && (!cfg.random_sinks || $urandom_range(99, 0) < cfg.sink_ready_percent);
 endtask

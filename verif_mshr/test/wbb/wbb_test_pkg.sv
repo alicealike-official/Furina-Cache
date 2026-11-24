@@ -19,4 +19,7 @@ package wbb_test_pkg;
     `include "wbb_delayed_push_test.sv"
     `include "wbb_pipeline_test.sv"
     `include "wbb_random_test.sv"
+    `include "wbb_long_run_test.sv"
+    `include "wbb_response_latency_test.sv"
+    `include "wbb_idle_payload_test.sv"
 endpackage

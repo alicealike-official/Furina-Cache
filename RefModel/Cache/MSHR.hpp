@@ -173,7 +173,11 @@ public:
         sendHoldEntry_   = -1;
         sendPresented_   = false;
         fillPresented_   = false;
+        fillHoldValid_   = false;
+        fillHoldEntry_   = -1;
         replayPtr_       = 0;
+        replayHoldValid_ = false;
+        replayHoldEntry_ = -1;
         alloc_req        = AllocReq{};
         merge_req        = MergeReq{};
         mem_rd_resp      = MemRdResp{};
@@ -323,17 +327,28 @@ public:
         sendPresented_ = false;
 
         // (c) 填充完成：FILL 首拍之后标记 fillDone（文档 7.11）
-        if (fillFire)
+        if (fillFire) {
+            fillHoldValid_ = false;
             entries_[fillSel].fillDone = true;
+        } else if (fillPresented_ && fillSel >= 0 && !fill_ready) {
+            // 锁住沿前实际呈现的填充，不能被本沿新响应替换。
+            fillHoldValid_ = true;
+            fillHoldEntry_ = fillSel;
+        }
         fillPresented_ = false;
 
         // (d) 重放一个 Slot（文档 7.11 / 7.12 / 7.13）
         if (replayFire) {
+            replayHoldValid_ = false;
             Entry& e = entries_[replaySel];
             e.replayCnt++;
             replayPtr_ = (replaySel + 1) % MSHR_ENTRIES;
             if (e.replayCnt >= e.validCnt)
                 releaseEntry(entries_[replaySel]);
+        } else if (replaySel >= 0) {
+            // 保存沿前已呈现的 Entry，不能被本沿完成 fill 的新候选替换。
+            replayHoldValid_ = true;
+            replayHoldEntry_ = replaySel;
         }
 
         // (e) 分配新条目（Stage2 权威提交，文档 7.5）
@@ -475,6 +490,7 @@ private:
     }
 
     int pickFill() const {                  // 文档 7.11：FILL 首拍、尚未填充
+        if (fillHoldValid_) return fillHoldEntry_;
         for (int i = 0; i < MSHR_ENTRIES; ++i)
             if (entries_[i].valid && entries_[i].state == State::FILL &&
                 !entries_[i].fillDone) return i;
@@ -482,6 +498,8 @@ private:
     }
 
     int pickReplay() const {                // 文档 7.12：条目级轮询
+        // FILL 不再合并，Slot 计数仅在握手时推进；保持 Entry 即保持当前响应。
+        if (replayHoldValid_) return replayHoldEntry_;
         for (int k = 0; k < MSHR_ENTRIES; ++k) {
             const int i = (replayPtr_ + k) % MSHR_ENTRIES;
             const Entry& e = entries_[i];
@@ -563,7 +581,11 @@ private:
     bool sendHoldValid_ = false;   // 发送保持寄存器（文档 7.7）
     int  sendHoldEntry_ = -1;
     bool sendPresented_ = false;   // 本拍是否调用过 sendReq()
+    bool fillHoldValid_ = false;   // 已呈现 fill 保持至接受
+    int  fillHoldEntry_ = -1;
     bool fillPresented_ = false;   // 本拍是否调用过 fillReq()
+    bool replayHoldValid_ = false; // replay 背压保持至实际握手
+    int  replayHoldEntry_ = -1;
     int  replayPtr_     = 0;       // 条目级重放轮询指针（文档 7.12）
 };
 

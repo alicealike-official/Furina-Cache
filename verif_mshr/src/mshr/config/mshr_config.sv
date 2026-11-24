@@ -1,3 +1,10 @@
+typedef enum int {
+    MSHR_MEM_FIFO,
+    MSHR_MEM_REVERSE,
+    MSHR_MEM_RANDOM,
+    MSHR_MEM_SELECTED
+} mshr_mem_order_t;
+
 class mshr_config extends uvm_object;
     uvm_active_passive_enum is_active = UVM_ACTIVE;
     int unsigned timeout_cycles = 2000;
@@ -10,6 +17,20 @@ class mshr_config extends uvm_object;
     bit mem_request_enable = 1;
     bit mem_response_enable = 1;
     // fill与replay的接收控制彼此独立，默认全部放行。
+    mshr_mem_order_t mem_order = MSHR_MEM_FIFO;
+    int unsigned selected_response_id = 0;
+    // 定向同拍case按IO观察周期安排放行，不改变已呈现响应。
+    longint unsigned response_not_before_cycle = 0;
+    longint unsigned request_not_before_cycle = 0;
+    bit random_request_ready = 0;
+    int unsigned request_ready_percent = 65;
+    bit random_latency = 0;
+    int unsigned min_latency_cycles = 1;
+    int unsigned max_latency_cycles = 16;
+    bit random_sinks = 0;
+    int unsigned sink_ready_percent = 65;
+    bit [BUS_ID_WIDTH-1:0] idle_response_id = '0;
+    bit [LINE_WIDTH-1:0] idle_response_data = '0;
     bit fill_enable = 1;
     bit replay_enable = 1;
 

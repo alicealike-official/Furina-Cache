@@ -8,6 +8,7 @@ class mshr_environment extends uvm_env;
     // C++ MSHR的SV预测组件，经mshr_ref_* DPI访问RefModel/Cache/MSHR.hpp。
     mshr_predictor predictor;
     mshr_scoreboard scoreboard;
+    mshr_activity_monitor activity;
     // C++ SparseMemory的SV封装，经mshr_mem_* DPI访问RefModel/MEM/SparseMemory.hpp。
     mshr_memory_store memory;
 
@@ -49,6 +50,7 @@ function void mshr_environment::build_phase(uvm_phase phase);
     sink_driver = mshr_sink_driver::type_id::create("sink_driver", this);
     predictor = mshr_predictor::type_id::create("predictor", this);
     scoreboard = mshr_scoreboard::type_id::create("scoreboard", this);
+    activity = mshr_activity_monitor::type_id::create("activity", this);
 endfunction
 
 function void mshr_environment::connect_phase(uvm_phase phase);
@@ -57,6 +59,11 @@ function void mshr_environment::connect_phase(uvm_phase phase);
     agent.monitor.monitor_port.connect(memory_agent.driver.monitor_export);
     agent.monitor.monitor_port.connect(predictor.monitor_export);
     predictor.compare_port.connect(scoreboard.compare_export);
+    agent.monitor.monitor_port.connect(activity.analysis_export);
+    if (agent.sequencer != null) begin
+        agent.sequencer.observations = activity;
+        agent.sequencer.memory = memory;
+    end
 endfunction
 
 // 停止上游提交后，检查C++模型、内存读队列及实际IO事务记录是否全部排空。

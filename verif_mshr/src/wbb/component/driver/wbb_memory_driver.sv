@@ -299,7 +299,7 @@ task wbb_memory_driver::drive_response();
         vif.memWriteResp_payload_id <= BUS_ID_WIDTH'(active_response.id);
     end else begin
         vif.memWriteResp_valid <= 0;
-        vif.memWriteResp_payload_id <= '0;
+        vif.memWriteResp_payload_id <= cfg.idle_response_id;
     end
 endtask
 

@@ -3,7 +3,7 @@
 直接例化 `WriteBackBuffer`，复用 `RefModel/Cache/WriteBackBuffer.hpp` 作为 WBB 参考模型。
 后端存储使用 `RefModel/MEM/SparseMemory.hpp` 的纯 C++ 稀疏内存。
 基础 `wbb_base_test` 已接入两笔完整写回激励，逐笔经过 reserve、push、内存发送和响应释放。
-规划中的12个case均已实现，5个适用case支持串行/流水两种输入模式。最新42组回归全部通过，UVM_WARNING/ERROR/FATAL均为0。
+当前14个case均已实现，5个适用case支持串行/流水两种输入模式。新增无效载荷和响应延迟case后，最新46组回归全部通过，UVM_WARNING/ERROR/FATAL均为0。
 既有完整回归结果见[回归汇总迁移视图](sim_wbb/work/regression/reports/run_20261120_013657_184228/summary.relocated.md)和[验证记录](../验证计划/DCacheWithMshr/WBB_case规划_note.md)。此前修复前后的原始报告仍保留用于对照；迁移视图只调整证据链接，不改历史结果、命令或输入哈希。
 
 ## 结构与信号归属
@@ -236,7 +236,7 @@ make -C verif_mshr/sim_wbb vcs_simulate WORK_DIR=work/delayed/ TEST_NAME=wbb_del
 
 历史DUT问题 **WBB-DUT-001** 已由用户在DUT和C++模型中补充发送保持后修复。
 本次冷编译复核中，背压case、延迟push case及随机seed=2在10 ns/4 ns下全部通过，目标场景仍命中，独立保持断言没有放宽。
-修复前的问题时序和日志保留在验证记录中；本结论对应当前4槽配置及已执行种子，其他参数和热复位仍需单独验证。
+修复前的问题时序和日志保留在验证记录中；本结论对应当前4槽配置及已执行种子，热复位仍需单独验证；当前验证范围限定为固定规格DUT。验证点清单只统计DUT行为；DPI、SVA、内存代理和回归脚本的自检属于环境维护，不计入DUT验证点或闭合数量。
 
 ## 流水 case（2026-11-20）
 
@@ -371,3 +371,25 @@ make -C verif_mshr/sim_wbb check_sva
 迁移后已验证generate、默认冷编译及无TEST_NAME仿真、DPI/SVA/内存代理自检；基础、流水和延迟push在10 ns/4 ns下共[6/6通过](sim_wbb/work/regression/reports/run_20261120_024923_117690/summary.md)，所有UVM warning/error/fatal为0。新生成RTL仅Git版本注释变化，功能内容不变。原42组完整功能回归仍按原记录保留，迁移检查不覆盖其全部case。
 
 旧编译产物在`sim_wbb/work/before_layout_builds`；自检旧日志在`work/layout_checks/previous_selfcheck_logs`。历史JSON/输入哈希不改写，`summary.relocated.md`只提供迁移后的导航；新回归Markdown使用相对链接。
+
+
+## 无效载荷与精确响应延迟检查
+
+新增 `wbb_idle_payload_test` 和 `wbb_response_latency_test`，分别对应IF-008和IF-009；均已加入默认回归。场景和必要命中条件见[case记录](../验证计划/DCacheWithMshr/WBB_case规划_note.md)。
+
+[本轮46组结果](sim_wbb/work/regression/reports/run_20261124_052027_970562/summary.md)。
+
+
+## RND-010 长跑
+
+`wbb_long_run_test`使用`wbb_long_run_sequence`，每次3轮×4096笔，总计12288笔。每轮先填满再持续写回，轮内不主动分批排空；轮末核对全部数据和事件计数，下一轮复用地址、更换数据。原有C++ WBB模型、IO SVA与C++稀疏内存检查持续启用，不增加复位场景。
+
+在项目根目录运行：
+
+```bash
+python3 verif_mshr/sim_wbb/script/run_wbb_regression.py --tests wbb_long_run_test --color always
+```
+
+默认运行serial/pipeline、10 ns/4 ns、seed=1/2/3共12组。长跑不包含在省略`--tests`的常规回归中；场景及判定见[case规划](../验证计划/DCacheWithMshr/WBB_case规划_note.md)。
+
+本轮[12/12长跑通过](sim_wbb/work/regression/reports/run_20261124_054804_914530/summary.md)，累计147456笔写回，UVM warning/error/fatal均为0。RND-010已按该规模闭合。
