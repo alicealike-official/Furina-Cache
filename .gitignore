@@ -20,3 +20,15 @@ project/
 rtl/
 target/
 GPUCache/
+# DCache top-level UVM generated artifacts
+verif_mshr/sim_dcache/work/
+verif_mshr/sim_dcache/novas.*
+verif_mshr/sim_dcache/novas_dump.log
+verif_mshr/sim_dcache/ucli.key
+verif_mshr/sim_dcache/verdiLog/
+verif_mshr/sim_dcache/inter.*
+verif_mshr/sim_dcache/tr_db.log
+verif_mshr/sim_dcache/.__solver_cache__/
+verif_mshr/generated/dcache/*.v
+verif_mshr/generated/dcache/*.log
+verif_mshr/generated/dcache/manifest.json

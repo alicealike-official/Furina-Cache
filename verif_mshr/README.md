@@ -1,28 +1,33 @@
 # 非阻塞 Cache IP 验证环境
 
-WBB与MSHR分别使用独立的仿真入口和生成目录，共用`src/common`中的时钟、复位及日志工具。
+WBB、MSHR和DCache顶层分别使用独立的仿真入口和生成目录，共用`src/common`中的时钟、复位及日志工具。
 
 | 模块 | UVM源码 | 仿真入口 | 生成RTL与参数 | 使用说明 |
 | --- | --- | --- | --- | --- |
 | WBB | `src/wbb/` | [sim_wbb](sim_wbb/Makefile) | `generated/wbb/` | [WBB_README](WBB_README.md) |
 | MSHR | `src/mshr/` | [sim_mshr](sim_mshr/Makefile) | `generated/mshr/` | [MSHR_README](MSHR_README.md) |
+| DCache顶层 | `src/dcache/` | [sim_dcache](sim_dcache/Makefile) | `generated/dcache/`（生成受阻） | [DCACHE_README](DCACHE_README.md) |
 
 ```text
 verif_mshr/
 ├── generated/
 │   ├── wbb/              # WriteBackBuffer.v、wbb_params_pkg.sv
-│   └── mshr/             # Mshr.v、mshr_params_pkg.sv
+│   ├── mshr/             # Mshr.v、mshr_params_pkg.sv
+│   └── dcache/           # 生成成功后导入DCache.v
 ├── sim_wbb/              # WBB Makefile、filelist、脚本及work
 ├── sim_mshr/             # MSHR Makefile、filelist、脚本及work
+├── sim_dcache/           # 顶层独立入口；当前生成错误待处理
 ├── src/
 │   ├── common/
 │   ├── wbb/
-│   └── mshr/
-├── test/                 # wbb、mshr及各自的adapter/断言自检
+│   ├── mshr/
+│   └── dcache/
+├── test/                 # wbb、mshr、dcache及各自的连接检查
 ├── dpi/                  # 各模块的C++适配
 ├── tb/                   # 各模块独立顶层
 ├── WBB_README.md
-└── MSHR_README.md
+├── MSHR_README.md
+└── DCACHE_README.md
 ```
 
 在仓库根目录分别运行：
@@ -64,3 +69,6 @@ MSHR、WBB、CacheMem、响应队列与替换策略在DCache中的连接和时�
 环境配置、对象有效性、初始化顺序、方法参数及场景适用条件的报错检查，在相应语句或连续检查块前用`【防御性检查】`标明，并说明具体前提。这些检查用于发现验证环境自身的使用错误，不作为DUT功能覆盖证据。
 
 在提交前约束地址对齐、索引范围或地址唯一性等协议输入前提时，使用`【激励合法性检查】`。DUT输出、实际握手时序、数据比较、场景命中和超时检查保留各自的功能说明，不能只因使用fatal就归入防御性检查。标识只帮助阅读，不改变检查执行或失败判定。
+
+
+DCache顶层采用分层检查：`src/dcache/integration`组装原`src/mshr`和`src/wbb`的被动检查链，原IP主动环境继续独立使用；模型、时钟和内存职责见[顶层分层目录](src/dcache/integration/README.md)。

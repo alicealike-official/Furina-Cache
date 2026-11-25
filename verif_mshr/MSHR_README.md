@@ -223,3 +223,6 @@ MSB-010多事件扩展：现有event_collision case增加三个alloc四事件组
 
 
 RND-008已补齐明确的资源临界矩阵：复用entry_capacity、slot_capacity、event_collision，新增沿前资源交叉计数和满表释放后下一拍hasFree检查。[最新完整52组回归](sim_mshr/work/regression/run_20261124_173257_750855/summary.md)全部通过；当前MSHR除7项复位外，其余验证点在当前配置及登记范围内闭合。
+
+
+顶层复用：DCache集成环境以UVM_PASSIVE模式实例化原mshr_agent，直接使用本目录的monitor、sample、predictor、scoreboard和IO SVA；不实例化IP driver或内存driver。独立IP入口保持原样。分层结构及模型实例边界见[DCache integration说明](src/dcache/integration/README.md)。

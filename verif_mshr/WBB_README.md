@@ -393,3 +393,6 @@ python3 verif_mshr/sim_wbb/script/run_wbb_regression.py --tests wbb_long_run_tes
 默认运行serial/pipeline、10 ns/4 ns、seed=1/2/3共12组。长跑不包含在省略`--tests`的常规回归中；场景及判定见[case规划](../验证计划/DCacheWithMshr/WBB_case规划_note.md)。
 
 本轮[12/12长跑通过](sim_wbb/work/regression/reports/run_20261124_054804_914530/summary.md)，累计147456笔写回，UVM warning/error/fatal均为0。RND-010已按该规模闭合。
+
+
+顶层复用：DCache集成环境以UVM_PASSIVE模式实例化原wbb_agent，直接使用本目录的monitor、sample、predictor、scoreboard和IO SVA；不实例化IP driver或内存driver。独立IP入口保持原样。分层结构及模型实例边界见[DCache integration说明](src/dcache/integration/README.md)。

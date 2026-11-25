@@ -154,6 +154,8 @@ public:
 
         readQ_.clear();
         writeQ_.clear();
+        readOutValid_ = false; writeOutValid_ = false;
+        readOut_ = ReadResp{}; writeOut_ = WriteResp{};
 
         s2Valid_ = false;
         s2Tag_ = 0; s2Index_ = 0; s2WordOff_ = 0; s2BlockAddr_ = 0;
@@ -246,7 +248,7 @@ public:
         rsvSlot_ = rsv.slot;
 
         // ---------- 4) Stage2：冻结判定（§11.2） ----------
-        const bool respFull2 = respFullFor(s2WrEn_);
+        const bool respFull2 = respAnyFull();
         const bool wbSame2   = wbb_.hasSameAddr(s2BlockAddr_);
         const bool hasFree2  = mshr_.hasFree();
         const bool hasWay2   = hasAvailableWay(s2Index_);
@@ -286,7 +288,7 @@ public:
         const bool wbFull1   = wbb_.full();
         const bool wbSame1   = wbb_.hasSameAddr(cBlk);
         const bool hasWay1   = hasAvailableWay(cIdx);
-        const bool respFull1 = respFullFor(cpu_wrEn);
+        const bool respFull1 = respAnyFull();
 
         const bool admissionOk = !respFull1 &&
             (canMerge1 ||
@@ -384,8 +386,8 @@ public:
             replayLast_  = (replay_.slot == e.validCnt - 1);
         }
 
-        const bool readQFull  = readQ_.size()  >= RESP_QUEUE_DEPTH;
-        const bool writeQFull = writeQ_.size() >= RESP_QUEUE_DEPTH;
+        const bool readQFull  = readQueueSize()  >= RESP_QUEUE_DEPTH;
+        const bool writeQFull = writeQueueSize() >= RESP_QUEUE_DEPTH;
 
         pushHitRead_  = hitRead_  && !readQFull;
         pushHitWrite_ = hitWrite_ && !writeQFull;
@@ -399,22 +401,24 @@ public:
         mshr_.replay_ready = replayPushOk_;
 
         // ---------- 12) 响应输出 ----------
-        cpuReadResp_valid  = !readQ_.empty();
+        cpuReadResp_valid  = RESP_QUEUE_DEPTH == 1 ? !readQ_.empty() : readOutValid_;
         cpuReadResp_hit    = false;
         cpuReadResp_merged = false;
-        if (!readQ_.empty()) {
-            cpuReadResp_rData  = readQ_.front().rData;
-            cpuReadResp_id     = readQ_.front().id;
-            cpuReadResp_hit    = readQ_.front().hit;
-            cpuReadResp_merged = readQ_.front().merged;
+        if (cpuReadResp_valid) {
+            const ReadResp& response = RESP_QUEUE_DEPTH == 1 ? readQ_.front() : readOut_;
+            cpuReadResp_rData  = response.rData;
+            cpuReadResp_id     = response.id;
+            cpuReadResp_hit    = response.hit;
+            cpuReadResp_merged = response.merged;
         }
-        cpuWriteResp_valid  = !writeQ_.empty();
+        cpuWriteResp_valid  = RESP_QUEUE_DEPTH == 1 ? !writeQ_.empty() : writeOutValid_;
         cpuWriteResp_hit    = false;
         cpuWriteResp_merged = false;
-        if (!writeQ_.empty()) {
-            cpuWriteResp_id     = writeQ_.front().id;
-            cpuWriteResp_hit    = writeQ_.front().hit;
-            cpuWriteResp_merged = writeQ_.front().merged;
+        if (cpuWriteResp_valid) {
+            const WriteResp& response = RESP_QUEUE_DEPTH == 1 ? writeQ_.front() : writeOut_;
+            cpuWriteResp_id     = response.id;
+            cpuWriteResp_hit    = response.hit;
+            cpuWriteResp_merged = response.merged;
         }
 
         // ---------- 13) 命中读数据 + RAW 旁路（§6.6） ----------
@@ -473,9 +477,10 @@ public:
             }
         }
 
-        // 1) 响应弹出（先弹，允许同拍 push）
-        if (cpuReadResp_ready  && !readQ_.empty())  readQ_.pop_front();
-        if (cpuWriteResp_ready && !writeQ_.empty()) writeQ_.pop_front();
+        // 1) 同步读出：仅从沿前已有的数据预取，随后才处理本沿入队。
+        // 输出有效且受阻时保持；被消费或输出为空时可加载下一笔。
+        advanceResponseRead(readQ_, readOut_, readOutValid_, cpuReadResp_ready);
+        advanceResponseRead(writeQ_, writeOut_, writeOutValid_, cpuWriteResp_ready);
 
         // 2) 响应推入（命中优先于重放）
         if (pushHitRead_)
@@ -552,8 +557,8 @@ public:
 
     bool   s2Valid()        const { return s2Valid_; }
     bool   s2Stuck()        const { return s2Stuck_; }
-    size_t readQueueSize()  const { return readQ_.size(); }
-    size_t writeQueueSize() const { return writeQ_.size(); }
+    size_t readQueueSize()  const { return readQ_.size() + (readOutValid_ ? 1u : 0u); }
+    size_t writeQueueSize() const { return writeQ_.size() + (writeOutValid_ ? 1u : 0u); }
 
     // 测试专用：切换 CacheMem 的读/写采样顺序（默认写优先）。
     // 用于验证 §6.6 旁路与 §2.5 的 !wayLocked 旧快照窗口。
@@ -581,7 +586,7 @@ public:
         os << "cpu_ready=" << cpu_ready
            << " s2Valid=" << s2Valid_
            << " s2Stuck=" << s2Stuck_ << "\n";
-        os << "readQ=" << readQ_.size() << " writeQ=" << writeQ_.size() << "\n";
+        os << "readQ=" << readQueueSize() << " writeQ=" << writeQueueSize() << "\n";
         os << "-- wayLock --\n";
         for (int s = 0; s < NUM_SETS; ++s) {
             bool any = false;
@@ -599,9 +604,29 @@ public:
 
 private:
     // ---------- 小工具 ----------
-    bool respFullFor(bool isWrite) const {
-        return isWrite ? (writeQ_.size() >= RESP_QUEUE_DEPTH)
-                       : (readQ_.size()  >= RESP_QUEUE_DEPTH);
+    // 对应 StreamFifo 默认的同步存储读口。输出寄存器也计入总容量，
+    // 预取不释放容量；只有 CPU 实际接受响应才释放一个位置。
+    template<typename Response>
+    static void advanceResponseRead(std::deque<Response>& queue, Response& output,
+                                    bool& outputValid, bool ready) {
+        // StreamFifo 深度为 1 时使用单寄存器，不另加同步读级。
+        if (RESP_QUEUE_DEPTH == 1) {
+            if (ready && !queue.empty()) queue.pop_front();
+            return;
+        }
+        if (!outputValid || ready) {
+            outputValid = !queue.empty();
+            if (outputValid) {
+                output = queue.front();
+                queue.pop_front();
+            }
+        }
+    }
+
+    // 架构 §9.3：任一响应队列满，均阻塞 Stage1 并冻结 Stage2。
+    bool respAnyFull() const {
+        return readQueueSize() >= RESP_QUEUE_DEPTH ||
+               writeQueueSize() >= RESP_QUEUE_DEPTH;
     }
 
     bool hasAvailableWay(int set) const {
@@ -638,6 +663,11 @@ private:
 
     std::deque<ReadResp>  readQ_;
     std::deque<WriteResp> writeQ_;
+    // SRAM 同步读出的响应寄存器；queue 保存尚未预取的响应。
+    ReadResp readOut_{};
+    WriteResp writeOut_{};
+    bool readOutValid_ = false;
+    bool writeOutValid_ = false;
 
     // Stage2 流水寄存器
     bool  s2Valid_ = false;

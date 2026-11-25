@@ -96,7 +96,9 @@ class DCache(
     wbb.io.q0Addr := cpuBlockAddr
 
     // val lock0 = Vec((0 until NUM_WAYS).map(w => mshr.io.lockMask(cpuIndex)(w)))
-    val lock0 = Vec((0 until NUM_WAYS).map(w => mshr.io.lockMask(cpuIndex * NUM_WAYS + w)))
+    // 合法扁平索引范围为 0 .. NUM_SETS * NUM_WAYS - 1，显式限定动态索引位宽。
+    val lock0 = Vec((0 until NUM_WAYS).map(w =>
+        mshr.io.lockMask((cpuIndex * NUM_WAYS + w).resize(log2Up(NUM_SETS * NUM_WAYS)))))
     val hasWay0 = !lock0.andR
 
     val canMerge0 = mshr.io.m0.mergeable && mshr.io.m0.slotFree
@@ -112,7 +114,8 @@ class DCache(
     cache.io.inspect.index := s1Index
 
     // val lock1 = Vec((0 until NUM_WAYS).map(w => mshr.io.lockMask(s1Index)(w)))
-    val lock1 = Vec((0 until NUM_WAYS).map(w => mshr.io.lockMask(s1Index * NUM_WAYS + w)))
+    val lock1 = Vec((0 until NUM_WAYS).map(w =>
+        mshr.io.lockMask((s1Index * NUM_WAYS + w).resize(log2Up(NUM_SETS * NUM_WAYS)))))
     val hitVec = Vec((0 until NUM_WAYS).map { w =>
         cache.io.r1.valid(w) && (cache.io.r1.tag(w) === s1Tag) && !lock1(w)
     })

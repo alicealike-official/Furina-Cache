@@ -11,7 +11,12 @@ object DCacheVerilog extends App {
     val cfg = CacheConfig()
     val config = SpinalConfig(
         targetDirectory = "rtl",
-        withTimescale = false
+        withTimescale = false,
+        defaultConfigForClockDomains = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = LOW
+        )
     )
     config.generateVerilog(new DCache(cfg, FifoPolicyFactory))
 }
