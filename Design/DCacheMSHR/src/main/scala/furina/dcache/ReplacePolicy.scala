@@ -24,6 +24,9 @@ import spinal.lib._
 trait ReplacePolicy {
     /** 在策略偏好序中跳过被锁定的路，返回最靠前的候选 */
     def allocWay(setIndex: UInt, lockMask: Vec[Bool]): UInt
+    /** 所选路是否满足属性；策略可直接从候选产生，避免等待路号编码。 */
+    def allocWayMatches(setIndex: UInt, lockMask: Vec[Bool], matches: Vec[Bool]): Bool =
+        matches(allocWay(setIndex, lockMask))
     def onHit(setIndex: UInt, way: UInt, enable: Bool): Unit
     def onFill(setIndex: UInt, way: UInt, enable: Bool): Unit
 }
@@ -44,6 +47,17 @@ abstract class OrderedPolicy(cfg: CacheConfig) extends Area with ReplacePolicy {
         val cand = Vec((0 until NUM_WAYS).map(i => !lockMask(order(setIndex)(i))))
         val k = priorityLowest(cand, wayWidth)
         order(setIndex)(k)
+    }
+
+    override def allocWayMatches(setIndex: UInt, lockMask: Vec[Bool], matches: Vec[Bool]): Bool = {
+        val ways = order(setIndex)
+        val cand = Vec((0 until NUM_WAYS).map(i => !lockMask(ways(i))))
+        val selectedMatches = (0 until NUM_WAYS).map { i =>
+            val grant = if (i == 0) cand(i) || !cand.orR
+                        else cand(i) && !cand.take(i).reduce(_ || _)
+            grant && matches(ways(i))
+        }
+        selectedMatches.reduce(_ || _)
     }
 
     /** 低位下标优先的优先编码器（cand 可能多位为 1，不能用 OHToUInt） */

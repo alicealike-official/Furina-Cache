@@ -29,6 +29,7 @@ verif_mshr/sim_dcache/verdiLog/
 verif_mshr/sim_dcache/inter.*
 verif_mshr/sim_dcache/tr_db.log
 verif_mshr/sim_dcache/.__solver_cache__/
+verif_mshr/sim_dcache/work_all_regression.lock
 verif_mshr/generated/dcache/*.v
 verif_mshr/generated/dcache/*.log
 verif_mshr/generated/dcache/manifest.json

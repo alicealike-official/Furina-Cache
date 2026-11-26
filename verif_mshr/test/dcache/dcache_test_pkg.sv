@@ -60,4 +60,5 @@ package dcache_test_pkg;
     `include "dcache_read_during_write_test.sv"
     `include "dcache_reset_test.sv"
     `include "dcache_reset_active_test.sv"
+    `include "dcache_perf_test.sv"
 endpackage

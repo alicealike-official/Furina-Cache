@@ -125,7 +125,6 @@ class dcache_probe_sample extends uvm_sequence_item;
     logic hasVictim;
     logic respFullAny;
     logic evictDirty;
-    logic victimDirty;
     logic [1:0] policyWay;
     logic [255:0] fifo_order;
     logic [127:0] cache_valid_map;

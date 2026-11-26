@@ -87,7 +87,6 @@ module dcache_probe_bind(
     input wire hasVictim,
     input wire respFullAny,
     input wire evictDirty,
-    input wire victimDirty,
     input wire [1:0] policyWay,
     input wire [255:0] fifo_order
 );
@@ -175,7 +174,6 @@ module dcache_probe_bind(
     assign probe.hasVictim = hasVictim;
     assign probe.respFullAny = respFullAny;
     assign probe.evictDirty = evictDirty;
-    assign probe.victimDirty = victimDirty;
     assign probe.policyWay = policyWay;
     assign probe.fifo_order = fifo_order;
     assign probe.cache_valid_map = cache_valid_map;
@@ -274,7 +272,6 @@ bind DCache dcache_probe_bind u_dcache_probe (
     .hasVictim(hasVictim),
     .respFullAny(respFullAny),
     .evictDirty(evictDirty),
-    .victimDirty(victimDirty),
     .policyWay(policyWay),
     .fifo_order({policy_order_31_3, policy_order_31_2, policy_order_31_1, policy_order_31_0, policy_order_30_3, policy_order_30_2, policy_order_30_1, policy_order_30_0, policy_order_29_3, policy_order_29_2, policy_order_29_1, policy_order_29_0, policy_order_28_3, policy_order_28_2, policy_order_28_1, policy_order_28_0, policy_order_27_3, policy_order_27_2, policy_order_27_1, policy_order_27_0, policy_order_26_3, policy_order_26_2, policy_order_26_1, policy_order_26_0, policy_order_25_3, policy_order_25_2, policy_order_25_1, policy_order_25_0, policy_order_24_3, policy_order_24_2, policy_order_24_1, policy_order_24_0, policy_order_23_3, policy_order_23_2, policy_order_23_1, policy_order_23_0, policy_order_22_3, policy_order_22_2, policy_order_22_1, policy_order_22_0, policy_order_21_3, policy_order_21_2, policy_order_21_1, policy_order_21_0, policy_order_20_3, policy_order_20_2, policy_order_20_1, policy_order_20_0, policy_order_19_3, policy_order_19_2, policy_order_19_1, policy_order_19_0, policy_order_18_3, policy_order_18_2, policy_order_18_1, policy_order_18_0, policy_order_17_3, policy_order_17_2, policy_order_17_1, policy_order_17_0, policy_order_16_3, policy_order_16_2, policy_order_16_1, policy_order_16_0, policy_order_15_3, policy_order_15_2, policy_order_15_1, policy_order_15_0, policy_order_14_3, policy_order_14_2, policy_order_14_1, policy_order_14_0, policy_order_13_3, policy_order_13_2, policy_order_13_1, policy_order_13_0, policy_order_12_3, policy_order_12_2, policy_order_12_1, policy_order_12_0, policy_order_11_3, policy_order_11_2, policy_order_11_1, policy_order_11_0, policy_order_10_3, policy_order_10_2, policy_order_10_1, policy_order_10_0, policy_order_9_3, policy_order_9_2, policy_order_9_1, policy_order_9_0, policy_order_8_3, policy_order_8_2, policy_order_8_1, policy_order_8_0, policy_order_7_3, policy_order_7_2, policy_order_7_1, policy_order_7_0, policy_order_6_3, policy_order_6_2, policy_order_6_1, policy_order_6_0, policy_order_5_3, policy_order_5_2, policy_order_5_1, policy_order_5_0, policy_order_4_3, policy_order_4_2, policy_order_4_1, policy_order_4_0, policy_order_3_3, policy_order_3_2, policy_order_3_1, policy_order_3_0, policy_order_2_3, policy_order_2_2, policy_order_2_1, policy_order_2_0, policy_order_1_3, policy_order_1_2, policy_order_1_1, policy_order_1_0, policy_order_0_3, policy_order_0_2, policy_order_0_1, policy_order_0_0})
 );

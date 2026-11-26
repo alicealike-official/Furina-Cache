@@ -45,6 +45,7 @@
             sample.s1Index, sample.cache_inspect_valid, locked, candidate, expected_order)) begin
             `fatal(dcache_last_error(), "DCACHE_POLICY_DPI")
         end
+        check_writeback_qualification(sample, candidate);
         require_condition(sample.fifo_order === expected_order, "FIFO order differs from architectural hit/fill updates");
         if (sample.m_alloc_en) begin
             require_condition(candidate >= 0 && sample.m_alloc_way === 2'(candidate), "Victim differs from FIFO preference after excluding locks");
@@ -54,6 +55,39 @@
         if (sample.hitRead || sample.hitWrite) count("policy_hit_checked");
         if (sample.cache_w2_en) count("policy_fill_checked");
         if (previous != null && !previous.cache_w2_en) count("policy_no_fill_hold_checked");
+    endfunction
+
+    // 用原C++ FIFO模型给出的最终候选及当前有效/脏状态核对写回资格。
+    // candidate来自dcache_fifo_step的沿前查询，已经包含最低空路优先和跳过锁定路；
+    // 不使用DUT的policyDirty或旧victimDirty计算期望，避免两条错误路径互相印证。
+    function void check_writeback_qualification(dcache_probe_sample sample, int candidate);
+        logic expected_dirty;
+        logic expected_writeback;
+        expected_dirty = 0;
+        if (candidate >= 0 && candidate < 4) begin
+            expected_dirty = sample.cache_inspect_valid[candidate] && sample.cache_inspect_dirty[candidate];
+        end
+
+        // Stage2存在请求时，即使冻结也检查候选属性，覆盖满WBB、空路和全锁窗口。
+        if (sample.s1Valid) begin
+            require_condition(sample.hasVictim === (candidate >= 0 && candidate < 4),
+                "Victim availability differs from unlocked architectural candidate");
+            require_condition(sample.evictDirty === expected_dirty,
+                "Writeback qualification differs from selected valid/dirty state");
+            count("writeback_qualification_checked");
+        end
+
+        // 分配接受时才执行淘汰读行/预留；clean分配或没有分配时不得误触发。
+        expected_writeback = sample.m_alloc_en && expected_dirty;
+        require_condition(sample.w_reserve_en === expected_writeback,
+            "WBB reservation differs from accepted dirty allocation");
+        require_condition(sample.cache_r2_en === expected_writeback,
+            "Victim line read differs from accepted dirty allocation");
+        if (sample.m_alloc_en) begin
+            require_condition(sample.m_alloc_hasWb === expected_dirty,
+                "MSHR hasWb differs from selected valid/dirty state");
+            count(expected_dirty ? "dirty_writeback_actions_checked" : "clean_allocation_no_writeback_checked");
+        end
     endfunction
 
     // 旁路选择来自规格比较键；冻结时请求字段及R1刷新地址保持，不依赖RAM同址读写原语。
@@ -277,7 +311,7 @@
             if (active_entries == 3) count("last_entry_with_response");
         end
         if (sample.s1Valid && sample.s2Stuck && sample.w_full && sample.respFullAny) count("two_stall_causes");
-        if (sample.s1Valid && sample.s2Stuck && sample.w_full && !sample.respFullAny && sample.victimDirty)
+        if (sample.s1Valid && sample.s2Stuck && sample.w_full && !sample.respFullAny && sample.evictDirty)
             count("dirty_wait_after_fifo_release");
         if (sample.s1Valid && sample.s2Stuck && !sample.m_hasFree) begin
             count("stage2_no_entry");

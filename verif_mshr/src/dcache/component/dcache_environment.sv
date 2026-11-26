@@ -3,6 +3,7 @@ class dcache_environment extends uvm_env;
     dcache_agent agent;
     dcache_activity_monitor activity;
     dcache_probe_monitor probe_monitor;
+    dcache_perf_monitor perf_monitor;
     virtual dcache_probe_interface probe_vif;
     virtual mshr_interface mshr_vif;
     virtual wbb_interface wbb_vif;
@@ -50,6 +51,13 @@ class dcache_environment extends uvm_env;
             cachemem_checks = dcache_cachemem_checks::type_id::create("cachemem_checks", this);
             probe_monitor = dcache_probe_monitor::type_id::create("probe_monitor", this);
         end
+        if (cfg.enable_perf) begin
+            // 【防御性检查】性能资源和路径计数要求已接入的真实只读接口。
+            if (!cfg.enable_probes) begin
+                `fatal("Performance measurement requires existing probes", "DCACHE_PERF_CONFIG")
+            end
+            perf_monitor = dcache_perf_monitor::type_id::create("perf_monitor", this);
+        end
         activity = dcache_activity_monitor::type_id::create("activity", this);
         agent = dcache_agent::type_id::create("agent", this);
         memory_agent = dcache_memory_agent::type_id::create("memory_agent", this);
@@ -63,7 +71,9 @@ class dcache_environment extends uvm_env;
         agent.monitor.monitor_port.connect(predictor.analysis_export);
         predictor.compare_port.connect(scoreboard.analysis_export);
         agent.monitor.monitor_port.connect(activity.analysis_export);
+        if (perf_monitor != null) agent.monitor.monitor_port.connect(perf_monitor.analysis_export);
         if (agent.sequencer != null) begin
+            agent.sequencer.perf_monitor = perf_monitor;
             agent.sequencer.probe_monitor = probe_monitor;
             agent.sequencer.observations = activity;
             agent.sequencer.cfg = cfg;

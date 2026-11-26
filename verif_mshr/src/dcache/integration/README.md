@@ -108,3 +108,13 @@ C50组合补测[6/6通过](../../../sim_dcache/work/regression/run_20261125_1540
 `monitor/dcache_extended_checks.svh`新增`check_read_during_write`：当真实W1写与CPU接受读同沿、同tag/set/word时，按CPU ID保存写值，待该读实际提交时核对旁路选择及结果，冻结期间保留记录。现有CPU顺序数据、原C++模型和SVA继续运行。`count_raw_read_value`仅统计原始R1值与写值的关系，不要求RAM碰撞返回固定版本。
 
 无新bind、编译内部临时信号引用或内部驱动。CacheMem原始碰撞比较的既有排除规则未放宽；原C++算法未改。C51新case及C05/C32/C33、混合随机与fill流水窗口共[20/20通过](../../../sim_dcache/work/regression/run_20261126_090229/summary.md)，[逐组碰撞证据](../../../sim_dcache/work/regression/run_20261126_090229/read_during_write_evidence.json)保存实际次数。该证据支持MEM-016按spec §6.6、§12.6的CPU可见功能闭合，不作为RAM原语单独验收。
+
+## 并行dirty判断的DV接入
+
+按Cache spec §10.4，实际写回资格为`evictDirty`。探针已移除旧`victimDirty`的bind端口、interface、sample及采样依赖；DE是否保留该观察信号不影响DV编译。`dirty_wait_after_fifo_release`改用真实`evictDirty`，原multi_stall case仍要求命中，不关闭场景检查。
+
+新增`check_writeback_qualification`复用`dcache_fifo_step`返回的沿前最终候选（原C++ FifoPolicy，包含最低空路优先及锁过滤），结合当前inspect valid/dirty计算期望。inspect本身继续由原C++ CacheMem检查。Stage2有效时核对hasVictim和evictDirty，包括冻结期间；分配时核对MSHR hasWb，并在每拍核对WBB reserve和R2使能必须且只能由有效脏分配触发。原有原子淘汰、下一拍push、数据与参考模型检查保持启用。
+
+不以DUT policyDirty或旧victimDirty作为期望，不增加新的DE内部信号绑定，不修改C++模型算法。新增统计为`writeback_qualification_checked`、`dirty_writeback_actions_checked`及`clean_allocation_no_writeback_checked`，表示实际执行检查的次数，不替代原case的必命中要求。
+
+本轮迁移[24/24通过](../../../sim_dcache/work/all_regression/run_20261126_142932_933208/summary.md)：4组framework，dirty/clean淘汰、Way Lock、FIFO边界、淘汰边界、释放交叉、多原因冻结各两时钟，以及存储组合case两时钟三种子。multi_stall在每种时钟下命中21拍`dirty_wait_after_fifo_release`；本结果为相关补测，不替代一次完整295组回归。

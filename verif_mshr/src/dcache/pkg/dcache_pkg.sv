@@ -16,6 +16,8 @@ package dcache_pkg;
     `include "component/monitor/dcache_monitor.sv"
     `include "integration/transaction/dcache_probe_sample.sv"
     `include "integration/monitor/dcache_probe_monitor.sv"
+    `include "perf/dcache_perf_result.sv"
+    `include "perf/dcache_perf_monitor.sv"
     `include "component/agent/dcache_sequencer.sv"
     `include "component/driver/dcache_driver.sv"
     `include "component/agent/dcache_agent.sv"
@@ -84,4 +86,5 @@ package dcache_pkg;
     `include "sequence/dcache_read_during_write_sequence.sv"
     `include "sequence/dcache_reset_sequence.sv"
     `include "sequence/dcache_reset_active_sequence.sv"
+    `include "sequence/dcache_perf_sequence.sv"
 endpackage

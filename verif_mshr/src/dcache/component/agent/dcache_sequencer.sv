@@ -1,6 +1,7 @@
 class dcache_sequencer extends uvm_sequencer #(dcache_transaction);
     dcache_activity_monitor observations;
     dcache_probe_monitor probe_monitor;
+    dcache_perf_monitor perf_monitor;
     dcache_config cfg;
     // 原C++ SparseMemory封装，由环境传入，供sequence预置后端数据。
     dcache_memory_store memory;

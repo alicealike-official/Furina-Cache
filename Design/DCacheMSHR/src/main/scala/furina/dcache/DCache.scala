@@ -140,8 +140,11 @@ class DCache(
     val victimTag = cache.io.r1.tag(victimWay)
     val victimBlockAddr = blockAddrFromTagIndex(victimTag, s1Index)
     // 只有"有效且脏"的行才需要写回；无效行的 dirty 可能是历史残留
-    val victimDirty = curValid(victimWay) && curDirty(victimWay)
-    val evictDirty = hasVictim && victimDirty
+    // 空路无需写回；无空路时直接由策略候选判断有效且脏，
+    // 与 victimWay 并行计算，避免路号编码后再动态读取状态。
+    val dirtyValid = Vec((0 until NUM_WAYS).map(w => curValid(w) && curDirty(w)))
+    val policyDirty = policy.allocWayMatches(s1Index, lock1, dirtyValid)
+    val evictDirty = hasVictim && !hasEmpty && policyDirty
 
     // ---------------- Stage2 冻结条件（§11.2） ----------------
     val canMerge1 = mshr.io.m1.mergeable && mshr.io.m1.slotFree

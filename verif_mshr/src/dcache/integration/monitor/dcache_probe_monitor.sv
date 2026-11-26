@@ -201,7 +201,6 @@ class dcache_probe_monitor extends uvm_component;
             sample.hasVictim = vif.mon_cb.hasVictim;
             sample.respFullAny = vif.mon_cb.respFullAny;
             sample.evictDirty = vif.mon_cb.evictDirty;
-            sample.victimDirty = vif.mon_cb.victimDirty;
             sample.policyWay = vif.mon_cb.policyWay;
             sample.fifo_order = vif.mon_cb.fifo_order;
             sample.cache_valid_map = vif.mon_cb.cache_valid_map;
@@ -233,6 +232,8 @@ class dcache_probe_monitor extends uvm_component;
             sample.w_reserve_en,sample.w_reserveOk,sample.w_push_en,sample.w_full,
             sample.rd_io_push_valid,sample.rd_io_push_ready,sample.wr_io_push_valid,sample.wr_io_push_ready,
             sample.rd_io_occupancy,sample.wr_io_occupancy,sample.hitRead,sample.hitWrite,sample.commit,sample.s2Stuck}) ||
+            (sample.s1Valid && $isunknown({sample.s1Index,sample.hasVictim,sample.evictDirty,
+                sample.cache_inspect_valid,sample.cache_inspect_dirty})) ||
             (sample.m_alloc_en && $isunknown({sample.m_freeEntry,sample.m_alloc_index,sample.m_alloc_way,sample.m_alloc_tag,sample.m_alloc_respId})) ||
             (sample.m_merge_en && $isunknown({sample.m_merge_entry,sample.m_merge_respId})) ||
             (sample.m_replay_valid && $isunknown({sample.m_replay_payload_id,sample.m_replay_payload_isWrite}))) begin

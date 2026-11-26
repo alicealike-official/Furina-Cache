@@ -1,7 +1,7 @@
 # 带 MSHR 的非阻塞数据 Cache 架构设计文档（v2）
 
 > 版本：v2（整合长文版）
-> 说明：本文为纯架构设计规格，不涉及任何具体实现语言与代码；文中的框图、时序图仅为示意排版。
+> 说明：本文以架构行为与接口契约为主，并记录当前采用的微架构组织；文中的表达式、框图和时序图用于说明设计，不限定具体实现语言。
 > 本版在初版基础上，整合了后续评审中对控制流、原子性、端口、反压、仲裁、MSHR 发送机制、Way Lock、WBB 预留等的全部修订与补充。
 
 ---
@@ -559,7 +559,7 @@ Replay 是 MSHR 把挂起请求逐个还给 CPU 的阶段，发生在 FILL 状�
 
 ### 8.5 替换写回流程与时序
 
-发生未命中需要替换脏行时，时序如下：Stage2 判定未命中并组合选出 victim；同拍组合准备"Way Lock、WBB 预留+写 addr、清 valid、分配 MSHR、读 victim 整行"；在 Stage2 的下一时钟沿，这组动作**原子生效**。之后某一拍整行数据从 R2 返回并 push 进预留槽；再之后某一拍 WBB 轮询选中该槽位、发出内存写请求并置 issued；最终收到内存写响应后槽位释放。
+发生未命中需要替换脏行时，时序如下：Stage2 判定未命中，组合选出 victim，并按 §10.4 的属性查询并行确定 evictDirty；同拍组合准备"Way Lock、WBB 预留+写 addr、清 valid、分配 MSHR、读 victim 整行"；在 Stage2 的下一时钟沿，这组动作**原子生效**。之后某一拍整行数据从 R2 返回并 push 进预留槽；再之后某一拍 WBB 轮询选中该槽位、发出内存写请求并置 issued；最终收到内存写响应后槽位释放。
 
 ### 8.6 发送仲裁
 
@@ -611,7 +611,7 @@ CPU 响应有两个来源：命中路径（Stage2 产生）与 MSHR 重放路径
 
 ### 10.1 接口抽象
 
-替换策略被抽象为一个可插拔模块，对外提供三个动作：根据组号与当前 Way Lock 状态选出一个候选替换路（分配时用）、在命中时更新策略状态（onHit）、在填充时更新策略状态（onFill）。Cache 顶层通过工厂在编译期注入具体策略，从而在不改动主体逻辑的前提下切换算法。策略内部通常为每个组维护独立的状态（如顺序队列、PLRU 树位等）。
+替换策略被抽象为一个可插拔模块：allocWay 根据组号与当前 Way Lock 状态选出候选替换路；allocWayMatches 查询同一候选路是否满足给定的逐路属性；onHit 和 onFill 分别在命中、填充时更新策略状态。属性查询与路号查询必须依据同一拍状态和同一偏好顺序，不能各自选择不同的路。Cache 顶层通过工厂在编译期注入具体策略，从而在不改动主体逻辑的前提下切换算法。策略内部通常为每个组维护独立的状态（如顺序队列、PLRU 树位等）。
 
 ### 10.2 候选策略
 
@@ -633,6 +633,26 @@ CPU 响应有两个来源：命中路径（Stage2 产生）与 MSHR 重放路径
 选择 victim 时，首先优先使用该组中"尚无效（空）且未被锁定"的路；若有多个这样的路，必须选择 **way 下标最低**的一路，此时不按替换策略的偏好顺序选择。例如 way0 已锁定、way1 与 way3 均无效且未锁定时，应选择 way1。若无这样的路，才交由替换策略给出候选。若所有路都被锁、或既无空路又无可替换路，则该请求不可接收。
 
 **候选的产生方式（必须满足）：** 策略必须在**自身的偏好顺序**中**先剔除本拍被 Way Lock 锁定的路**，再取剩余顺序中最靠前的一路——即"最该被替换且当前可用"的那一路。实现不得退化为"从策略候选开始按 way 编号向后扫描"：后者会丢掉策略的年龄/树偏好语义，使 FIFO/LRU 在最老路被锁时可能淘汰一条比它新得多的行。例如 FIFO 顺序为 `[2,0,3,1]` 且 way2 被锁时，候选必须是 way0（次老），而不是按编号相邻的 way3。PLRU 同理：在树偏好序中剔除锁定叶子，若首选子树已无未锁叶子则回退到同父的另一支，再逐层向上回退。
+
+**写回属性与替换路号并行产生（当前采用的优化）：** Stage2 的控制路径不必先等待最终 victimWay 编码，再按路号串行读取 valid/dirty。先对每一路计算当前状态的有效脏属性，再由策略在同一候选选择条件下直接给出该属性。定义如下：
+
+```text
+dirtyValid[w] = curValid[w] && curDirty[w]
+policyWay    = allocWay(setIndex, lockMask)
+policyDirty  = allocWayMatches(setIndex, lockMask, dirtyValid)
+hasEmpty     = 存在 valid=0 且未锁的路
+hasVictim    = 存在可选受害路
+victimWay    = 有空路时取原空路候选，否则取 policyWay
+evictDirty   = hasVictim && !hasEmpty && policyDirty
+```
+
+curValid/curDirty 使用当前组的当前状态，不能换成可能过时的流水快照。policyDirty 描述策略候选的属性；有空路时最终 victim 优先取空路，因此必须用 !hasEmpty 屏蔽写回。没有可选路时 hasVictim 屏蔽写回，条目不能分配。有可选 victim 时，上式与“所选 victim 有效且脏”表达同一写回条件。
+
+FIFO/LRU 的属性查询按顺序位置产生首个未锁候选的选中条件，将该位置对应的 dirtyValid 合并输出；路号仍由原 allocWay 产生。默认属性查询可取 dirtyValid[allocWay(...)]，当前 PLRU 使用该默认方式，不能据 FIFO 综合结果声称所有策略均获得并行化收益。全锁时策略属性查询与路号查询保持相同默认候选，但其结果不得用于发起淘汰。
+
+这一组织不改变空路优先、替换顺序维护、Way Lock、请求拍数和淘汰原子性。WBB 预留、victim 整行读取使能及资源不足导致的冻结均使用 evictDirty；地址仍来自最终 victimWay 对应的原行。
+
+实现及实验边界见 [DCACHE-PPA-002](DebugNote/DCACHE-PPA-002_并行写回判断优化尝试.md)，本节不把综合收益当作功能验证或物理签核结论。
 
 **Way Lock 的生命周期与 MSHR 条目严格一致**：从 MSHR 分配该条目的那一刻置位（置位对象为该条目的 `allocWay`），一直到条目释放（即重放完成、重放计数到达"有效槽位数减一"的那一拍）才清除。之所以不能在"填充写完成"时提前释放，是因为会引发二次释放 bug：假设条目 0 填充完某路后立即清锁，随后条目 1 可能又选中该路并重新置锁，而当条目 0 真正释放时若再次清锁，就会把条目 1 的锁误清，导致该路在条目 1 仍在使用时被替换策略再次选中，造成数据错乱。因此锁的释放必须与条目的释放一一对应。
 
@@ -698,17 +718,17 @@ s2Stuck = s1Valid && (
    || ( !hit && hitInMshr && !canMerge )            // 命中条目但处于 FILL（或 Slot 满），暂不可合并
    || ( !hit && !hitInMshr && ( !hasFree || !hasAvailableWay ) )  // 无法分配：无空条目或无可用 way
    || ( !hit && wbSameAddr )                        // 需要淘汰但 WBB 同地址冲突（含 reserved）
-   || ( !hit && !hitInMshr && victimDirty && !wbReserveOk )       // 脏 victim 但 WBB 预留失败（§8.4）
+   || ( !hit && !hitInMshr && evictDirty && !wbReserveOk )       // 脏 victim 但 WBB 预留失败（§8.4）
 )
 ```
 
 其中：
 
 - `hit`：Stage2 的 Cache 命中，已叠加 `!wayLocked`（§6.3）；
-- `victimDirty`：所选 victim 满足 `valid && dirty`。**无效路上的残留 dirty 不算脏**（§5.4 规定清 valid 时不清 dirty），不得为它预留写回槽位；
+- `evictDirty`：按 §10.4 并行计算的写回资格，等于 `hasVictim && !hasEmpty && policyDirty`。**无效路上的残留 dirty 不算脏**（§5.4 规定清 valid 时不清 dirty），不得为它预留写回槽位。实际冻结控制使用 `evictDirty`；
 - `wbReserveOk`：本拍 WBB 预留是否成功。当 victim 不脏（含无效 victim）时，本条件整体不参与判定，等价于预留成功。
 
-最后一条是 8.4 的直接推论：只有当"确实需要写回脏行、而 WBB 又腾不出槽位"时才冻结。它与 11.1 的 `wbFull` 不是同一粒度——11.1 在 Stage1 无法区分 victim 是否脏，只能保守地按 `wbFull` 整体反压；11.2 在 Stage2 已能精确判定，故只在 `victimDirty && !wbReserveOk` 时冻结。
+最后一条是 8.4 的直接推论：只有当"确实需要写回脏行、而 WBB 又腾不出槽位"时才冻结。它与 11.1 的 `wbFull` 不是同一粒度——11.1 在 Stage1 无法区分 victim 是否脏，只能保守地按 `wbFull` 整体反压；11.2 在 Stage2 已能精确判定，故在未命中且不能合并、需要淘汰时，只有 `evictDirty && !wbReserveOk` 才因 WBB 资源不足而冻结。
 
 冻结期间保持 Stage2 流水寄存器与输出不变、门控一切对外写、`cpuReady=False`、并保持读使能 `fire || s2Stall` 以刷新读数据。待条件消失后继续提交。
 

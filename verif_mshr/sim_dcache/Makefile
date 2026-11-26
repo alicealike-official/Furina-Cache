@@ -87,6 +87,7 @@ help:
 	@echo "  vcs_compile          - 仅编译"
 	@echo "  vcs_simulate         - 仅仿真（需先编译）"
 	@echo "  run_verdi            - 单独打开 Verdi 查看波形"
+	@echo "  perf                 - 独立DCache性能矩阵及彩色报告"
 	@echo "  clean                - 清理所有仿真生成的文件"
 
 run: vcs_simulate
@@ -108,3 +109,7 @@ check_dpi:
 
 check_framework:
 	python3 -B script/run_dcache_framework.py
+
+# 独立性能矩阵；保持原模型、scoreboard与断言，结果按运行时间单独保存。
+perf:
+	python3 -B script/run_dcache_perf.py

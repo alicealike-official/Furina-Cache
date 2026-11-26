@@ -141,3 +141,9 @@ C11、C19、C30已接入只读探针。bind位置为[src/dcache/integration/bind
 ## 代码覆盖率
 
 已增加独立DUT代码覆盖率流程，收集Line/Condition/Branch/FSM/Toggle，不新增功能覆盖组。[首轮129/129结果](coverage/RESULTS.md)与[运行说明](coverage/README.md)包含真实covered/coverable、未命中数量、HTML和VDB位置。代码覆盖率基线不等同于全代码100%，不改动当前功能验证点的闭合记录。
+
+## 性能测试
+
+新增独立`dcache_perf_test`，激励由`dcache_perf_sequence`生成，`perf`目录的可选被动组件按真实握手统计。原CacheTop/MSHR/WBB/SparseMemory及数据检查、SVA继续启用。普通功能case默认不创建性能组件。
+
+入口为`make -C verif_mshr/sim_dcache perf`，27组性能场景与2组时钟重放均通过。范围包括连续命中、独立冷未命中的串行/连续提交、同行合并及持续脏淘汰。详见[运行与扩展说明](perf/README.md)和[性能报告](perf/RESULTS.md)。

@@ -3,6 +3,9 @@ class dcache_config extends uvm_object;
     bit allow_reset_cancellation = 0;
     uvm_active_passive_enum is_active = UVM_ACTIVE;
     bit continuous_cpu = 0;
+    // 性能旁观者只在独立perf case启用；默认功能回归没有额外测量对象。
+    bit enable_perf = 0;
+    string perf_result_file = "work/dcache_perf.json";
     bit enable_probes = 1;
     longint unsigned read_response_not_before_cycle = 0;
     int timeout_cycles = 10000;
