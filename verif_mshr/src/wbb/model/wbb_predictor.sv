@@ -10,6 +10,7 @@ class wbb_predictor extends uvm_component;
     // 存储实现见 RefModel/MEM/SparseMemory.hpp，SV 封装见 model/wbb_memory_store.sv。
     wbb_memory_store memory;
     bit reset_released;
+    wbb_config cfg;
 
     `uvm_component_utils(wbb_predictor)
 
@@ -38,6 +39,10 @@ function void wbb_predictor::build_phase(uvm_phase phase);
     if (!uvm_config_db #(wbb_memory_store)::get(this, "", "memory", memory)) begin
         `fatal("Shared memory store not found")
     end
+    // 【防御性检查】复位取消策略由所属环境传入，不能由predictor自行决定。
+    if (!uvm_config_db #(wbb_config)::get(this, "", "wbb_config", cfg)) begin
+        `fatal("WBB config missing", "WBB_CONFIG")
+    end
     // DPI 调用：校验 SV/C++ 配置并创建 C++ WriteBackBuffer，model_handle 保存返回的实例句柄。
     if (!wbb_ref_create(ADDR_WIDTH, DATA_WIDTH, BLOCK_SIZE, WBB_ENTRIES,
         SLOT_WIDTH, BUS_ID_WIDTH, model_handle)) begin
@@ -52,13 +57,17 @@ function void wbb_predictor::write(wbb_sample sample);
         `fatal("Reset contains X/Z", "TB_PROTOCOL")
     end
     if (!sample.rst_n) begin
-        if (reset_released) begin
-            `fatal("Mid-run reset cancellation semantics are not supported", "TB_RESET")
+        if (reset_released && !is_empty() && !cfg.allow_reset_cancellation) begin
+            `fatal("Active WBB reset requires an explicit cancellation contract", "TB_RESET")
         end
         // DPI 调用：对 model_handle 指向的 C++ WBB 执行 reset()，继续保留该实例。
         if (!wbb_ref_reset(model_handle)) begin
             `fatal(wbb_dpi_last_error(), "WBB_DPI")
         end
+        reset_released = 0;
+        item = wbb_compare_item::type_id::create("reset_item");
+        item.actual_sample = sample;
+        compare_port.write(item);
         return;
     end
     reset_released = 1;

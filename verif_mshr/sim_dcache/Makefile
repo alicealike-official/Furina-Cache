@@ -2,6 +2,10 @@
 #-------------------------------------------------------
 export TEST_NAME =
 DUT = ./dut.f
+# Coverage collection can use an isolated database and DUT-only instrumentation.
+COVERAGE_METRICS ?= line+cond+fsm+branch+tgl+assert
+COVERAGE_OPTIONS ?=
+COVERAGE_DATABASE ?= $(WORK_DIR)/simv.vdb
 TB = ./tb.f
 UVM_HOME = ../../verif_env/uvm-1.2
 
@@ -47,8 +51,8 @@ vcs_compile: $(DIRS)
 		$(UVM_HOME)/src/dpi/uvm_dpi.cc \
 		../dpi/dcache_dpi.cpp ../dpi/mshr_dpi.cpp ../dpi/wbb_dpi.cpp \
 		-Mdir=$(CSRC_DIR) \
-		-cm line+cond+fsm+branch+tgl+assert \
-  		-cm_dir $(WORK_DIR)/simv.vdb \
+		-cm $(COVERAGE_METRICS) $(COVERAGE_OPTIONS) \
+		-cm_dir $(COVERAGE_DATABASE) \
         -f $(DUT) -f $(TB) -top dcache_tb_top $(SVA_DEFINES) \
 		-kdb \
 		-l $(VCS_COMP_LOG) \
@@ -60,8 +64,8 @@ vcs_simulate: $(SIMV) $(DUMP_TCL)
     +fsdb+autoflush \
 	+wave=$(WAVEFORM) \
 	$(if $(strip $(TEST_NAME)),+UVM_TESTNAME=$(TEST_NAME)) $(SIM_ARGS) \
-	-cm line+cond+fsm+branch+tgl+assert \
-	-cm_dir  $(WORK_DIR)/simv.vdb \
+	-cm $(COVERAGE_METRICS) \
+	-cm_dir $(COVERAGE_DATABASE) \
 	-cm_name $(if $(strip $(TEST_NAME)),$(TEST_NAME),dcache_base_test) \
 	-ucli -do $(DUMP_TCL) \
 	-l $(VCS_SIM_LOG)
@@ -75,7 +79,7 @@ clean:
 	rm -rf $(WORK_DIR) novas.* novas_dump.log ucli.key verdiLog/ inter.fsdb tr_db.log script/regression_logs urgReport cm.log .fsm.sch.verilog.xml
 
 merge_cov:
-	urg -dir $(WORK_DIR)/simv.vdb
+	urg -dir $(COVERAGE_DATABASE)
 
 help:
 	@echo "Available targets:"

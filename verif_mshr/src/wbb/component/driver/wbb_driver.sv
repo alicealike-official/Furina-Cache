@@ -78,7 +78,20 @@ task wbb_driver::run_phase(uvm_phase phase);
     wait (vif.rst_n === 1'b1);
     forever begin
         seq_item_port.get_next_item(req);
-        drive_transaction(req);
+        wait (vif.rst_n === 1'b1);
+        fork : request_or_reset
+            begin
+                drive_transaction(req);
+            end
+            begin
+                @(negedge vif.rst_n);
+                if (!cfg.allow_reset_cancellation) begin
+                    `fatal("Active request reset requires cancellation enabled", "TB_RESET")
+                end
+                drive_idle();
+            end
+        join_any
+        disable request_or_reset;
         seq_item_port.item_done();
     end
 endtask

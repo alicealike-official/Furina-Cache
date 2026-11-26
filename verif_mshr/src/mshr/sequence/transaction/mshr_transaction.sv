@@ -6,6 +6,8 @@ typedef enum int {
 } mshr_operation_t;
 
 class mshr_transaction extends uvm_sequence_item;
+    // TB复位边界专用：从已确认的空态直接提交第一拍alloc，不改变普通事务的查询流程。
+    bit reset_release_alloc = 0;
     // ALLOC/MERGE各表示一个Slot请求；返回只代表上游提交，不代表内存或replay完成。
     mshr_operation_t operation = MSHR_ALLOC;
     int unsigned cycles = 1;

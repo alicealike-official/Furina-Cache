@@ -11,7 +11,7 @@ module tb_top;
 
     WriteBackBuffer dut (
         .clk(clk),
-        .reset(~rst_n),
+        .resetn(rst_n),
         .reserve_en(wbb_vif.reserve_en),
         .reserve_addr(wbb_vif.reserve_addr),
         .push_en(wbb_vif.push_en),

@@ -6,6 +6,7 @@ class mshr_predictor extends uvm_component;
     // 这是DPI返回的C++ MSHR实例句柄，不是SV自写的参考模型，也不是DUT层级句柄。
     protected chandle model_handle;
     protected bit reset_released;
+    mshr_config cfg;
 
     `uvm_component_utils(mshr_predictor)
 
@@ -33,6 +34,10 @@ endclass
 function void mshr_predictor::build_phase(uvm_phase phase);
     super.build_phase(phase);
 
+    // 【防御性检查】取消策略由环境配置给出。
+    if (!uvm_config_db #(mshr_config)::get(this, "", "mshr_config", cfg)) begin
+        `fatal("MSHR config missing", "MSHR_CONFIG")
+    end
     // DPI核对SV参数与RefModel/Cache/params.hpp，并创建原有C++ MSHR对象。
     if (!mshr_ref_create(ADDR_WIDTH, DATA_WIDTH, BLOCK_SIZE, MSHR_ENTRIES,
         MSHR_MAX_PENDING, NUM_SETS, NUM_WAYS, TAG_WIDTH, INDEX_WIDTH, WAY_WIDTH,
@@ -51,6 +56,9 @@ function void mshr_predictor::write(mshr_sample sample);
         `fatal("MSHR predictor received a null sample", "MSHR_SAMPLE")
     end
     if (handle_reset(sample)) begin
+        item = mshr_compare_item::type_id::create("reset_item");
+        item.actual_sample = sample;
+        compare_port.write(item);
         return;
     end
     validate_sample(sample);
@@ -60,7 +68,7 @@ function void mshr_predictor::write(mshr_sample sample);
     compare_port.write(item);
 endfunction
 
-// 处理低有效复位；空闲重复复位可以清模型，有在途Entry时先报取消语义尚未定义。
+// 处理低有效复位；非空取消须由复位台架显式启用，普通case仍拒绝意外取消。
 // 这里只复位C++ MSHR，后端稀疏内存及其他组件的队列由各自所有者处理。
 function bit mshr_predictor::handle_reset(mshr_sample sample);
     if ($isunknown(sample.rst_n)) begin
@@ -73,7 +81,7 @@ function bit mshr_predictor::handle_reset(mshr_sample sample);
     if ({sample.alloc_en, sample.merge_en, sample.memReadResp_valid} !== 3'b000) begin
         `fatal("MSHR input sources must be idle while reset is asserted", "MSHR_RESET_INPUT")
     end
-    if (reset_released && !is_empty()) begin
+    if (reset_released && !is_empty() && !cfg.allow_reset_cancellation) begin
         `fatal("Reset cancellation with active MSHR entries is not defined", "MSHR_RESET")
         return 1;
     end

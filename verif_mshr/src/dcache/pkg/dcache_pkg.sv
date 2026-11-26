@@ -81,4 +81,7 @@ package dcache_pkg;
     `include "sequence/dcache_multi_stall_sequence.sv"
     `include "sequence/dcache_stage_boundary_sequence.sv"
     `include "sequence/dcache_memory_combinations_sequence.sv"
+    `include "sequence/dcache_read_during_write_sequence.sv"
+    `include "sequence/dcache_reset_sequence.sv"
+    `include "sequence/dcache_reset_active_sequence.sv"
 endpackage

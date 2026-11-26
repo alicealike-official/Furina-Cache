@@ -16,6 +16,7 @@ class dcache_memory_driver extends uvm_subscriber #(dcache_sample);
     longint unsigned cycle;
     int read_requests, read_responses, write_requests, write_responses;
     bit read_presented, write_presented;
+    int cancelled_reads, cancelled_writes;
     `uvm_component_utils(dcache_memory_driver)
     function new(string name = "dcache_memory_driver", uvm_component parent = null);
         super.new(name, parent);
@@ -32,9 +33,7 @@ class dcache_memory_driver extends uvm_subscriber #(dcache_sample);
     // monitor发布同一沿前快照；先完成旧响应，再接受新请求。
     function void write(dcache_sample t);
         if (!t.rst_n) begin
-            if (!is_idle()) begin
-                `fatal("Active reset cancellation is not defined", "DCACHE_RESET")
-            end
+            reset_bookkeeping();
             return;
         end
         cycle++;
@@ -98,8 +97,11 @@ class dcache_memory_driver extends uvm_subscriber #(dcache_sample);
     task run_phase(uvm_phase phase);
         drive_idle();
         forever begin
-            @(negedge vif.clk);
-            if (!vif.rst_n) drive_idle();
+            @(negedge vif.clk or negedge vif.rst_n);
+            if (!vif.rst_n) begin
+                reset_bookkeeping();
+                drive_idle();
+            end
             else begin
                 // 【防御性检查】当前普通协议至少一拍响应，零拍不支持。
                 if (cfg.read_latency_cycles < 1 || cfg.write_latency_cycles < 1) begin
@@ -110,7 +112,7 @@ class dcache_memory_driver extends uvm_subscriber #(dcache_sample);
             end
         end
     endtask
-    // 启动复位期间只驱动本agent拥有的内存信号。
+    // 复位期间只驱动本agent拥有的内存信号。
     task drive_idle();
         vif.memReadReq_ready <= 0;
         vif.memWriteReq_ready <= 0;
@@ -170,9 +172,23 @@ class dcache_memory_driver extends uvm_subscriber #(dcache_sample);
     function bit is_idle();
         return reads.size() == 0 && writes.size() == 0 && !read_presented && !write_presented;
     endfunction
+    // 复位隔离旧总线响应，不回滚实际MEM里已经接受的写；默认拒绝无约定的在途取消。
+    function void reset_bookkeeping();
+        if (!is_idle() && !cfg.allow_reset_cancellation) begin
+            `fatal("Pending memory reset requires cancellation enabled", "DCACHE_RESET")
+        end
+        cancelled_reads += reads.size();
+        cancelled_writes += writes.size();
+        reads.delete();
+        writes.delete();
+        foreach (read_ids[id]) read_ids[id] = 0;
+        foreach (write_ids[id]) write_ids[id] = 0;
+        read_presented = 0;
+        write_presented = 0;
+    endfunction
     function void check_phase(uvm_phase phase);
         super.check_phase(phase);
-        if (!is_idle() || read_requests != read_responses || write_requests != write_responses) begin
+        if (!is_idle() || read_requests != read_responses + cancelled_reads || write_requests != write_responses + cancelled_writes) begin
             `error("Memory transactions did not drain", "DCACHE_DRAIN")
         end
     endfunction

@@ -41,7 +41,7 @@ def main():
     results = []
     for test in args.tests:
         for period in args.periods:
-            for seed in (args.seeds if (test in ('dcache_random_test','dcache_long_run_test','dcache_memory_combinations_test') or test.startswith('dcache_random_')) else [1]):
+            for seed in (args.seeds if (test in ('dcache_random_test','dcache_long_run_test','dcache_memory_combinations_test','dcache_read_during_write_test') or test.startswith('dcache_random_')) else [1]):
                 tag = f'{test}_p{period}_s{seed}'
                 log = folder/(tag+'.log')
                 wave = folder/(tag+'.fsdb')

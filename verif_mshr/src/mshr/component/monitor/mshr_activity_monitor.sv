@@ -17,6 +17,7 @@ class mshr_activity_monitor extends uvm_subscriber #(mshr_sample);
     int send_cycle[MSHR_ENTRIES];
     int latency_hits[int];
     int previous_response_cycle = -2;
+    int cancelled_entries;
     bit filled[MSHR_ENTRIES];
     bit [TAG_WIDTH-1:0] tags[MSHR_ENTRIES];
     bit [INDEX_WIDTH-1:0] indices[MSHR_ENTRIES];
@@ -31,6 +32,7 @@ class mshr_activity_monitor extends uvm_subscriber #(mshr_sample);
     endfunction
 
     extern virtual function void write(mshr_sample t);
+    extern function void reset_history();
     extern function void record_events(mshr_sample sample);
     extern function void record_resource_boundaries(mshr_sample sample, int occupied_count);
     extern function void record_multi_events(mshr_sample sample);
@@ -60,7 +62,10 @@ function void mshr_activity_monitor::write(mshr_sample t);
     trace_stall_change(last_sample, t);
     record_fill_stall(last_sample, t);
     last_sample = t;
-    if (!t.rst_n) return;
+    if (!t.rst_n) begin
+        reset_history();
+        return;
+    end
     cycle++;
     live = 0;
     foreach (stage[entry]) if (stage[entry] != 0) live++;
@@ -119,7 +124,7 @@ endtask
 // 依据实际分配与最后replay计数等待全空，不以参考模型状态替代实际完成。
 task mshr_activity_monitor::wait_empty();
     wait_cycles(1);
-    while (hits.exists("alloc") && (!hits.exists("release") || hits["alloc"] != hits["release"])) @sampled;
+    while (hits.exists("alloc") && (hits["alloc"] != (hits.exists("release") ? hits["release"] : 0) + cancelled_entries)) @sampled;
 endtask
 
 // 用已接受fill和Slot记录检查有限集合轮询上界，只计真实replay握手，不把反压拍数当饥饿。
@@ -333,4 +338,21 @@ function void mshr_activity_monitor::record_resource_boundaries(mshr_sample samp
             count_event("boundary_full_last_slot_five_events");
         end
     end
+endfunction
+
+// 取消本轮接口归属，保留累计命中；复位不能清除之前已报告的协议错误。
+function void mshr_activity_monitor::reset_history();
+    foreach (stage[entry]) begin
+        if (stage[entry] != 0) cancelled_entries++;
+        stage[entry] = 0;
+        slots[entry] = 0;
+        completed[entry] = 0;
+        filled[entry] = 0;
+        bypasses[entry] = 0;
+    end
+    foreach (cpu_pending[id]) cpu_pending[id] = 0;
+    in_flight.delete();
+    check_full_release_next = 0;
+    previous_response_cycle = -2;
+    last_sample = null;
 endfunction

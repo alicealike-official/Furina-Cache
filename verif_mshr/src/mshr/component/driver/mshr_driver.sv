@@ -20,6 +20,7 @@ class mshr_driver extends uvm_driver #(mshr_transaction);
     extern task drive_queries(mshr_transaction item);
     extern function void check_transaction(mshr_transaction item);
     extern task drive_transaction(mshr_transaction item);
+    extern task drive_reset_release_alloc(mshr_transaction item);
     extern task prepare_request_query(mshr_transaction item);
     extern task wait_for_resources(mshr_transaction item);
     extern function bit request_ready(mshr_transaction item);
@@ -49,7 +50,20 @@ task mshr_driver::run_phase(uvm_phase phase);
     wait (vif.rst_n === 1'b1);
     forever begin
         seq_item_port.get_next_item(req);
-        drive_transaction(req);
+        wait (vif.rst_n === 1'b1);
+        fork : request_or_reset
+            begin
+                drive_transaction(req);
+            end
+            begin
+                @(negedge vif.rst_n);
+                if (!cfg.allow_reset_cancellation) begin
+                    `fatal("Active request reset requires cancellation enabled", "TB_RESET")
+                end
+                drive_idle();
+            end
+        join_any
+        disable request_or_reset;
         seq_item_port.item_done();
     end
 endtask
@@ -120,6 +134,10 @@ task mshr_driver::drive_transaction(mshr_transaction item);
     check_transaction(item);
     item.selected_entry = -1;
     item.selected_slot = -1;
+    if (item.reset_release_alloc) begin
+        drive_reset_release_alloc(item);
+        return;
+    end
     if (item.operation inside {MSHR_ALLOC, MSHR_MERGE}) begin
 
         // 先查询并等待资源，再在同一下降沿驱动一次提交。
@@ -307,4 +325,24 @@ task mshr_driver::drive_invalid_payload(mshr_transaction item);
     vif.merge_wordOff <= item.wordOff;
     vif.merge_wData <= item.wData;
     vif.merge_respId <= item.respId;
+endtask
+
+// 复位后空态专用alloc：首个下降沿准备，首个有效沿提交；资格只取真实hasFree/freeEntry。
+task mshr_driver::drive_reset_release_alloc(mshr_transaction item);
+    // 【激励合法性检查】只有显式标记的alloc可走此路径，查询/merge仍使用普通流程。
+    if (item.operation != MSHR_ALLOC) begin
+        `fatal("Reset release fast path requires alloc", "MSHR_RESET_INPUT")
+    end
+    @(negedge vif.clk);
+    if (vif.hasFree !== 1'b1 || $isunknown(vif.freeEntry) || int'(vif.freeEntry) >= MSHR_ENTRIES) begin
+        `fatal("No valid free Entry after reset", "MSHR_RESET_FREE")
+    end
+    item.selected_entry = vif.freeEntry;
+    item.selected_slot = 0;
+    drive_queries(item);
+    drive_request(item);
+    @(vif.mon_cb);
+    check_submission(item);
+    @(negedge vif.clk);
+    drive_idle();
 endtask

@@ -47,7 +47,10 @@ class dcache_predictor extends uvm_subscriber #(dcache_sample);
         if (!dcache_ref_step(handle, !t.rst_n, inputs, outputs)) begin
             `fatal(dcache_last_error(), "DCACHE_MODEL")
         end
-        if (!t.rst_n) return;
+        if (!t.rst_n) begin
+            compare_port.write(item);
+            return;
+        end
         item.expected.cpu_ready = 1'(outputs[1]);
         item.expected.cpuReadResp_valid = 1'(outputs[6]);
         item.expected.cpuReadResp_payload_rData = 32'(outputs[8]);

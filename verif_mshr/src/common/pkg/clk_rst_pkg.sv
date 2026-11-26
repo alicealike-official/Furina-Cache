@@ -7,4 +7,5 @@ package clk_rst_pkg;
     `include "clk_rst_config.sv"
     `include "clk_rst_driver.sv"
     `include "clk_rst_agent.sv"
+    `include "reset_checks.sv"
 endpackage

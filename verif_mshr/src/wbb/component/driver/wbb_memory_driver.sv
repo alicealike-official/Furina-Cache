@@ -25,6 +25,7 @@ class wbb_memory_driver extends uvm_component;
     protected bit outstanding[int unsigned];
     protected longint unsigned cycle = 0;
     protected bit reset_released;
+    int cancelled_responses;
 
     `uvm_component_utils(wbb_memory_driver)
 
@@ -42,6 +43,7 @@ class wbb_memory_driver extends uvm_component;
     extern virtual task run_phase(uvm_phase phase);
     extern function void write(wbb_sample sample);
     extern function bit prepare_sample(wbb_sample sample);
+    extern function void reset_bookkeeping();
     extern function void process_response(wbb_sample sample);
     extern function void process_request(wbb_sample sample);
     extern function void check_configuration();
@@ -106,13 +108,11 @@ function void wbb_memory_driver::write(wbb_sample sample);
     process_request(sample);
 endfunction
 
-// 启动复位期间跳过采样，运行中再次复位时报错；正常采样更新周期计数并检查握手控制无 X/Z。
+// 复位采样清理本地调度；只有显式模式允许取消在途响应，普通采样检查握手控制。
 // 返回 1 表示本拍可继续处理，每个有效非复位采样只在此处递增一次 cycle。
 function bit wbb_memory_driver::prepare_sample(wbb_sample sample);
     if (sample.rst_n !== 1'b1) begin
-        if (reset_released) begin
-            `fatal("Mid-run reset is unsupported", "TB_RESET")
-        end
+        reset_bookkeeping();
         return 0;
     end
     reset_released = 1;
@@ -249,8 +249,13 @@ task wbb_memory_driver::run_phase(uvm_phase phase);
     drive_idle();
     wait (vif.rst_n === 1'b1);
     forever begin
-        @(negedge vif.clk);
-        drive_memory_outputs();
+        @(negedge vif.clk or negedge vif.rst_n);
+        if (!vif.rst_n) begin
+            reset_bookkeeping();
+            drive_idle();
+        end else begin
+            drive_memory_outputs();
+        end
     end
 endtask
 
@@ -313,4 +318,17 @@ function void wbb_memory_driver::check_phase(uvm_phase phase);
     if (!is_idle()) begin
         `error("Memory responses/IDs did not drain", "MEM_DRAIN")
     end
+endfunction
+
+// 内存已经接收的写内容保留；只有显式取消模式才隔离旧响应并释放TB在途ID。
+function void wbb_memory_driver::reset_bookkeeping();
+    if (!is_idle() && !cfg.allow_reset_cancellation) begin
+        `fatal("Pending write reset requires cancellation enabled", "TB_RESET")
+    end
+    cancelled_responses += pending.size();
+    pending.delete();
+    outstanding.delete();
+    active_response = null;
+    reset_released = 0;
+    cycle = 0;
 endfunction

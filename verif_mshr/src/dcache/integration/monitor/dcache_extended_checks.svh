@@ -9,6 +9,8 @@
     bit [15:0] words_written_after_fill[128];
     bit filled_from_w2[128];
     int writeback_outstanding;
+    bit same_edge_read_pending[1 << CPU_ID_WIDTH];
+    logic [DATA_WIDTH-1:0] same_edge_write_data[1 << CPU_ID_WIDTH];
     bit previous_cpu_accept;
     bit previous_m0_hit;
     bit previous_m0_mergeable;
@@ -23,6 +25,7 @@
         check_metadata(sample);
         check_fifo_policy(sample);
         check_bypass_and_freeze(sample);
+        check_read_during_write(sample);
         check_fifo_transfers(sample);
         count_pipeline_windows(sample);
         count_memory_combinations(sample);
@@ -327,5 +330,57 @@
         if (sample.cache_w1_en) begin
             location = int'(sample.cache_w1_index)*4 + int'(sample.cache_w1_way);
             if (filled_from_w2[location]) words_written_after_fill[location][sample.cache_w1_wordOff] = 1;
+        end
+    endfunction
+
+    // 从实际W1写入和CPU读接受记录同字碰撞；读提交时检查旁路及写值，冻结期间保留这笔义务。
+    function void check_read_during_write(dcache_probe_sample sample);
+        int cpu_id;
+        cpu_id = sample.s1Id;
+        if (sample.commit && same_edge_read_pending[cpu_id]) begin
+            if (sample.hitRead) begin
+                require_condition(sample.bypass === 1'b1, "Same-edge write/read did not select bypass");
+                require_condition(sample.hitReadData === same_edge_write_data[cpu_id],
+                    "Same-edge write/read did not return the accepted W1 value");
+                count("same_edge_wr_checked");
+                count_raw_read_value(sample, same_edge_write_data[cpu_id]);
+            end
+            same_edge_read_pending[cpu_id] = 0;
+        end
+
+        // 本沿前台写入与新读地址相同；R1使能和地址也必须确实指向这笔已接受读。
+        if (cpu_vif.mon_cb.cpu_valid && cpu_vif.mon_cb.cpu_ready && !cpu_vif.mon_cb.cpu_payload_wrEn &&
+            sample.cache_w1_en && sample.cache_r1_en &&
+            cpu_vif.mon_cb.cpu_payload_addr[31:11] == sample.s1Tag &&
+            cpu_vif.mon_cb.cpu_payload_addr[10:6] == sample.cache_w1_index &&
+            cpu_vif.mon_cb.cpu_payload_addr[5:2] == sample.cache_w1_wordOff &&
+            sample.cache_r1_index == sample.cache_w1_index && sample.cache_r1_wordOff == sample.cache_w1_wordOff) begin
+            cpu_id = cpu_vif.mon_cb.cpu_payload_id;
+            same_edge_read_pending[cpu_id] = 1;
+            same_edge_write_data[cpu_id] = sample.cache_w1_data;
+            count("same_edge_wr_observed");
+            count($sformatf("same_edge_wr_way_word_%0d_%0d", sample.cache_w1_way, sample.cache_w1_wordOff));
+            if (previous != null && previous.cache_w1_en && previous.s1Tag == sample.s1Tag &&
+                previous.cache_w1_index == sample.cache_w1_index && previous.cache_w1_wordOff == sample.cache_w1_wordOff)
+                count("same_edge_wr_after_two_writes");
+        end
+    endfunction
+
+    // 仅记录原始R1数据与写值的关系；spec不限定RAM碰撞返回值，因此不强制某类结果出现。
+    function void count_raw_read_value(dcache_probe_sample sample, logic [DATA_WIDTH-1:0] expected_write);
+        logic [DATA_WIDTH-1:0] ram_value;
+        case (sample.hitWay)
+            0: ram_value = sample.cache_r1_data_0;
+            1: ram_value = sample.cache_r1_data_1;
+            2: ram_value = sample.cache_r1_data_2;
+            3: ram_value = sample.cache_r1_data_3;
+            default: ram_value = 'x;
+        endcase
+        if ($isunknown(ram_value)) begin
+            count("same_edge_wr_raw_unknown");
+        end else if (ram_value != expected_write) begin
+            count("same_edge_wr_raw_differs");
+        end else begin
+            count("same_edge_wr_raw_same");
         end
     endfunction

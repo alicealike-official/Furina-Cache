@@ -9,10 +9,16 @@ class dcache_mshr_checks extends uvm_env;
     endfunction
     function void build_phase(uvm_phase phase);
         mshr_pkg::mshr_config cfg;
+        dcache_config top_cfg;
         super.build_phase(phase);
         cfg = mshr_pkg::mshr_config::type_id::create("cfg");
         cfg.is_active = UVM_PASSIVE;
-        uvm_config_db #(mshr_pkg::mshr_config)::set(this, "agent", "mshr_config", cfg);
+        // 【防御性检查】系统取消约定来自顶层配置，不由被动IP环境自行选择。
+        if (!uvm_config_db #(dcache_config)::get(this, "", "dcache_config", top_cfg)) begin
+            `fatal("Top reset policy missing", "DCACHE_IP_CONFIG")
+        end
+        cfg.allow_reset_cancellation = top_cfg.allow_reset_cancellation;
+        uvm_config_db #(mshr_pkg::mshr_config)::set(this, "*", "mshr_config", cfg);
         agent = mshr_pkg::mshr_agent::type_id::create("agent", this);
         predictor = mshr_pkg::mshr_predictor::type_id::create("predictor", this);
         scoreboard = mshr_pkg::mshr_scoreboard::type_id::create("scoreboard", this);

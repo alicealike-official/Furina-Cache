@@ -22,9 +22,30 @@ class dcache_driver extends uvm_driver #(dcache_transaction);
         wait (vif.rst_n === 1'b1);
         forever begin
             seq_item_port.get_next_item(req);
-            drive_request(req);
+            wait (vif.rst_n === 1'b1);
+            fork : request_or_reset
+                begin
+                    drive_request(req);
+                end
+                begin
+                    @(negedge vif.rst_n);
+                    if (!cfg.allow_reset_cancellation) begin
+                        `fatal("Active request reset requires cancellation enabled", "TB_RESET")
+                    end
+                    drive_idle();
+                end
+            join_any
+            disable request_or_reset;
             seq_item_port.item_done();
         end
+    endtask
+    // CPU源独占这些信号，异步复位时及时撤销有效请求。
+    task drive_idle();
+        vif.cpu_valid <= 0;
+        vif.cpu_payload_addr <= 0;
+        vif.cpu_payload_wrEn <= 0;
+        vif.cpu_payload_wData <= 0;
+        vif.cpu_payload_id <= 0;
     endtask
     // 在下降沿呈现请求，所有字段保持到握手；字段与随机化均来自sequence。
     task drive_request(dcache_transaction item);

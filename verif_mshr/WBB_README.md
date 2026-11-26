@@ -1,5 +1,7 @@
 # WBB UVM 验证环境
 
+本地复位专项已完成：三模块18/18回归通过，当前本模块50/50闭合；RST-010、RST-011已按用户决定移出验收清单，不计为通过。详见[复位说明](RESET_README.md)。
+
 直接例化 `WriteBackBuffer`，复用 `RefModel/Cache/WriteBackBuffer.hpp` 作为 WBB 参考模型。
 后端存储使用 `RefModel/MEM/SparseMemory.hpp` 的纯 C++ 稀疏内存。
 基础 `wbb_base_test` 已接入两笔完整写回激励，逐笔经过 reserve、push、内存发送和响应释放。
@@ -396,3 +398,8 @@ python3 verif_mshr/sim_wbb/script/run_wbb_regression.py --tests wbb_long_run_tes
 
 
 顶层复用：DCache集成环境以UVM_PASSIVE模式实例化原wbb_agent，直接使用本目录的monitor、sample、predictor、scoreboard和IO SVA；不实例化IP driver或内存driver。独立IP入口保持原样。分层结构及模型实例边界见[DCache integration说明](src/dcache/integration/README.md)。
+
+
+## 代码覆盖率
+
+已增加独立DUT代码覆盖率流程，收集Line/Condition/Branch/FSM/Toggle，不新增功能覆盖组。[首轮129/129结果](coverage/RESULTS.md)与[运行说明](coverage/README.md)包含真实covered/coverable、未命中数量、HTML和VDB位置。代码覆盖率基线不等同于全代码100%，不改动当前功能验证点的闭合记录。

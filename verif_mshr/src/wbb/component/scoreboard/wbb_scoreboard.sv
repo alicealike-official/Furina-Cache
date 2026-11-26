@@ -25,6 +25,8 @@ class wbb_scoreboard extends uvm_scoreboard;
     endfunction
 
     extern virtual function void build_phase(uvm_phase phase);
+    int reset_unpushed, reset_unsent, reset_unacked;
+    extern function void reset_history();
     extern function void write(wbb_compare_item item);
     extern virtual function void check_phase(uvm_phase phase);
     extern virtual function void report_phase(uvm_phase phase);
@@ -45,6 +47,10 @@ function void wbb_scoreboard::write(wbb_compare_item item);
 
     // 取得同一拍的实际采样和C++预测，先比较容量与地址查询。
     sample = item.actual_sample;
+    if (!sample.rst_n) begin
+        reset_history();
+        return;
+    end
     checked_cycles++;
     if (sample.reserveOk !== (item.expected_reserve_ok != 0) || sample.full !== (item.expected_full != 0)) begin
         `error("Capacity outputs differ from C++ WBB model", "WBB_CAPACITY")
@@ -108,7 +114,7 @@ function void wbb_scoreboard::check_phase(uvm_phase phase);
     // 调用 model/wbb_memory_store.sv 的 SV 封装，经 sparse_mem_read_line DPI
     // 回读两份 C++ SparseMemory 的受测地址，并比较实际值与期望值。
     memory.compare_contents();
-    if (reserve_count != push_count || push_count != send_count || send_count != response_count) begin
+    if (reserve_count != push_count + reset_unpushed || push_count != send_count + reset_unsent || send_count != response_count + reset_unacked) begin
         `error("WBB transaction counts do not balance at end of run", "WBB_DRAIN")
     end
     if (checked_cycles == 0) begin
@@ -120,4 +126,12 @@ function void wbb_scoreboard::report_phase(uvm_phase phase);
     super.report_phase(phase);
     `info($sformatf("cycles=%0d reserve=%0d push=%0d send=%0d response=%0d full_cycles=%0d stalled_cycles=%0d",
         checked_cycles, reserve_count, push_count, send_count, response_count, full_cycles, stalled_cycles))
+endfunction
+
+// 清除跨复位的保持义务，累计各阶段被取消的实际数量；既有错误计数不清零。
+function void wbb_scoreboard::reset_history();
+    reset_unpushed = reserve_count - push_count;
+    reset_unsent = push_count - send_count;
+    reset_unacked = send_count - response_count;
+    previous_sample = null;
 endfunction

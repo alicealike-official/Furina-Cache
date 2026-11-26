@@ -11,7 +11,15 @@ object WbbVerificationVerilog extends App {
     val entries = if (args.length > 1) args(1).toInt else 4
     val cfg = CacheConfig(WBB_ENTRIES = entries)
     Files.createDirectories(Paths.get(output))
-    SpinalConfig(targetDirectory = output, withTimescale = false)
+    SpinalConfig(
+        targetDirectory = output,
+        withTimescale = false,
+        defaultConfigForClockDomains = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = LOW
+        )
+    )
         .generateVerilog(new WriteBackBuffer(cfg))
 
     val parameters = Seq(

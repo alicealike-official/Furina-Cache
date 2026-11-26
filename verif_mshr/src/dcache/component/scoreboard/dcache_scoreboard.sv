@@ -2,12 +2,17 @@ class dcache_scoreboard extends uvm_subscriber #(dcache_compare_item);
     int cycles, requests, read_responses, write_responses;
     bit pending[32];
     bit write_kind[32];
+    int cancelled_requests;
     `uvm_component_utils(dcache_scoreboard)
     function new(string name = "dcache_scoreboard", uvm_component parent = null);
         super.new(name, parent);
     endfunction
     // 比较原C++预测与沿前IO，再按CPU ID记录实际请求和响应。
     function void write(dcache_compare_item t);
+        if (!t.actual.rst_n) begin
+            reset_history();
+            return;
+        end
         cycles++;
         compare_outputs(t.actual, t.expected);
         record_cpu_events(t.actual);
@@ -94,9 +99,16 @@ class dcache_scoreboard extends uvm_subscriber #(dcache_compare_item);
         end
         return 1;
     endfunction
+    // 只取消仍在等待CPU响应的ID，保留已完成计数和已报错误。
+    function void reset_history();
+        foreach (pending[id]) begin
+            if (pending[id]) cancelled_requests++;
+            pending[id] = 0;
+        end
+    endfunction
     function void check_phase(uvm_phase phase);
         super.check_phase(phase);
-        if (!is_idle() || requests != read_responses + write_responses || cycles == 0) begin
+        if (!is_idle() || requests != read_responses + write_responses + cancelled_requests || cycles == 0) begin
             `error("CPU requests did not complete or no samples checked", "DCACHE_DRAIN")
         end
     endfunction

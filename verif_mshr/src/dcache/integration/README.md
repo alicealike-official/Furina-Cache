@@ -101,3 +101,10 @@ CPU读值以请求接受顺序作为期望，跨行响应以ID匹配；接受→
 `count_memory_combinations`进一步按真实沿前端口记录双读、双写的way/word与同异set组合，以及W2→W1更新后从R1/R2读取的历史。`dcache_memory_combinations_test`使用随机顺序的受控写读和32,768笔随机连续流量，要求276个组合条件在每次运行中全部命中；参考数据仍来自原C++ CacheMem和原顶层/IP检查。没有新增内部驱动。
 
 C50组合补测[6/6通过](../../../sim_dcache/work/regression/run_20261125_154026/summary.md)，每组276项要求全命中；共享计数扩展后的[基础4/4](../../../sim_dcache/work/framework/run_20261125_154417/summary.md)通过。详细组合矩阵见[case文档](../../../../验证计划/DCacheWithMshr/DCache_case规划_note.md#c50-存储端口组合补测)。
+
+
+## 同址读写按spec旁路契约检查
+
+`monitor/dcache_extended_checks.svh`新增`check_read_during_write`：当真实W1写与CPU接受读同沿、同tag/set/word时，按CPU ID保存写值，待该读实际提交时核对旁路选择及结果，冻结期间保留记录。现有CPU顺序数据、原C++模型和SVA继续运行。`count_raw_read_value`仅统计原始R1值与写值的关系，不要求RAM碰撞返回固定版本。
+
+无新bind、编译内部临时信号引用或内部驱动。CacheMem原始碰撞比较的既有排除规则未放宽；原C++算法未改。C51新case及C05/C32/C33、混合随机与fill流水窗口共[20/20通过](../../../sim_dcache/work/regression/run_20261126_090229/summary.md)，[逐组碰撞证据](../../../sim_dcache/work/regression/run_20261126_090229/read_during_write_evidence.json)保存实际次数。该证据支持MEM-016按spec §6.6、§12.6的CPU可见功能闭合，不作为RAM原语单独验收。

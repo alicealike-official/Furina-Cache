@@ -178,6 +178,7 @@ extern "C" int dcache_memref_step(void* handle, svBit reset_active,
         model.w2_req.tag = get(inputs,14); model.w2_req.dirty = get(inputs,15);
         for (int word = 0; word < 16; ++word) model.w2_req.line[word] = get(inputs,16+word);
         model.clr_req = {bool(get(inputs,32)),int(get(inputs,33)),int(get(inputs,34))};
+        // spec 6.6由CPU旁路保证读值；此处不把原始RAM碰撞返回固定为新值或旧值。
         state.compare_r1 = 0; state.known_r1 = 0;
         for (int way = 0; way < 4; ++way) {
             const int set = model.r1_req.index;

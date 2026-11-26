@@ -1,4 +1,6 @@
 class dcache_config extends uvm_object;
+    // 复位台架选项：清理本地义务并使外部旧调度静默，不定义系统迟到响应处理规则。
+    bit allow_reset_cancellation = 0;
     uvm_active_passive_enum is_active = UVM_ACTIVE;
     bit continuous_cpu = 0;
     bit enable_probes = 1;

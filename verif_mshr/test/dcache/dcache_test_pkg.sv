@@ -57,4 +57,7 @@ package dcache_test_pkg;
     `include "dcache_multi_stall_test.sv"
     `include "dcache_stage_boundary_test.sv"
     `include "dcache_memory_combinations_test.sv"
+    `include "dcache_read_during_write_test.sv"
+    `include "dcache_reset_test.sv"
+    `include "dcache_reset_active_test.sv"
 endpackage

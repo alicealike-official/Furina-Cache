@@ -22,6 +22,7 @@ class mshr_memory_driver extends uvm_component;
     uvm_analysis_imp #(mshr_sample, mshr_memory_driver) monitor_export;
     int unsigned request_count;
     int unsigned response_count;
+    int unsigned cancelled_responses;
 
     protected mshr_pending_read pending[$];
     // 已经呈现到响应接口的对象；握手前不能因开关变化或新请求到达而替换。
@@ -126,12 +127,13 @@ function bit mshr_memory_driver::prepare_sample(mshr_sample sample);
     return 1;
 endfunction
 
-// 允许启动或空闲再次复位；有在途读时不能擅自丢弃响应，热复位取消契约需另行明确。
+// 启动/空闲复位直接清调度；只有显式复位台架可停止旧响应调度，不代表DUT会处理迟到返回。
 // 外部 C++ 内存内容和累计请求/响应计数保留，只有下一轮调度的周期起点重新归零。
 function void mshr_memory_driver::reset_bookkeeping();
-    if (!is_idle()) begin
+    if (!is_idle() && !cfg.allow_reset_cancellation) begin
         `fatal("Reset with pending memory reads requires a defined cancellation contract", "MSHR_MEM_RESET")
     end
+    cancelled_responses += pending.size();
     pending.delete();
     outstanding.delete();
     active_response = null;
@@ -283,7 +285,7 @@ endfunction
 
 function void mshr_memory_driver::check_phase(uvm_phase phase);
     super.check_phase(phase);
-    if (!is_idle() || request_count != response_count) begin
+    if (!is_idle() || request_count != response_count + cancelled_responses) begin
         `error($sformatf("Memory reads did not drain: requests=%0d responses=%0d pending=%0d",
             request_count, response_count, pending.size()), "MSHR_MEM_DRAIN")
     end

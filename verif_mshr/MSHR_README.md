@@ -1,5 +1,7 @@
 # MSHR UVM 验证框架
 
+本地复位专项已完成：三模块18/18回归通过，当前本模块79/79闭合；RST-010、RST-011已按用户决定移出验收清单，不计为通过。详见[复位说明](RESET_README.md)。
+
 MSHR环境位于`src/mshr`，有独立的TB、生成目录和仿真入口。它复用现有C++ MSHR和稀疏内存，用端口采样检查分配、合并、内存读、fill、replay及锁；WBB使用独立的`sim_wbb`入口，两者的生成文件分别位于`generated/mshr`与`generated/wbb`。
 
 目前已实现21个功能case及独立长跑case，默认空态启动入口保留。完整功能回归曾发现replay背压保持违约；设计修复后52/52复核通过。场景、执行结果和剩余项见 [MSHR case规划](../验证计划/DCacheWithMshr/MSHR_case规划_note.md)。
@@ -226,3 +228,8 @@ RND-008已补齐明确的资源临界矩阵：复用entry_capacity、slot_capaci
 
 
 顶层复用：DCache集成环境以UVM_PASSIVE模式实例化原mshr_agent，直接使用本目录的monitor、sample、predictor、scoreboard和IO SVA；不实例化IP driver或内存driver。独立IP入口保持原样。分层结构及模型实例边界见[DCache integration说明](src/dcache/integration/README.md)。
+
+
+## 代码覆盖率
+
+已增加独立DUT代码覆盖率流程，收集Line/Condition/Branch/FSM/Toggle，不新增功能覆盖组。[首轮129/129结果](coverage/RESULTS.md)与[运行说明](coverage/README.md)包含真实covered/coverable、未命中数量、HTML和VDB位置。代码覆盖率基线不等同于全代码100%，不改动当前功能验证点的闭合记录。

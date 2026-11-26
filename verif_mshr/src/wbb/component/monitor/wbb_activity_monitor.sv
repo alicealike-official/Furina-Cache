@@ -26,6 +26,7 @@ class wbb_activity_monitor extends uvm_subscriber #(wbb_sample);
     int push_count = 0;
     int send_count = 0;
     int response_count = 0;
+    int cancelled_responses = 0;
     bit [WBB_ENTRIES-1:0] occupied = '0;
     bit [WBB_ENTRIES-1:0] loaded = '0;
     bit [WBB_ENTRIES-1:0] issued = '0;
@@ -83,6 +84,7 @@ class wbb_activity_monitor extends uvm_subscriber #(wbb_sample);
     endfunction
 
     extern virtual function void write(wbb_sample t);
+    extern function void reset_history();
     extern function int address_stage(bit [ADDR_WIDTH-1:0] addr);
     extern function void record_queries(wbb_sample sample);
     extern function void record_events(wbb_sample sample);
@@ -107,6 +109,7 @@ function void wbb_activity_monitor::write(wbb_sample t);
     sample = t;
     last_sample = sample;
     if (sample.rst_n !== 1'b1) begin
+        reset_history();
         return;
     end
 
@@ -334,7 +337,20 @@ task wbb_activity_monitor::wait_for_pushes(int target);
     while (push_count < target) @sampled;
 endtask
 
-// 等待已接受的写回全部收到响应；只观察接口事件，不读取DUT内部状态。
+// 等待当前区间写回完成；已被复位取消的响应单独计数，不伪造真实响应事件。
 task wbb_activity_monitor::wait_until_empty();
-    while (occupied != '0 || send_count != response_count) @sampled;
+    while (occupied != '0 || send_count != response_count + cancelled_responses) @sampled;
 endtask
+
+// 复位清槽归属和跨拍保持记录，累计事件与覆盖不清零。
+function void wbb_activity_monitor::reset_history();
+    occupied = '0;
+    loaded = '0;
+    issued = '0;
+    cancelled_responses += in_flight_ids.size();
+    in_flight_ids.delete();
+    last_sample = null;
+    send_burst = 0;
+    last_send_id = -1;
+    waiting_for_overlap = 0;
+endfunction

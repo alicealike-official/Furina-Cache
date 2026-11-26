@@ -27,10 +27,16 @@ class dcache_wbb_checks extends uvm_env;
     endfunction
     function void build_phase(uvm_phase phase);
         wbb_pkg::wbb_config cfg;
+        dcache_config top_cfg;
         super.build_phase(phase);
         cfg = wbb_pkg::wbb_config::type_id::create("cfg");
         cfg.is_active = UVM_PASSIVE;
-        uvm_config_db #(wbb_pkg::wbb_config)::set(this, "agent", "wbb_config", cfg);
+        // 【防御性检查】系统取消约定来自顶层配置，不由被动IP环境自行选择。
+        if (!uvm_config_db #(dcache_config)::get(this, "", "dcache_config", top_cfg)) begin
+            `fatal("Top reset policy missing", "DCACHE_IP_CONFIG")
+        end
+        cfg.allow_reset_cancellation = top_cfg.allow_reset_cancellation;
+        uvm_config_db #(wbb_pkg::wbb_config)::set(this, "*", "wbb_config", cfg);
         memory = wbb_pkg::wbb_memory_store::type_id::create("memory");
         // initialize创建独立的实际/期望C++ SparseMemory对象，不共享顶层后端。
         memory.initialize(4096);

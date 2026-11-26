@@ -1,5 +1,9 @@
 # DCache顶层UVM框架
 
+本地复位专项已完成：三模块18/18回归通过，当前本模块151/151闭合；RST-010、RST-011已按用户决定移出验收清单，不计为通过。详见[复位说明](RESET_README.md)。
+
+当前验收仅保留FIFO替换策略，LRU/PLRU及跨策略验证点已移出。最新主表151项，151项在当前范围闭合。本地复位与RTL恢复证据保留，旧响应处理和物理释放时序不在当前清单。
+
 当前已接入重新生成的真实DCache RTL及低有效resetn端口。原C++模型的响应FIFO时序经修复后，默认空态与基础smoke在10 ns/4 ns下共4/4通过，UVM warning/error/fatal均为0。历史差异及修复记录见[DCACHE-CHECK-001](../Architecture/DebugNote/DCACHE-CHECK-001_CPU响应与模型时序差异.md)。这仅证明框架和基础通路，不代表完整顶层验证闭合。
 
 ## 组织与职责
@@ -125,3 +129,15 @@ C11、C19、C30已接入只读探针。bind位置为[src/dcache/integration/bind
 [112组完整回归](sim_dcache/work/regression/run_20261125_150533/summary.md)全部通过；[逐case内部计数](sim_dcache/work/regression/run_20261125_150533/internal_coverage_evidence.json)保存实际命中证据。原CacheMem/FifoPolicy被动检查的用途、碰撞排除范围和bind位置见[集成说明](src/dcache/integration/README.md)。本轮不新增复位专项或复杂替换策略。
 
 新增组合补测入口：`dcache_memory_combinations_test`。每次运行先执行两轮随机顺序的填充/逐字写读/驱逐，再执行32,768笔随机连续请求；双读、双写和W2→W1后读取共276个组合条件必须每次全部命中。回归默认对该case执行seed 1/2/3、10 ns/4 ns。[6/6报告](sim_dcache/work/regression/run_20261125_154026/summary.md)与[逐组组合证据](sim_dcache/work/regression/run_20261125_154026/combination_evidence.json)已保存，MEM-009/010/012闭合，主表现为144/168项闭合。
+
+
+## 同字读写旁路补测
+
+新增`dcache_read_during_write_test`，两轮随机写值/字顺序覆盖全部4way×16word，执行W-R、W-W-R及W-R-W-R。公共monitor从真实W1与CPU读接受记录碰撞写值，核对读提交时的旁路和数据，不要求底层RAM固定返回旧值或新值。每组2312笔请求，1024次真实碰撞检查、256次连续两写后读通过。
+
+新case两周期三种子及原RAW、异址旁路、冻结恢复、混合随机和fill流水窗口[20/20通过](sim_dcache/work/regression/run_20261126_090229/summary.md)。MEM-016按既有spec旁路要求闭合，最新161项中145项闭合、16项保留，剩余仅为暂缓的复位和复杂策略。原模型算法和DUT未修改。
+
+
+## 代码覆盖率
+
+已增加独立DUT代码覆盖率流程，收集Line/Condition/Branch/FSM/Toggle，不新增功能覆盖组。[首轮129/129结果](coverage/RESULTS.md)与[运行说明](coverage/README.md)包含真实covered/coverable、未命中数量、HTML和VDB位置。代码覆盖率基线不等同于全代码100%，不改动当前功能验证点的闭合记录。

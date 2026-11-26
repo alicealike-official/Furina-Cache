@@ -42,4 +42,6 @@ package wbb_pkg;
     `include "sequence/wbb_long_run_sequence.sv"
     `include "sequence/wbb_response_latency_sequence.sv"
     `include "sequence/wbb_idle_payload_sequence.sv"
+    `include "sequence/wbb_reset_sequence.sv"
+    `include "sequence/wbb_reset_active_sequence.sv"
 endpackage

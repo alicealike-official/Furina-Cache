@@ -6,6 +6,10 @@ class dcache_activity_monitor extends uvm_subscriber #(dcache_sample);
     int cpu_burst, max_cpu_burst;
     longint unsigned cpu_cycles[$];
     int requests, responses, reads, writes, read_acks, write_acks;
+    int cancelled_requests, cancelled_reads, cancelled_writes;
+    bit reset_seen;
+    bit touched_after_reset[bit [31:0]];
+    dcache_memory_store backend;
     bit pending[32];
     bit [31:0] expected_read[32];
     int read_inflight[$];
@@ -24,6 +28,10 @@ class dcache_activity_monitor extends uvm_subscriber #(dcache_sample);
     endfunction
     function void build_phase(uvm_phase phase);
         super.build_phase(phase);
+        // 【防御性检查】实际后端来自环境，用于协同复位后的新数据期望。
+        if (!uvm_config_db #(dcache_memory_store)::get(this, "", "memory", backend)) begin
+            `fatal("Backend store missing", "DCACHE_MEMORY")
+        end
         architecture = dcache_memory_store::type_id::create("architecture");
         architecture.initialize();
     endfunction
@@ -35,7 +43,11 @@ class dcache_activity_monitor extends uvm_subscriber #(dcache_sample);
     // 沿前采样驱动CPU顺序期望与内存事件统计，然后唤醒等待的sequence。
     function void write(dcache_sample t);
         last_sample = t;
-        if (!t.rst_n) return;
+        if (!t.rst_n) begin
+            reset_history();
+            return;
+        end
+        reset_seen = 0;
         cycle++;
         if (t.cpu_valid && t.cpu_ready) begin
             cpu_burst++;
@@ -67,6 +79,11 @@ class dcache_activity_monitor extends uvm_subscriber #(dcache_sample);
             block = {sample.cpu_payload_addr[31:6], 6'b0};
             word_index = sample.cpu_payload_addr[5:2];
             // read_line/write_line经dcache_mem_* DPI使用原C++ SparseMemory。
+            if (!touched_after_reset.exists(block)) begin
+                backend.read_line(block, line);
+                architecture.write_line(block, line);
+                touched_after_reset[block] = 1;
+            end
             architecture.read_line(block, line);
             expected_read[sample.cpu_payload_id] = line[word_index*32 +: 32];
             if (sample.cpu_payload_wrEn) begin
@@ -137,9 +154,26 @@ class dcache_activity_monitor extends uvm_subscriber #(dcache_sample);
     // 等待当前已接受CPU请求和内存义务完成，不声称脏Cache已写回。
     task wait_empty();
         wait_cycles(4);
-        while (requests != responses || reads != read_acks || writes != write_acks) @sampled;
+        while (requests != responses + cancelled_requests || reads != read_acks + cancelled_reads || writes != write_acks + cancelled_writes) @sampled;
         wait_cycles(4);
     endtask
+    // CPU期望仅在每次复位首次采样重建；实际后端不清空，之后按新CPU接受顺序更新。
+    function void reset_history();
+        if (reset_seen) return;
+        foreach (pending[id]) begin
+            if (pending[id]) cancelled_requests++;
+            pending[id] = 0;
+        end
+        cancelled_reads += read_inflight.size();
+        cancelled_writes += write_inflight.size();
+        read_inflight.delete();
+        write_inflight.delete();
+        touched_after_reset.delete();
+        architecture.close();
+        architecture.initialize();
+        cpu_burst = 0;
+        reset_seen = 1;
+    endfunction
     function void final_phase(uvm_phase phase);
         super.final_phase(phase);
         architecture.close();

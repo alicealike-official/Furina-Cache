@@ -207,7 +207,9 @@ class dcache_probe_monitor extends uvm_component;
             sample.cache_valid_map = vif.mon_cb.cache_valid_map;
             sample.cache_dirty_map = vif.mon_cb.cache_dirty_map;
             sample.cache_tag_map = vif.mon_cb.cache_tag_map;
-            if (sample.rst_n) begin
+            if (!sample.rst_n) begin
+                reset_history();
+            end else begin
                 cycle++;
                 sample.cycle = cycle;
                 validate_sample(sample);
@@ -424,6 +426,37 @@ class dcache_probe_monitor extends uvm_component;
             entry_set[entry] === request.addr[10:6] && mshr_vif.mon_cb.merge_wordOff === request.addr[5:2] &&
             mshr_vif.mon_cb.merge_respId === request.id && mshr_vif.mon_cb.merge_isWrite === request.is_write &&
             (!request.is_write || mshr_vif.mon_cb.merge_wData === request.data), "CPU-to-merge payload mismatch");
+    endfunction
+    // 清理上一复位区间的集成义务；通过原C++ FIFO DPI重置策略对象，保留累计覆盖。
+    function void reset_history();
+        bit [255:0] unused_order;
+        int unused_candidate;
+        if (!dcache_fifo_step(policy_handle, 1, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, unused_candidate, unused_order)) begin
+            `fatal(dcache_last_error(), "DCACHE_POLICY_DPI")
+        end
+        cpu_requests.delete();
+        fifo_read_ids.delete();
+        fifo_write_ids.delete();
+        fifo_read_records.delete();
+        fifo_write_records.delete();
+        foreach (live[entry]) begin
+            live[entry] = 0;
+            entry_filled[entry] = 0;
+            slots[entry] = 0;
+            returned_slots[entry] = 0;
+        end
+        foreach (same_edge_read_pending[id]) same_edge_read_pending[id] = 0;
+        foreach (filled_from_w2[location]) begin
+            filled_from_w2[location] = 0;
+            words_written_after_fill[location] = '0;
+        end
+        writeback_outstanding = 0;
+        previous_cpu_accept = 0;
+        released_previous_cycle = 0;
+        freeze_active = 0;
+        previous = null;
+        last_sample = null;
     endfunction
     function void check_phase(uvm_phase phase);
         super.check_phase(phase);

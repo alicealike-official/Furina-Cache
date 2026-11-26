@@ -131,7 +131,7 @@ class dcache_cachemem_checks extends uvm_component;
     endfunction
     function void report_phase(uvm_phase phase);
         super.report_phase(phase);
-        `info($sformatf("r1_checked=%0d r2_checked=%0d same-cycle collisions excluded pending RAM contract",
+        `info($sformatf("r1_checked=%0d r2_checked=%0d raw collision values not constrained; CPU bypass checked per spec 6.6",
             r1_compares, r2_compares), "DCACHE_CACHEMEM_COVERAGE")
     endfunction
     function void final_phase(uvm_phase phase);

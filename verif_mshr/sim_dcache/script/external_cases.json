@@ -47,5 +47,6 @@
     "dcache_release_cross_test",
     "dcache_multi_stall_test",
     "dcache_stage_boundary_test",
-    "dcache_memory_combinations_test"
+    "dcache_memory_combinations_test",
+    "dcache_read_during_write_test"
 ]

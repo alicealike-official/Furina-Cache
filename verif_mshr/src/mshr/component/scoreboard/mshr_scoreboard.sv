@@ -38,6 +38,8 @@ class mshr_scoreboard extends uvm_scoreboard;
         compare_export = new("compare_export", this);
     endfunction
 
+    int reset_unsent, reset_unreturned, reset_unfilled, reset_unreleased, reset_slots;
+    extern function void reset_history();
     extern function void write(mshr_compare_item item);
     extern function void compare_queries(mshr_compare_item item);
     extern function void compare_outputs(mshr_compare_item item);
@@ -55,6 +57,10 @@ function void mshr_scoreboard::write(mshr_compare_item item);
     // 【防御性检查】确认调用方提供有效对象，避免空句柄被继续访问。
     if (item == null || item.actual_sample == null) begin
         `fatal("Null MSHR comparison item", "MSHR_COMPARE")
+    end
+    if (!item.actual_sample.rst_n) begin
+        reset_history();
+        return;
     end
     checked_cycles++;
     compare_queries(item);
@@ -336,9 +342,9 @@ endfunction
 
 function void mshr_scoreboard::check_phase(uvm_phase phase);
     super.check_phase(phase);
-    if (!is_idle() || alloc_count != send_count || send_count != response_count ||
-        response_count != fill_count || fill_count != release_count ||
-        alloc_count + merge_count != replay_count) begin
+    if (!is_idle() || alloc_count != send_count + reset_unsent || send_count != response_count + reset_unreturned ||
+        response_count != fill_count + reset_unfilled || fill_count != release_count + reset_unreleased ||
+        alloc_count + merge_count != replay_count + reset_slots) begin
         `error("Entry/Slot transactions did not drain consistently", "MSHR_DRAIN")
     end
     if (checked_cycles == 0) begin
@@ -351,4 +357,22 @@ function void mshr_scoreboard::report_phase(uvm_phase phase);
     `info($sformatf("cycles=%0d alloc=%0d merge=%0d send=%0d response=%0d fill=%0d replay=%0d release=%0d",
         checked_cycles, alloc_count, merge_count, send_count, response_count, fill_count,
         replay_count, release_count), "MSHR_COUNTS")
+endfunction
+
+// 复位取消尚未完成的Entry/Slot，清理接口归属；累计数量保留并在收尾时计入守恒。
+function void mshr_scoreboard::reset_history();
+    reset_unsent = alloc_count - send_count;
+    reset_unreturned = send_count - response_count;
+    reset_unfilled = response_count - fill_count;
+    reset_unreleased = fill_count - release_count;
+    reset_slots = alloc_count + merge_count - replay_count;
+    foreach (occupied[entry]) begin
+        occupied[entry] = 0;
+        sent[entry] = 0;
+        returned[entry] = 0;
+        filled[entry] = 0;
+        slot_count[entry] = 0;
+        completed[entry] = 0;
+    end
+    foreach (cpu_pending[id]) cpu_pending[id] = 0;
 endfunction

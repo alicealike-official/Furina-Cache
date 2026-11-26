@@ -31,4 +31,6 @@ package mshr_test_pkg;
     `include "mshr_idle_payload_test.sv"
     `include "mshr_read_view_test.sv"
     `include "mshr_long_run_test.sv"
+    `include "mshr_reset_test.sv"
+    `include "mshr_reset_active_test.sv"
 endpackage

@@ -48,4 +48,6 @@ package mshr_pkg;
     `include "sequence/mshr_idle_payload_sequence.sv"
     `include "sequence/mshr_read_view_sequence.sv"
     `include "sequence/mshr_long_run_sequence.sv"
+    `include "sequence/mshr_reset_sequence.sv"
+    `include "sequence/mshr_reset_active_sequence.sv"
 endpackage

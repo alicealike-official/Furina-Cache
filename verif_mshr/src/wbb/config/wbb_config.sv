@@ -11,6 +11,8 @@ typedef enum int {
 } wbb_input_mode_t;
 
 class wbb_config extends uvm_object;
+    // 复位台架选项：清理本地义务并使外部旧调度静默，不定义系统迟到响应处理规则。
+    bit allow_reset_cancellation = 0;
     // TB的上游提交方式，不是DUT信号；只有声明支持两种模式的case允许切换。
     wbb_input_mode_t input_mode = WBB_INPUT_SERIAL;
     uvm_active_passive_enum is_active = UVM_ACTIVE;

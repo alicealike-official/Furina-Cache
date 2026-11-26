@@ -1,5 +1,9 @@
 # WBB IP 验证 case 规划
 
+最新范围：用户已将RST-010、RST-011移出三模块当前验收清单，当前WBB 50/50、MSHR 79/79、DCache 151/151闭合；已有本地复位case和历史证据保留。
+
+移出两项之前的复位回归记录（2026-11-26）：本地清空及RTL恢复已补测，WBB 50/52闭合；旧响应处理按用户决定暂缓，物理recovery/removal不属于本轮。详见文末本地复位case和[总说明](../../verif_mshr/RESET_README.md)。
+
 本note只针对固定规格WBB DUT组织验证，不要求单槽、跨参数组合或Scala非法参数生成测试，也不把验证环境自身的正确性列为DUT验证点。
 
 本 note 将 WBB IP 验证组织为 15 组 case，列出各组的主要场景、对应验证点和实施状态，供后续编写 sequence、配置内存响应和登记覆盖结果时使用。
@@ -345,3 +349,13 @@ python3 verif_mshr/sim_wbb/script/run_wbb_regression.py --tests wbb_long_run_tes
 执行结果：[本轮报告](../../verif_mshr/sim_wbb/work/regression/reports/run_20261124_054804_914530/summary.md)，**12/12 PASS**，累计147456笔写回，所有UVM_WARNING/ERROR/FATAL均为0。每组四事件计数均为12288，三轮`WBB_LONG_ROUND_COVERAGE`均完成，最终占用为0000；RND-010据此登记为本配置已闭合。串行seed1的三轮乱序响应分别为1956/1919/1947次，满槽周期分别为14724/14744/14712拍，说明各轮持续经历资源压力，而非只有开头填满一次。
 
 [源码哈希](../../verif_mshr/sim_wbb/work/regression/reports/run_20261124_054804_914530/source_hashes.json)保存本轮DUT、C++模型及WBB验证源码版本；具体命令、时钟、种子、逐轮场景计数和日志/FSDB见报告。首次许可证连接失败的未运行记录单独保留，没有覆盖或计为PASS。未修改DUT与C++模型，未开展复位场景。
+
+## 本地复位case更新（2026-11-26）
+
+新增`wbb_reset_test`与`wbb_reset_active_test`，在10ns/4ns执行。运行/停钟×释放首拍/次拍的四种组合明确命中；非空场景先断言目标状态存在，再停钟检查复位清空，之后用正常请求恢复。tag/data不要求清零，FIFO仅当前策略。
+
+[三模块18/18报告](../../verif_mshr/sim_dcache/work/reset_regression/run_20261126_095417/summary.md)、[逐阶段命中](../../verif_mshr/sim_dcache/work/reset_regression/run_20261126_095417/reset_evidence.json)。具体阶段、取消记账与历史DV超时原因见[复位说明](../../verif_mshr/RESET_README.md)。旧响应不投递到新事务，本轮不判断DUT迟到响应处理；不引用综合或物理时序结果闭合RST-011。此前复位暂缓记录按历史阶段理解，以主表新状态为准。
+
+## 移出两项复位扩展要求
+
+用户决定RST-010、RST-011暂不纳入当前清单，不再安排相应补测或列作未闭合。已经完成的本地复位和恢复case保留，旧响应处理、物理释放时序不计为通过。当前WBB 50/50、MSHR 79/79、DCache 151/151闭合，本次仅更新文档。
